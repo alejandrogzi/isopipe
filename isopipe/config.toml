@@ -1,0 +1,13 @@
+[metadata]
+name = "isopipe"
+version = "0.0.1"
+authors = "alejandrogzi <alejandrxgzi@gmail.com>"
+repository = "https://github.com/alejandrogzi/isopipe"
+readme = "README.md"
+
+[packages]
+lima = "1.11.0"
+pbcss = "6.4.0"
+isoseq3 = "0.0.0"
+minimap3 = "0.0.0"
+isotools = "0.0.1"

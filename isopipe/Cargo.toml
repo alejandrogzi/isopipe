@@ -1,0 +1,28 @@
+[package]
+name = "isopipe"
+version = "0.0.1"
+authors = ["alejandrogzi <alejandrxgzi@gmail.com>"]
+edition = "2021"
+license = "MIT"
+description = "Hillerlab master annotation pipeline package"
+homepage = "https://github.com/alejandrogzi/isopipe"
+repository = "https://github.com/alejandrogzi/isopipe"
+readme = "README.md"
+keywords = ["iso-seq", "bioinformatics", "genomics", "pipeline"]
+categories = ["command-line-utilities", "science"]
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+log = "0.4.14"
+simple_logger = "4.0.0"
+rayon = "1.8.0"
+num_cpus = "1.16.0"
+hashbrown = { version = "0.14", features = ["rayon"] }
+time = "0.3.36"
+serde = { version = "1.0.210", features = ["derive", "rc"] }
+toml = { version = "0.8.20", features = ["parse"] }
+memmap2 = "0.9.5"
+
+[profile.release]
+lto = true
+opt-level = 3
