@@ -62,6 +62,7 @@ pub struct RunArgs {
     )]
     pub config: PathBuf,
 }
+
 // impl ArgCheck for RunArgs {}
 
 /// Run the pipeline from a specific step to another step
@@ -229,7 +230,7 @@ impl StepArgs {
                 .collect::<Result<Vec<_>, _>>()?;
             steps.sort_unstable();
 
-            log::info!("INFO: running {:?} step/s only...", steps);
+            log::info!("INFO: running step/s {:?} only...", steps);
 
             return Ok(steps
                 .into_iter()
