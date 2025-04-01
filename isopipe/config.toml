@@ -11,3 +11,33 @@ pbcss = "6.4.0"
 isoseq3 = "0.0.0"
 minimap3 = "0.0.0"
 isotools = "0.0.1"
+
+[params.global]
+data_prefix = "foo"                   # raw data prefix
+global_output_dir = "/path/to/outdir" # output dir -> {outdir}/isopipe_run_{timestamp}
+
+[params.ccs]
+chunk = 100                # --chunk
+threads = 64               # -j
+min-rq = 0.95              # --min-rq
+report-file = "report.txt" # --report-file
+output_dir = "step1_ccs"   # output dir
+input_dir = ""             # raw data dir [only one inmutable]
+
+[params.lima]
+isoseq = ""               # leave empty
+peek-guess = ""           # leave empty
+primers = ""              # primers file
+output_dir = "step2_lima" # output dir
+input_dir = "step1_ccs"   # raw data dir [default]
+
+[params.refine]
+
+[params.cluster]
+
+[params.filter-quality]
+input_dir = "step4_cluster"         # raw data dir [default]
+output_dir = "step5_filter_quality" # output dir
+per_id = 0.96                       # --per_id
+clip3 = 50                          # --clip3
+suffix = 30                         # --suffix
