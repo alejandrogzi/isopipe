@@ -13,6 +13,10 @@ fn main() {
 
     let args: Args = Args::parse();
 
+    // match args.executor [local, para, nextflow]
+    // TODO: ParallelExecutor::init(NEXTFLOW)
+    // TODO: ParallelExecutor::init(PARA)
+
     match args.command {
         SubArgs::Run { args } => {
             // args.check().unwrap_or_else(|e| {
@@ -24,7 +28,9 @@ fn main() {
                 .expect("ERROR: Could not read config file");
             config.load().expect("ERROR: Could not load config file");
 
-            run(config).unwrap_or_else(|e| {
+            let global_output_dir = config.get_global_output_dir();
+
+            run(config, global_output_dir).unwrap_or_else(|e| {
                 error!("{}", e);
                 std::process::exit(1);
             });
@@ -39,11 +45,13 @@ fn main() {
                 .expect("ERROR: Could not read config file");
 
             config
-                .aware(args)
+                .aware(args.clone())
                 .load()
                 .expect("ERROR: Could not load config file");
 
-            run(config).unwrap_or_else(|e| {
+            let global_output_dir = config.get_global_output_dir();
+
+            run(config, global_output_dir).unwrap_or_else(|e| {
                 error!("{}", e);
                 std::process::exit(1);
             });
