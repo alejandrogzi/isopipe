@@ -22,6 +22,7 @@ time = "0.3.36"
 serde = { version = "1.0.210", features = ["derive", "rc"] }
 toml = { version = "0.8.20", features = ["parse"] }
 memmap2 = "0.9.5"
+chrono = "0.4.40"
 
 [profile.release]
 lto = true
