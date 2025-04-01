@@ -889,6 +889,27 @@ impl StepParams {
             .join(" ")
     }
 
+    /// Get a parameter value from a StepParams struct.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - A string containing the parameter key.
+    ///
+    /// # Returns
+    ///
+    /// An Option containing the parameter value.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let params = StepParams {
+    ///   values: HashMap::new(),
+    /// };
+    ///
+    /// let value = params.get("min-rq");
+    ///
+    /// assert_eq!(value, None);
+    /// ```
     pub fn get(&self, key: &str) -> Option<&ParamValue> {
         self.values.get(key)
     }
