@@ -13,10 +13,12 @@ use crate::config::PipelineStep;
 ///     .arg("input.bam")
 ///     .arg("output.bam")
 ///     .arg("chunks");
+///
+/// assert_eq!(job.cmd, "ccs input.bam output.bam chunks");
 /// ```
 #[derive(Debug, Clone)]
 pub struct Job {
-    cmd: String,
+    pub cmd: String,
 }
 
 impl Job {
@@ -100,5 +102,9 @@ impl Job {
             self.cmd.push_str(arg);
         }
         self
+    }
+
+    pub fn cmd(&self) -> &str {
+        &self.cmd
     }
 }
