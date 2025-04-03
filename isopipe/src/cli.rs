@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 use crate::config::*;
+use crate::executor::manager::ParallelManager;
 
 pub const MIN_STEP: &str = "0";
 pub const MAX_STEP: &str = "6";
@@ -11,6 +12,16 @@ pub const MAX_STEP: &str = "6";
 pub struct Args {
     #[command(subcommand)]
     pub command: SubArgs,
+
+    #[arg(
+        short = 'm',
+        long = "manager",
+        help = "Parallel executor strategy",
+        value_name = "MANAGER",
+        required = false,
+        default_value = "para"
+    )]
+    pub manager: ParallelManager,
 }
 
 impl Args {}
