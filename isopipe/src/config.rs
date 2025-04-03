@@ -43,13 +43,13 @@ const OUTPUT: &str = "isopipe_run";
 /// ```
 #[derive(Deserialize, Debug, Clone)]
 pub struct Config {
-    metadata: HashMap<String, String>,
-    packages: HashMap<String, String>,
-    global: HashMap<String, ParamValue>,
+    pub metadata: HashMap<String, String>,
+    pub packages: HashMap<String, String>,
+    pub global: HashMap<String, ParamValue>,
     #[serde(default, deserialize_with = "deserialize_steps")]
-    steps: Vec<PipelineStep>,
+    pub steps: Vec<PipelineStep>,
     #[serde(default, deserialize_with = "deserialize_to_hash")]
-    params: HashMap<PipelineStep, StepParams>,
+    pub params: HashMap<PipelineStep, StepParams>,
 }
 
 impl Config {
@@ -835,6 +835,21 @@ impl PipelineStep {
     }
 }
 
+impl std::fmt::Display for PipelineStep {
+    /// Format the PipelineStep enum as a string.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let step = PipelineStep::Ccs;
+    ///
+    /// assert_eq!(format!("{}", step), "ccs");
+    /// ```
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_str())
+    }
+}
+
 /// A struct representing step parameters.
 ///
 /// # Fields
@@ -971,6 +986,66 @@ impl ParamValue {
         match self {
             ParamValue::Str(s) => s.clone(),
             _ => String::new(),
+        }
+    }
+
+    /// Convert a ParamValue to an integer.
+    ///
+    /// # Returns
+    ///
+    /// An integer.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let value = ParamValue::Int(1);
+    ///
+    /// assert_eq!(value.to_int(), 1);
+    /// ```
+    pub fn to_int(&self) -> i64 {
+        match self {
+            ParamValue::Int(i) => *i,
+            _ => 0,
+        }
+    }
+
+    /// Convert a ParamValue to a float.
+    ///
+    /// # Returns
+    ///
+    /// A float.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let value = ParamValue::Float(1.0);
+    ///
+    /// assert_eq!(value.to_float(), 1.0);
+    /// ```
+    pub fn to_float(&self) -> f64 {
+        match self {
+            ParamValue::Float(f) => *f,
+            _ => 0.0,
+        }
+    }
+
+    /// Convert a ParamValue to a boolean.
+    ///
+    /// # Returns
+    ///
+    /// A boolean.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let value = ParamValue::Bool(true);
+    ///
+    /// assert_eq!(value.to_bool(), true);
+    /// ```
+    pub fn to_bool(&self) -> bool {
+        match self {
+            ParamValue::Bool(b) => *b,
+            _ => false,
         }
     }
 }
