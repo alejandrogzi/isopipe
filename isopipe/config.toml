@@ -7,22 +7,29 @@ readme = "README.md"
 
 [packages]
 lima = "1.11.0"
-pbcss = "6.4.0"
+pbccs = "6.4.0"
 isoseq3 = "0.0.0"
 minimap3 = "0.0.0"
 isotools = "0.0.1"
+pbindex = "1.7.0"
 
-[params.global]
+[global]
 data_prefix = "foo"                   # raw data prefix
-global_output_dir = "/path/to/outdir" # output dir -> {outdir}/isopipe_run_{timestamp}
+global_output_dir = "/path/to/outdir" # FILL: output dir -> {outdir}/isopipe_run_{timestamp}
+long_queue = "long"                   # long queue name
+short_queue = "short"                 # short queue name
+default_memory = 16                   # default memory in GB
+default_threads = 8                   # default number of threads
 
 [params.ccs]
 chunk = 100                # --chunk
-threads = 64               # -j
+num-threads = 64           # -j
 min-rq = 0.95              # --min-rq
 report-file = "report.txt" # --report-file
 output_dir = "step1_ccs"   # output dir
 input_dir = ""             # raw data dir [only one inmutable]
+memory = 50                # memory in GB
+time = "24.h"              # time for each job
 
 [params.lima]
 isoseq = ""               # leave empty
@@ -30,8 +37,18 @@ peek-guess = ""           # leave empty
 primers = ""              # primers file
 output_dir = "step2_lima" # output dir
 input_dir = "step1_ccs"   # raw data dir [default]
+memory = 50               # memory in GB
+time = "24.h"             # time for each job
+num-threads = 64          # -j
 
 [params.refine]
+primers = ""                # primers file
+output_dir = "step3_refine" # output dir
+input_dir = "step2_lima"    # raw data dir [default]
+memory = 50                 # memory in GB
+num-threads = 64            # --num-threads
+time = "24.h"               # time for each job
+
 
 [params.cluster]
 
@@ -41,3 +58,5 @@ output_dir = "step5_filter_quality" # output dir
 per_id = 0.96                       # --per_id
 clip3 = 50                          # --clip3
 suffix = 30                         # --suffix
+memory = 50                         # memory in GB
+time = "24.h"                       # time for each job
