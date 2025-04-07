@@ -1,10 +1,16 @@
 use std::io::Write;
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::{
-    config::{Config, PipelineStep},
+    config::{Config, PipelineStep, NF_RUNNER},
     executor::job::Job,
 };
+
+const ASSETS: &str = "assets";
+const SHORT_QUEUE: &str = "short_queue";
+const DEFAULT_MEMORY: &str = "default_memory";
+const DEFAULT_THREADS: &str = "default_threads";
 
 #[derive(Debug, Clone)]
 pub struct ParallelExecutor {
@@ -103,18 +109,43 @@ impl ParallelExecutor {
     /// let executor = ParallelExecutor::new(ParallelManager::Nextflow);
     /// executor.add_job("job1");
     /// executor.add_arg("--arg1".to_string());
+    ///
+    /// assert_eq!(executor.manager, "nextflow");
+    /// assert_eq!(executor.jobs.len(), 1);
+    /// assert_eq!(executor.args.len(), 1);
+    ///
     /// executor.execute();
     /// ```
-    pub fn execute(&self, config: &Config, step: &PipelineStep) {
-        let jobs = write_jobs(self.jobs.clone());
+    pub fn execute(&mut self, config: &Config, step: &PipelineStep, global_output_dir: PathBuf) {
+        let jobs = write_jobs(self.jobs.clone(), global_output_dir.clone());
+        let memory = config
+            .get_param(*step, "memory")
+            .unwrap_or(
+                config
+                    .get_global_param(DEFAULT_MEMORY)
+                    .expect("ERROR: No default memory found in global parameters!"),
+            )
+            .to_int();
+        let threads = config
+            .get_param(*step, "num-threads")
+            .unwrap_or(
+                config
+                    .get_global_param(DEFAULT_THREADS)
+                    .expect("ERROR: No default threads found in global parameters!"),
+            )
+            .to_int();
 
         match self.manager {
             ParallelManager::Nextflow => {
-                // INFO: 'nextflow run <pipeline> -c <config> -j <jobs>'
+                // INFO: 'nextflow run <pipeline> -j <jobs>'
+                let runner = get_assets_dir().join(NF_RUNNER);
+
                 let cmd = format!(
-                    "nextflow run --jobs {} --mem {}",
-                    jobs,
-                    config.get_param(*step, "memory").to_int()
+                    "nextflow run {} --jobs {} --mem {} --threads {}",
+                    runner.display(),
+                    jobs.display(),
+                    memory,
+                    threads,
                 );
 
                 std::process::Command::new("sh")
@@ -126,21 +157,37 @@ impl ParallelExecutor {
             ParallelManager::Para => {
                 // INFO: 'para make <step> <jobs> -q <queue> -memoryMb <memory>'
                 let cmd = format!(
-                    "para make {} {} -q {} -memoryMb {}",
+                    "para make {} {} -q {} -memoryMb {} -numCores {}",
                     step,
-                    jobs,
+                    jobs.display(),
                     config
                         .global
-                        .get("short_queue")
+                        .get(SHORT_QUEUE)
                         .expect("ERROR: No short queue found"),
-                    config.get_param(*step, "memory").to_int(),
+                    memory * 1024, // WARN: Memory is in MB
+                    threads,
                 );
 
-                std::process::Command::new("sh")
+                log::info!("INFO: Executing command: {}", cmd);
+
+                let output = std::process::Command::new("sh")
                     .arg("-c")
                     .arg(cmd)
                     .output()
                     .expect("ERROR: Failed to execute command");
+
+                if !output.status.success() {
+                    log::error!(
+                        "ERROR: Failed to execute command: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                    panic!("ERROR: Failed to execute command");
+                } else {
+                    log::info!(
+                        "INFO: Command executed successfully: {}",
+                        String::from_utf8_lossy(&output.stdout)
+                    );
+                }
             }
             ParallelManager::Snakemake => {
                 todo!()
@@ -149,6 +196,36 @@ impl ParallelExecutor {
                 todo!()
             }
         }
+
+        self.reset(global_output_dir);
+    }
+
+    /// Reset the executor by clearing the jobs and arguments
+    ///
+    /// # Example
+    ///
+    /// ```rust, no_run
+    /// use isopipe::executor::ParallelExecutor;
+    ///
+    /// let executor = ParallelExecutor::new(ParallelManager::Nextflow);
+    /// executor.add_job("job1");
+    /// executor.add_arg("--arg1".to_string());
+    ///
+    /// assert_eq!(executor.manager, "nextflow");
+    /// assert_eq!(executor.jobs.len(), 1);
+    ///
+    /// executor.reset();
+    ///
+    /// assert_eq!(executor.jobs.len(), 0);
+    /// assert_eq!(executor.args.len(), 0);
+    /// ```
+    pub fn reset(&mut self, global_output_dir: PathBuf) {
+        self.jobs.clear();
+        self.args.clear();
+
+        // INFO: remove jobs file
+        let filename = global_output_dir.join("jobs");
+        std::fs::remove_file(&filename).expect("ERROR: Failed to remove job file");
     }
 }
 
@@ -281,7 +358,7 @@ impl ParallelManager {
     /// let manager = ParallelManager::new("nextflow");
     /// assert_eq!(manager.cmd, "nextflow");
     /// ```
-    pub fn init(manager: &str) -> Self {
+    pub fn new(manager: &str) -> Self {
         check_manager(manager);
 
         match manager.to_lowercase().as_str() {
@@ -290,6 +367,42 @@ impl ParallelManager {
             "snakemake" => ParallelManager::Snakemake,
             "local" => ParallelManager::Local,
             _ => panic!("ERROR: Unknown parallel manager: {}", manager),
+        }
+    }
+
+    /// Initialize the parallel manager
+    ///
+    /// # Example
+    ///
+    /// ```rust, no_run
+    /// use isopipe::executor::ParallelManager;
+    ///
+    /// let manager = ParallelManager::new("nextflow");
+    /// let executor = manager.init();
+    ///
+    /// assert_eq!(executor.manager, "nextflow");
+    /// assert_eq!(executor.jobs.len(), 0);
+    /// ```
+    pub fn init(&self) -> ParallelExecutor {
+        match self {
+            ParallelManager::Nextflow => {
+                // INFO: 'nextflow run <pipeline> -c <config> -j <jobs>'
+                log::info!("INFO: Initializing nextflow...");
+                self.as_executor()
+            }
+            ParallelManager::Para => {
+                // INFO: 'para make <step> <jobs> -q <queue> -memoryMb <memory>'
+                log::info!("INFO: Initializing para...");
+                self.as_executor()
+            }
+            ParallelManager::Snakemake => {
+                todo!()
+            }
+            ParallelManager::Local => {
+                // INFO: 'sh -c <command>'
+                log::info!("INFO: Initializing local...");
+                self.as_executor()
+            }
         }
     }
 
@@ -331,8 +444,8 @@ impl ParallelManager {
 ///
 /// assert_eq!(filename.to_str().unwrap(), "jobs");
 /// ```
-fn write_jobs(jobs: Vec<Job>) -> String {
-    let filename = String::from("jobs");
+fn write_jobs(jobs: Vec<Job>, global_output_dir: PathBuf) -> PathBuf {
+    let filename = global_output_dir.join("jobs");
 
     let mut file = std::fs::File::create(&filename).expect("ERROR: Failed to create job file");
     for job in jobs {
@@ -368,4 +481,20 @@ fn check_manager(manager: &str) {
         .arg("--version")
         .output()
         .expect("ERROR: Failed to execute command");
+}
+
+/// Get the assets directory
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use isopipe::executor::get_assets_dir;
+///
+/// let assets_dir = get_assets_dir();
+///
+/// assert_eq!(assets_dir.to_str().unwrap(), "assets");
+/// ```
+pub fn get_assets_dir() -> PathBuf {
+    let assets = std::env::current_dir().expect("Failed to get executable path");
+    return assets.join(ASSETS);
 }
