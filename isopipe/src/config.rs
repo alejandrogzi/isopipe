@@ -12,6 +12,7 @@ use crate::cli::StepArgs;
 
 const ISOTOOLS: &str = "isotools";
 const OUTPUT: &str = "isopipe_run";
+pub const NF_RUNNER: &str = "execute_joblist.nf";
 
 /// A struct representing a configuration file.
 ///
@@ -242,7 +243,7 @@ impl Config {
                     return PipelineStep::FilterQuality == s;
                 }
 
-                if &pkg == &"pbcss" {
+                if &pkg == &"pbccs" || &pkg == &"pbindex" {
                     return PipelineStep::Ccs == s;
                 }
 
@@ -250,6 +251,13 @@ impl Config {
                     .expect("ERROR: Could not parse step from package name!")
             }) {
                 self.packages.remove(pkg);
+            }
+
+            if &pkg == &"pbcss" {
+                // WARN: force pbindex if CCS is used
+                if !self.packages.contains_key("pbindex") {
+                    self.packages.insert("pbindex".into(), "1.7.0".into());
+                }
             }
         }
     }
@@ -526,12 +534,33 @@ impl Config {
     ///
     /// assert_eq!(value, ParamValue::Float(0.95));
     /// ```
-    pub fn get_param(&self, step: PipelineStep, key: &str) -> &ParamValue {
+    pub fn get_param(&self, step: PipelineStep, key: &str) -> Option<&ParamValue> {
         self.params
             .get(&step)
-            .expect("ERROR: Step not found in params!")
+            .expect(format!("ERROR: Step {} not found in params!", step).as_str())
             .get(key)
-            .expect("ERROR: Key not found in params!")
+    }
+
+    /// Get a global parameter value from the Config.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - A String containing the parameter key.
+    ///
+    /// # Returns
+    ///
+    /// An Option containing the parameter value.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let config = Config::new();
+    /// let value = config.get_global_param("min-rq");
+    ///
+    /// assert_eq!(value, None);
+    /// ```
+    pub fn get_global_param(&self, key: &str) -> Option<&ParamValue> {
+        self.global.get(key)
     }
 
     /// Get global output directory from the Config
@@ -549,7 +578,7 @@ impl Config {
     ///
     /// assert_eq!(output, PathBuf::from("output_20210901120000"));
     /// ```
-    pub fn get_global_output_dir(&self) -> PathBuf {
+    pub fn create_global_output_dir(&self) -> PathBuf {
         let rs = format!(
             "{}/{}_{}",
             self.global
@@ -558,7 +587,7 @@ impl Config {
                 .to_path_buf()
                 .display(),
             OUTPUT,
-            chrono::Local::now().format("%Y%m%d%H")
+            chrono::Local::now().format("%Y%m%d%H%M")
         )
         .into();
 
@@ -606,50 +635,34 @@ impl Config {
 /// load_package("ccs".into(), Some("5.0.0".into()));
 /// ```
 fn load_package(
-    package: String,
+    mut package: String,
     version: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut cmd = format!("module load {}", package);
     if let Some(v) = version {
         cmd.push_str(&format!("/{}", v));
     }
-    log::info!("Loading: {}...", cmd);
+    log::info!("INFO: Checking {}...", cmd);
 
-    let output = std::process::Command::new("bash")
-        .arg("-c")
-        .arg(&cmd)
+    if package == "pbccs" {
+        package = "ccs".into();
+    }
+
+    let output = std::process::Command::new(package.clone())
+        .arg("--help")
         .output()
         .expect("ERROR: Failed to execute process");
 
     if output.status.success() {
+        log::info!("INFO: Package {} found!", package);
         Ok(())
     } else {
         log::error!(
-            "ERROR: failed to load package {}\n{}.\nINFO: Trying locally...",
-            cmd,
+            "ERROR: failed to execute {}\n{}\nPlease install the package.",
+            package,
             String::from_utf8_lossy(&output.stderr)
         );
-        // INFO: trying now locally to see if it works
-        let output = std::process::Command::new(package.clone())
-            .arg("--help")
-            .output()
-            .expect("ERROR: Failed to execute process");
-
-        if output.status.success() {
-            log::info!(
-                "Package {} found: {}",
-                package,
-                String::from_utf8_lossy(&output.stdout)
-            );
-            Ok(())
-        } else {
-            log::error!(
-                "ERROR: failed to execute {}\n{}\nPlease install the package.",
-                package,
-                String::from_utf8_lossy(&output.stderr)
-            );
-            std::process::exit(1);
-        }
+        std::process::exit(1);
     }
 }
 
@@ -985,7 +998,9 @@ impl ParamValue {
     pub fn to_string(&self) -> String {
         match self {
             ParamValue::Str(s) => s.clone(),
-            _ => String::new(),
+            ParamValue::Int(i) => i.to_string(),
+            ParamValue::Float(f) => f.to_string(),
+            ParamValue::Bool(b) => b.to_string(),
         }
     }
 
