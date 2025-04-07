@@ -5,6 +5,7 @@ use simple_logger::init_with_level;
 use isopipe::{
     cli::{Args, SubArgs},
     core::run,
+    executor::manager::ParallelManager,
 };
 
 fn main() {
@@ -13,9 +14,16 @@ fn main() {
 
     let args: Args = Args::parse();
 
-    // match args.executor [local, para, nextflow]
-    // TODO: ParallelExecutor::init(NEXTFLOW)
-    // TODO: ParallelExecutor::init(PARA)
+    let executor = match args.manager {
+        ParallelManager::Nextflow | ParallelManager::Para => {
+            info!("INFO: Initializing parallel executor...");
+            args.manager.init()
+        }
+        _ => {
+            error!("ERROR: Unknown executor or has not been implemented!");
+            std::process::exit(1);
+        }
+    };
 
     match args.command {
         SubArgs::Run { args } => {
@@ -28,9 +36,9 @@ fn main() {
                 .expect("ERROR: Could not read config file");
             config.load().expect("ERROR: Could not load config file");
 
-            let global_output_dir = config.get_global_output_dir();
+            let global_output_dir = config.create_global_output_dir();
 
-            run(config, global_output_dir).unwrap_or_else(|e| {
+            run(config, global_output_dir, executor).unwrap_or_else(|e| {
                 error!("{}", e);
                 std::process::exit(1);
             });
@@ -49,9 +57,9 @@ fn main() {
                 .load()
                 .expect("ERROR: Could not load config file");
 
-            let global_output_dir = config.get_global_output_dir();
+            let global_output_dir = config.create_global_output_dir();
 
-            run(config, global_output_dir).unwrap_or_else(|e| {
+            run(config, global_output_dir, executor).unwrap_or_else(|e| {
                 error!("{}", e);
                 std::process::exit(1);
             });
