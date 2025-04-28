@@ -621,17 +621,21 @@ impl Config {
                 return step.to_str();
             }
             _ => {
-                let package = step.to_str();
+                let mut package = step.to_str();
+
+                if package == "ccs" {
+                    package = String::from("pbccs");
+                }
+
                 let version = self
                     .packages
                     .get(&package)
                     .expect(format!("ERROR: Package not found -> {}", package).as_str())
                     .to_string();
 
-                if package == "ccs" {
-                    format!("pbccs/{} pbindex/1.7.0", version)
-                } else {
-                    format!("{}/{}", package, version)
+                match package.as_str() {
+                    "pbccs" => format!("{}/{} pbindex/1.7.0", package, version),
+                    _ => format!("{}/{}", package, version),
                 }
             }
         }
