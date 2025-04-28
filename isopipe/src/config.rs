@@ -322,11 +322,9 @@ impl Config {
     /// config.load().unwrap();
     /// ```
     pub fn load(&self) -> Result<(), Box<dyn std::error::Error>> {
-        for (package, version) in &self.packages {
+        for (package, _) in &self.packages {
             if package == ISOTOOLS {
                 build_isotools().expect("ERROR: Could not build isotools!");
-            } else {
-                load_package(package.clone(), Some(version.clone()))?;
             }
         }
 
@@ -616,53 +614,27 @@ impl Config {
             .expect("ERROR: data_prefix not found!")
             .to_string()
     }
-}
 
-/// Load a package using the module system.
-///
-/// # Arguments
-///
-/// * `package` - A String containing the package name.
-/// * `version` - An Option containing the package version.
-///
-/// # Returns
-///
-/// A Result containing a unit or an error.
-///
-/// # Example
-///
-/// ``` rust, no_run
-/// load_package("ccs".into(), Some("5.0.0".into()));
-/// ```
-fn load_package(
-    mut package: String,
-    version: Option<String>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut cmd = format!("module load {}", package);
-    if let Some(v) = version {
-        cmd.push_str(&format!("/{}", v));
-    }
-    log::info!("INFO: Checking {}...", cmd);
+    pub fn get_pkg_from_step(&self, step: &PipelineStep) -> String {
+        match step {
+            PipelineStep::Minimap | PipelineStep::Refine | PipelineStep::Cluster => {
+                return step.to_str();
+            }
+            _ => {
+                let package = step.to_str();
+                let version = self
+                    .packages
+                    .get(&package)
+                    .expect("ERROR: Package not found!")
+                    .to_string();
 
-    if package == "pbccs" {
-        package = "ccs".into();
-    }
-
-    let output = std::process::Command::new(package.clone())
-        .arg("--help")
-        .output()
-        .expect("ERROR: Failed to execute process");
-
-    if output.status.success() {
-        log::info!("INFO: Package {} found!", package);
-        Ok(())
-    } else {
-        log::error!(
-            "ERROR: failed to execute {}\n{}\nPlease install the package.",
-            package,
-            String::from_utf8_lossy(&output.stderr)
-        );
-        std::process::exit(1);
+                if package == "ccs" {
+                    format!("pbccs/{} pbindex/1.7.0", version)
+                } else {
+                    format!("{}/{}", package, version)
+                }
+            }
+        }
     }
 }
 
