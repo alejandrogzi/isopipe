@@ -625,7 +625,7 @@ impl Config {
                 let version = self
                     .packages
                     .get(&package)
-                    .expect("ERROR: Package not found!")
+                    .expect(format!("ERROR: Package not found -> {}", package).as_str())
                     .to_string();
 
                 if package == "ccs" {
