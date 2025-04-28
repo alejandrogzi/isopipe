@@ -144,7 +144,7 @@ impl ParallelExecutor {
                 let runner = get_assets_dir().join(NF_RUNNER);
 
                 let cmd = format!(
-                    "load module {} && nextflow run {} --jobs {} --mem {} --threads {}",
+                    "module load {} && nextflow run {} --jobs {} --mem {} --threads {}",
                     package,
                     runner.display(),
                     jobs.display(),
@@ -161,7 +161,7 @@ impl ParallelExecutor {
             ParallelManager::Para => {
                 // INFO: 'para make <step> <jobs> -q <queue> -memoryMb <memory>'
                 let cmd = format!(
-                    "load module {} && para make {} {} -q {} -memoryMb {} -numCores {}",
+                    "module load {} && para make {} {} -q {} -memoryMb {} -numCores {}",
                     package,
                     step,
                     jobs.display(),
