@@ -118,6 +118,8 @@ impl ParallelExecutor {
     /// ```
     pub fn execute(&mut self, config: &Config, step: &PipelineStep, global_output_dir: PathBuf) {
         let jobs = write_jobs(self.jobs.clone(), global_output_dir.clone());
+        let package = config.get_pkg_from_step(step);
+
         let memory = config
             .get_param(*step, "memory")
             .unwrap_or(
@@ -126,6 +128,7 @@ impl ParallelExecutor {
                     .expect("ERROR: No default memory found in global parameters!"),
             )
             .to_int();
+
         let threads = config
             .get_param(*step, "num-threads")
             .unwrap_or(
@@ -141,7 +144,8 @@ impl ParallelExecutor {
                 let runner = get_assets_dir().join(NF_RUNNER);
 
                 let cmd = format!(
-                    "nextflow run {} --jobs {} --mem {} --threads {}",
+                    "load module {} && nextflow run {} --jobs {} --mem {} --threads {}",
+                    package,
                     runner.display(),
                     jobs.display(),
                     memory,
@@ -157,7 +161,8 @@ impl ParallelExecutor {
             ParallelManager::Para => {
                 // INFO: 'para make <step> <jobs> -q <queue> -memoryMb <memory>'
                 let cmd = format!(
-                    "para make {} {} -q {} -memoryMb {} -numCores {}",
+                    "load module {} && para make {} {} -q {} -memoryMb {} -numCores {}",
+                    package,
                     step,
                     jobs.display(),
                     config
