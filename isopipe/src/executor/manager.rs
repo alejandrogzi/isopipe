@@ -3,14 +3,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use crate::{
-    config::{Config, PipelineStep, NF_RUNNER},
+    config::{Config, PipelineStep},
+    consts::*,
     executor::job::Job,
 };
-
-const ASSETS: &str = "assets";
-const SHORT_QUEUE: &str = "short_queue";
-const DEFAULT_MEMORY: &str = "default_memory";
-const DEFAULT_THREADS: &str = "default_threads";
 
 #[derive(Debug, Clone)]
 pub struct ParallelExecutor {
@@ -567,5 +563,8 @@ pub fn __get_assets_dir() -> PathBuf {
 /// ```
 pub fn __clean_para_dir(dir: PathBuf) {
     let para_dir = dir.join(".para");
-    std::fs::remove_dir_all(&para_dir).expect("ERROR: Failed to remove para directory");
+
+    if para_dir.exists() {
+        std::fs::remove_dir_all(&para_dir).expect("ERROR: Failed to remove para directory");
+    }
 }
