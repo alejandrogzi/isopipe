@@ -186,7 +186,10 @@ impl ParallelExecutor {
                         "ERROR: Failed to execute command: {}",
                         String::from_utf8_lossy(&output.stderr)
                     );
-                    panic!("ERROR: Failed to execute command");
+
+                    self.__channel_error(step);
+
+                    std::process::exit(1);
                 } else {
                     log::info!(
                         "INFO: Command executed successfully: {}",
@@ -231,6 +234,47 @@ impl ParallelExecutor {
         // INFO: remove jobs file
         let filename = global_output_dir.join("jobs");
         std::fs::remove_file(&filename).expect("ERROR: Failed to remove job file");
+    }
+
+    /// Channels errors while using para as executor
+    ///
+    /// # Arguments
+    /// * `step` - The pipeline step that caused the error
+    ///
+    /// # Examples
+    /// ```
+    /// let step = PipelineStep::new("test");
+    /// let executor = ParallelExecutor::new(ParallelManager::Para);
+    /// executor.__channel_error(&step);
+    /// ```
+    pub fn __channel_error(&self, step: &PipelineStep) {
+        match self.manager {
+            ParallelManager::Para => {
+                let dir = std::env::current_dir()
+                    .expect("ERROR: Failed to get current directory")
+                    .join(".para")
+                    .join(step.to_str())
+                    .join("1");
+
+                // INFO: looping through dir until find .crashed
+                for entry in std::fs::read_dir(&dir).expect("ERROR: Failed to read directory") {
+                    let entry = entry.expect("ERROR: Failed to read directory entry");
+                    if entry
+                        .file_name()
+                        .to_str()
+                        .expect("ERROR: could not get filename!")
+                        .ends_with(".crashed")
+                    {
+                        let error = std::fs::read_to_string(entry.path())
+                            .expect("ERROR: Failed to read error file");
+                        log::error!("ERROR: {}", error);
+
+                        return;
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 }
 
