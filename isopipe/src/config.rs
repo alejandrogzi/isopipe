@@ -615,7 +615,21 @@ impl Config {
             .to_string()
     }
 
-    pub fn get_pkg_from_step(&self, step: &PipelineStep) -> String {
+    /// Get package name from the Config.
+    ///
+    /// # Returns
+    ///
+    /// A String containing the package name with the version attached (if any)
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let config = Config::new();
+    /// let package = config.get_package_from_step(&PipelineStep::Ccs);
+    ///
+    /// assert_eq!(package, "pbccs/v0.1.0");
+    /// ```
+    pub fn get_package_from_step(&self, step: &PipelineStep) -> String {
         match step {
             PipelineStep::Minimap | PipelineStep::Refine | PipelineStep::Cluster => {
                 return step.to_str();
@@ -633,10 +647,7 @@ impl Config {
                     .expect(format!("ERROR: Package not found -> {}", package).as_str())
                     .to_string();
 
-                match package.as_str() {
-                    "pbccs" => format!("{}/{} pbindex/1.7.0", package, version),
-                    _ => format!("{}/{}", package, version),
-                }
+                format!("{}/{}", package, version)
             }
         }
     }

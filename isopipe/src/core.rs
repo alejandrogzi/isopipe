@@ -4,9 +4,11 @@ use crate::executor::manager::ParallelExecutor;
 
 use std::path::PathBuf;
 
+// formats
 const BAM: &str = "bam";
 const SAM: &str = "sam";
 
+// config const keys
 const OUTPUT_DIR: &str = "output_dir";
 const PRIMERS: &str = "primers";
 const INPUT_DIR: &str = "input_dir";
@@ -14,6 +16,7 @@ const MEMORY: &str = "memory";
 const TIME: &str = "time";
 const PREFIX: &str = "prefix";
 
+// project-wide const
 const ISOPIPE: &str = "isopipe";
 const PBINDEX: &str = "pbindex";
 
