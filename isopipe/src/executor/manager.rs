@@ -118,7 +118,7 @@ impl ParallelExecutor {
     /// ```
     pub fn execute(&mut self, config: &Config, step: &PipelineStep, global_output_dir: PathBuf) {
         let jobs = write_jobs(self.jobs.clone(), global_output_dir.clone());
-        let package = config.get_pkg_from_step(step);
+        let package = config.get_package_from_step(step);
 
         let memory = config
             .get_param(*step, "memory")
@@ -141,7 +141,7 @@ impl ParallelExecutor {
         match self.manager {
             ParallelManager::Nextflow => {
                 // INFO: 'nextflow run <pipeline> -j <jobs>'
-                let runner = get_assets_dir().join(NF_RUNNER);
+                let runner = __get_assets_dir().join(NF_RUNNER);
 
                 let cmd = format!(
                     "module load {} && nextflow run {} --jobs {} --mem {} --threads {}",
@@ -364,7 +364,7 @@ impl ParallelManager {
     /// assert_eq!(manager.cmd, "nextflow");
     /// ```
     pub fn new(manager: &str) -> Self {
-        check_manager(manager);
+        __check_manager(manager);
 
         match manager.to_lowercase().as_str() {
             "nextflow" => ParallelManager::Nextflow,
@@ -396,6 +396,10 @@ impl ParallelManager {
                 self.as_executor()
             }
             ParallelManager::Para => {
+                __clean_para_dir(
+                    std::env::current_dir().expect("ERROR: Failed to get current directory"),
+                );
+
                 // INFO: 'para make <step> <jobs> -q <queue> -memoryMb <memory>'
                 log::info!("INFO: Initializing para...");
                 self.as_executor()
@@ -473,7 +477,7 @@ fn write_jobs(jobs: Vec<Job>, global_output_dir: PathBuf) -> PathBuf {
 ///
 /// assert_eq!(manager, "nextflow");
 /// ```
-fn check_manager(manager: &str) {
+fn __check_manager(manager: &str) {
     if !["nextflow", "para", "snakemake", "local"].contains(&manager) {
         panic!("ERROR: Unknown parallel manager: {}", manager);
     }
@@ -499,7 +503,25 @@ fn check_manager(manager: &str) {
 ///
 /// assert_eq!(assets_dir.to_str().unwrap(), "assets");
 /// ```
-pub fn get_assets_dir() -> PathBuf {
+pub fn __get_assets_dir() -> PathBuf {
     let assets = std::env::current_dir().expect("Failed to get executable path");
     return assets.join(ASSETS);
+}
+
+/// Clean the .para directory
+///
+/// # Arguments
+/// * `dir` - The current directory where .para resides
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use isopipe::executor::__clean_para_dir;
+///
+/// let dir = std::env::current_dir().expect("Failed to get executable path");
+/// let dir = __clean_para_dir(dir);
+/// ```
+pub fn __clean_para_dir(dir: PathBuf) {
+    let para_dir = dir.join(".para");
+    std::fs::remove_dir_all(&para_dir).expect("ERROR: Failed to remove para directory");
 }
