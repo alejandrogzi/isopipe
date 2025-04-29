@@ -9,10 +9,7 @@ use std::process::{Command, ExitStatus};
 use std::thread;
 
 use crate::cli::StepArgs;
-
-const ISOTOOLS: &str = "isotools";
-const OUTPUT: &str = "isopipe_run";
-pub const NF_RUNNER: &str = "execute_joblist.nf";
+use crate::consts::*;
 
 /// A struct representing a configuration file.
 ///
@@ -651,6 +648,103 @@ impl Config {
             }
         }
     }
+
+    /// Get the directories for a given pipeline step.
+    ///
+    /// # Arguments
+    ///
+    /// * `step` - The pipeline step for which to get the directories.
+    /// * `global_output_dir` - The global output directory.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing the input directory and the output directory for the given pipeline step.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let config = Config::new();
+    /// let step = PipelineStep::Ccs;
+    /// let global_output_dir = PathBuf::from("/path/to/output");
+    ///
+    /// let (input_dir, output_dir) = config.get_step_dirs(&step, &global_output_dir);
+    ///
+    /// assert_eq!(input_dir, PathBuf::from("/path/to/input"));
+    /// assert_eq!(output_dir, PathBuf::from("/path/to/output/ccs"));
+    /// ```
+    pub fn get_step_dirs(
+        &self,
+        step: &PipelineStep,
+        global_output_dir: &Path,
+    ) -> (PathBuf, PathBuf) {
+        let input_dir = self
+            .get_param(*step, INPUT_DIR)
+            .expect("ERROR: input_dir not found for ccs in config.toml!")
+            .to_path_buf();
+        let step_output_dir = global_output_dir.join(
+            self.get_param(*step, OUTPUT_DIR)
+                .expect("ERROR: output_dir not found for ccs in config.toml!")
+                .to_path_buf(),
+        );
+        std::fs::create_dir_all(&step_output_dir).expect("ERROR: failed to create output dir!");
+
+        (input_dir, step_output_dir)
+    }
+
+    /// Get custom fields for a given step.
+    ///
+    /// # Arguments
+    ///
+    /// * `step` - The step for which to retrieve custom fields.
+    /// * `fields` - A vector of field names to retrieve.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let step = PipelineStep::Ccs;
+    /// let config = Config::default();
+    /// let custom_fields = config.get_step_custom_fields(&step, vec!["field1", "field2"]);
+    ///
+    /// assert_eq!(custom_fields, vec!["value1", "value2"]);
+    /// ```
+    pub fn get_step_custom_fields(&self, step: &PipelineStep, fields: Vec<&str>) -> Vec<String> {
+        fields
+            .into_iter()
+            .map(|field| {
+                self.get_param(*step, field)
+                    .expect(
+                        format!("ERROR: {} not found for {} in config.toml!", field, step).as_str(),
+                    )
+                    .to_string()
+            })
+            .collect()
+    }
+
+    /// Get arguments for a given step.
+    ///
+    /// # Arguments
+    ///
+    /// * `step` - The step for which to retrieve arguments.
+    /// * `exclude` - A vector of argument names to exclude.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let step = PipelineStep::Ccs;
+    /// let config = Config::default();
+    /// let args = config.get_step_args(&step, vec!["arg1", "arg2"]);
+    ///
+    /// assert_eq!(args, "arg3 arg4");
+    /// ```
+    pub fn get_step_args(&self, step: &PipelineStep, exclude: Vec<&str>) -> String {
+        let args = self
+            .params()
+            .get(step)
+            .expect("ERROR: ccs not found in config.toml!")
+            .flat(Some(exclude));
+
+        args
+    }
 }
 
 impl Default for Config {
@@ -1254,4 +1348,38 @@ fn cargo_install(path: &Path) {
             path.display()
         )
     );
+}
+
+/// Executes a shell command and logs the output.
+///
+/// # Arguments
+///
+/// * `cmd` - The shell command to execute.
+/// * `log_msg` - The message to log upon successful execution.
+/// * `tool` - The name of the tool being executed.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// shell("ls -l".to_string(), "Listing files", "");
+/// ```
+pub fn shell(cmd: String, log_msg: &str, tool: &str) {
+    let tool = if tool.is_empty() { ISOPIPE } else { tool };
+
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd.clone())
+        .output()
+        .expect("ERROR: Failed to execute process");
+
+    if output.status.success() {
+        log::info!("INFO [{}]: {}!", tool, log_msg);
+    } else {
+        log::error!(
+            "ERROR: failed to execute {}\n{}",
+            cmd,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        std::process::exit(1);
+    }
 }
