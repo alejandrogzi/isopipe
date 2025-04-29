@@ -14,6 +14,9 @@ const MEMORY: &str = "memory";
 const TIME: &str = "time";
 const PREFIX: &str = "prefix";
 
+const ISOPIPE: &str = "isopipe";
+const PBINDEX: &str = "pbindex";
+
 pub fn run(
     config: Config,
     global_output_dir: PathBuf,
@@ -106,7 +109,7 @@ pub fn run_step(
                         bam.display()
                     );
 
-                    generate_pb_index(&bam);
+                    generate_pb_index(&bam, &config);
                 }
 
                 let job = Job::new()
@@ -444,20 +447,63 @@ pub fn run_step(
     }
 }
 
-fn generate_pb_index(bam: &PathBuf) {
-    let output = std::process::Command::new("pbindex")
-        .arg(bam)
+/// Generates a .pbi for a BAM file.
+///
+/// # Arguments
+///
+/// * `bam` - The path to the BAM file.
+/// * `config` - The configuration for the pipeline.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// generate_pb_index(PathBuf::from("example.bam"), &config);
+/// ```
+fn generate_pb_index(bam: &PathBuf, config: &Config) {
+    let msg = format!("Generating PBINDEX for {}", bam.display());
+    let package = config
+        .packages
+        .get(PBINDEX)
+        .expect("PBINDEX package not found");
+
+    let cmd = format!(
+        "module load {}/{} && pbindex {}",
+        PBINDEX,
+        package,
+        bam.display()
+    );
+
+    shell(cmd, &msg, PBINDEX);
+}
+
+/// Executes a shell command and logs the output.
+///
+/// # Arguments
+///
+/// * `cmd` - The shell command to execute.
+/// * `log_msg` - The message to log upon successful execution.
+/// * `tool` - The name of the tool being executed.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// shell("ls -l".to_string(), "Listing files", "");
+/// ```
+pub fn shell(cmd: String, log_msg: &str, tool: &str) {
+    let tool = if tool.is_empty() { ISOPIPE } else { tool };
+
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(cmd.clone())
         .output()
         .expect("ERROR: Failed to execute process");
 
     if output.status.success() {
-        log::info!(
-            "INFO [PBINDEX]: Successfully generated pbindex for {}",
-            bam.display()
-        );
+        log::info!("INFO [{}]: {}!", tool, log_msg);
     } else {
         log::error!(
-            "ERROR: failed to execute pbindex\n{}",
+            "ERROR: failed to execute {}\n{}",
+            cmd,
             String::from_utf8_lossy(&output.stderr)
         );
         std::process::exit(1);
