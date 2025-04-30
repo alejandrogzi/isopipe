@@ -246,27 +246,35 @@ impl ParallelExecutor {
     pub fn __channel_error(&self, step: &PipelineStep) {
         match self.manager {
             ParallelManager::Para => {
-                let dir = std::env::current_dir()
-                    .expect("ERROR: Failed to get current directory")
+                if std::env::current_dir()
+                    .expect("ERROR: Failed to get current directory!")
                     .join(".para")
-                    .join(step.to_str())
-                    .join("1");
+                    .exists()
+                {
+                    let dir = std::env::current_dir()
+                        .expect("ERROR: Failed to get current directory")
+                        .join(".para")
+                        .join(step.to_str())
+                        .join("1");
 
-                // INFO: looping through dir until find .crashed
-                for entry in std::fs::read_dir(&dir).expect("ERROR: Failed to read directory") {
-                    let entry = entry.expect("ERROR: Failed to read directory entry");
-                    if entry
-                        .file_name()
-                        .to_str()
-                        .expect("ERROR: could not get filename!")
-                        .ends_with(".crashed")
-                    {
-                        let error = std::fs::read_to_string(entry.path())
-                            .expect("ERROR: Failed to read error file");
-                        log::error!("ERROR: {}", error);
+                    // INFO: looping through dir until find .crashed
+                    for entry in std::fs::read_dir(&dir).expect("ERROR: Failed to read directory") {
+                        let entry = entry.expect("ERROR: Failed to read directory entry");
+                        if entry
+                            .file_name()
+                            .to_str()
+                            .expect("ERROR: could not get filename!")
+                            .ends_with(".crashed")
+                        {
+                            let error = std::fs::read_to_string(entry.path())
+                                .expect("ERROR: Failed to read error file");
+                            log::error!("ERROR: {}", error);
 
-                        return;
+                            return;
+                        }
                     }
+                } else {
+                    log::info!("INFO: starting clean run, no .para dir found!")
                 }
             }
             _ => {}
