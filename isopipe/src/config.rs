@@ -630,9 +630,10 @@ impl Config {
     /// ```
     pub fn get_package_from_step(&self, step: &PipelineStep) -> String {
         match step {
-            PipelineStep::Minimap | PipelineStep::Refine | PipelineStep::Cluster => {
+            PipelineStep::Minimap => {
                 return step.to_str();
             }
+            PipelineStep::Refine | PipelineStep::Cluster => String::from(ISOSEQ3),
             _ => {
                 let mut package = step.to_str();
 

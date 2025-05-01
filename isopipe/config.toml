@@ -9,8 +9,8 @@ run_id = ""
 [packages]
 lima = "1.11.0"
 pbccs = "6.4.0"
-isoseq3 = "0.0.0"
-minimap3 = "0.0.0"
+isoseq3 = ""
+minimap3 = ""
 isotools = "0.0.1"
 pbindex = "1.7.0"
 

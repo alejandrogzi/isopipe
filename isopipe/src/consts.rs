@@ -18,6 +18,7 @@ pub const ISOPIPE: &str = "isopipe";
 pub const PBINDEX: &str = "pbindex";
 pub const ISOTOOLS: &str = "isotools";
 pub const OUTPUT: &str = "isopipe_run";
+pub const ISOSEQ3: &str = "isoseq3";
 
 // filenames
 pub const NF_RUNNER: &str = "execute_joblist.nf";
