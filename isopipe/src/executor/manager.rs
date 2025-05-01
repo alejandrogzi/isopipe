@@ -446,10 +446,6 @@ impl ParallelManager {
                 self.as_executor()
             }
             ParallelManager::Para => {
-                __clean_para_dir(
-                    std::env::current_dir().expect("ERROR: Failed to get current directory"),
-                );
-
                 // INFO: 'para make <step> <jobs> -q <queue> -memoryMb <memory>'
                 log::info!("INFO: Initializing para...");
                 self.as_executor()
@@ -571,6 +567,7 @@ pub fn __get_assets_dir() -> PathBuf {
 /// let dir = std::env::current_dir().expect("Failed to get executable path");
 /// let dir = __clean_para_dir(dir);
 /// ```
+#[allow(dead_code)]
 pub fn __clean_para_dir(dir: PathBuf) {
     let para_dir = dir.join(".para");
 
