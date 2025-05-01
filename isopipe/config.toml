@@ -14,7 +14,7 @@ isotools = "0.0.1"
 pbindex = "1.7.0"
 
 [global]
-data_prefix = "foo"                   # raw data prefix
+data_prefix = "foo"                   # FILL: raw data prefix
 global_output_dir = "/path/to/outdir" # FILL: output dir -> {outdir}/isopipe_run_{timestamp}
 long_queue = "long"                   # long queue name
 short_queue = "short"                 # short queue name
@@ -22,27 +22,27 @@ default_memory = 16                   # default memory in GB
 default_threads = 8                   # default number of threads
 
 [params.ccs]
-chunk = 100                # --chunk
-num-threads = 64           # -j
-min-rq = 0.95              # --min-rq
-report-file = "report.txt" # --report-file
-output_dir = "step1_ccs"   # output dir
-input_dir = ""             # raw data dir [only one inmutable]
-memory = 50                # memory in GB
-time = "24.h"              # time for each job
+chunk = 100              # --chunk
+num-threads = 64         # -j
+min-rq = 0.95            # --min-rq
+report-file = "report"   # --report-file
+output_dir = "step1_ccs" # output dir
+input_dir = ""           # FILL: raw data dir [only one inmutable]
+memory = 50              # memory in GB
+time = "24.h"            # time for each job
 
 [params.lima]
-isoseq = ""               # leave empty
-peek-guess = ""           # leave empty
-primers = ""              # primers file
-output_dir = "step2_lima" # output dir
+isoseq = ""               # leave empty and position
+peek-guess = ""           # leave empty and position
+primers = ""              # FILL: primers file
+output_dir = "step2_lima" # output dir [default]
 input_dir = "step1_ccs"   # raw data dir [default]
 memory = 50               # memory in GB
 time = "24.h"             # time for each job
 num-threads = 64          # -j
 
 [params.refine]
-primers = ""                # primers file
+primers = ""                # FILL: primers file
 output_dir = "step3_refine" # output dir
 input_dir = "step2_lima"    # raw data dir [default]
 memory = 50                 # memory in GB
