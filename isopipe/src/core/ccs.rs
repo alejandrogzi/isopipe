@@ -58,7 +58,12 @@ pub fn ccs(
 
         // INFO: order/index known ahead from get_step_custom_fields
         let chunks = format!("--chunk {}/{}", idx, fields[0]);
-        let report = format!("--report-file {}/{}", step_output_dir.display(), fields[1]);
+        let report = format!(
+            "--report-file {}/{}_{}.txt",
+            step_output_dir.display(),
+            fields[1],
+            idx
+        );
 
         // WARN: need to check if bam has a .pbi file -> if not, run pbindex
         let mut pbi = bam.clone();
