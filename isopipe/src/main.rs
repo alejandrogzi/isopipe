@@ -32,7 +32,7 @@ fn main() {
             //     std::process::exit(1);
             // });
 
-            let config = isopipe::config::Config::read(args.config)
+            let mut config = isopipe::config::Config::read(args.config)
                 .expect("ERROR: Could not read config file");
             config.load().expect("ERROR: Could not load config file");
 

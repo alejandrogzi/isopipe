@@ -318,7 +318,9 @@ impl Config {
     /// let config = Config::new();
     /// config.load().unwrap();
     /// ```
-    pub fn load(&self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        self.set_run_id();
+
         for (package, _) in &self.packages {
             if package == ISOTOOLS {
                 build_isotools().expect("ERROR: Could not build isotools!");
@@ -744,6 +746,58 @@ impl Config {
             .flat(Some(exclude));
 
         args
+    }
+
+    /// Generates a unique random run ID of 4 characters.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let config = Config::default();
+    /// config.set_run_id();
+    /// let run_id = config.get_run_id();
+    /// ```
+    pub fn set_run_id(&mut self) {
+        let handle = self
+            .metadata
+            .get_mut(RUN_ID)
+            .expect("ERROR: RUN_ID not found in metadata!");
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("ERROR: Time went backwards")
+            .as_nanos();
+
+        let mut id = String::with_capacity(RUN_ID_LEN);
+
+        // Use simple deterministic mixing to extract characters
+        let mut hash = now;
+        for _ in 0..RUN_ID_LEN {
+            let idx = (hash % (CHARSET.len() as u128)) as usize;
+            id.push(CHARSET[idx] as char);
+            hash /= 7; // Crude entropy mixing
+        }
+
+        *handle = id;
+    }
+
+    /// Get the run ID.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let config = Config::default();
+    ///
+    /// config.set_run_id();
+    /// let run_id = config.get_run_id();
+    ///
+    /// println!("Run ID: {}", run_id);
+    /// ```
+    pub fn get_run_id(&self) -> String {
+        self.metadata
+            .get(RUN_ID)
+            .expect("ERROR: RUN_ID not found in metadata!")
+            .clone()
     }
 }
 

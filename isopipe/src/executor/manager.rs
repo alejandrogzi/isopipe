@@ -156,10 +156,12 @@ impl ParallelExecutor {
             }
             ParallelManager::Para => {
                 // INFO: 'para make <step> <jobs> -q <queue> -memoryMb <memory>'
+                let step_code = format!("{}_{}", step, config.get_run_id());
+
                 let cmd = format!(
                     "module load {} && para make {} {} -q {} -memoryMb {} -numCores {}",
                     package,
-                    step,
+                    step_code,
                     jobs.display(),
                     config
                         .global

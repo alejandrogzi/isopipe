@@ -11,6 +11,7 @@ pub const TIME: &str = "time";
 pub const PREFIX: &str = "prefix";
 pub const CHUNK: &str = "chunk";
 pub const REPORT: &str = "report-file";
+pub const RUN_ID: &str = "run_id";
 
 // project-wide pub const
 pub const ISOPIPE: &str = "isopipe";
@@ -26,3 +27,7 @@ pub const ASSETS: &str = "assets";
 pub const SHORT_QUEUE: &str = "short_queue";
 pub const DEFAULT_MEMORY: &str = "default_memory";
 pub const DEFAULT_THREADS: &str = "default_threads";
+
+// miscellaneous constants
+pub const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+pub const RUN_ID_LEN: usize = 4;
