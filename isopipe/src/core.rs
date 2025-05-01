@@ -36,15 +36,33 @@ pub fn run_step(
         }
         PipelineStep::Lima => {
             log::info!("INFO [STEP 1]: Pre-processing for lima started...");
-            lima::lima(step, config, &input_dir, &step_output_dir, prefix)
+            lima::lima(
+                step,
+                config,
+                &global_output_dir.join(input_dir),
+                &step_output_dir,
+                prefix,
+            )
         }
         PipelineStep::Refine => {
             log::info!("INFO [STEP 2]: Pre-processing for isoseq::refine started...");
-            isoseq::refine(step, config, &input_dir, &step_output_dir, prefix)
+            isoseq::refine(
+                step,
+                config,
+                &global_output_dir.join(input_dir),
+                &step_output_dir,
+                prefix,
+            )
         }
         PipelineStep::Cluster => {
             log::info!("INFO [STEP 3]: Pre-processing for isoseq::cluster started...");
-            isoseq::cluster(step, config, &input_dir, &step_output_dir, prefix)
+            isoseq::cluster(
+                step,
+                config,
+                &global_output_dir.join(input_dir),
+                &step_output_dir,
+                prefix,
+            )
         }
         PipelineStep::Minimap => {
             // let output = std::process::Command::new("minimap3")
