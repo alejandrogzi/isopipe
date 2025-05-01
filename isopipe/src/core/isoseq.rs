@@ -32,7 +32,10 @@ pub fn refine(
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
 
-    let args = config.get_step_args(step, vec![INPUT_DIR, PREFIX, OUTPUT_DIR, MEMORY, TIME]);
+    let args = config.get_step_args(
+        step,
+        vec![INPUT_DIR, PREFIX, OUTPUT_DIR, MEMORY, TIME, PRIMERS],
+    );
     let fields = config.get_step_custom_fields(step, vec![PRIMERS]);
 
     for entry in std::fs::read_dir(input_dir)
@@ -49,15 +52,18 @@ pub fn refine(
     {
         let bam = entry.path();
 
-        let identifier = bam
+        let name_fields = bam
             .file_stem()
             .expect("ERROR: failed to get file stem")
             .to_str()
             .expect("ERROR: failed to convert path to str")
             .split('.')
             .collect::<Vec<&str>>();
-        let identifier = identifier.get(2).expect("ERROR: failed to get identifier");
-        let out_bam = step_output_dir.join(format!("{}.flnc.{}.bam", prefix, identifier));
+
+        let identifier = name_fields.get(2).expect("ERROR: failed to get identifier");
+        let primer_tag = name_fields.get(3).expect("ERROR: failed to get primer tag");
+        let out_bam =
+            step_output_dir.join(format!("{}.{}.flnc.{}.bam", prefix, primer_tag, identifier));
 
         let job = Job::new()
             .task(PipelineStep::Refine)
