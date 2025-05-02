@@ -64,14 +64,14 @@ pub fn refine(
 
         let job = Job::new()
             .task(*step)
-            .arg(&args)
             .arg(bam.to_str().expect("ERROR: failed to convert path to str"))
             .arg(&fields[0])
             .arg(
                 out_bam
                     .to_str()
                     .expect("ERROR: failed to convert path to str"),
-            );
+            )
+            .arg(&args);
 
         jobs.push(job)
     }
@@ -119,14 +119,16 @@ pub fn cluster(
         CLUSTER,
     );
 
-    let args = config.get_step_args(step, vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME]);
-    let out_bam = format!("{}/{}", step_output_dir.display(), CLUSTERED);
+    let args = config.get_step_args(step, vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, LOG_FILE]);
+    let out_bam = format!("{}/{}", step_output_dir.display(), CLUSTERED_BAM);
+    let fields = config.get_step_custom_fields(step, vec![LOG_FILE]);
 
     let jobs = vec![Job::new()
         .task(*step)
         .arg(&all_fofn)
         .arg(&out_bam)
-        .arg(&args)];
+        .arg(&args)
+        .arg(format!("--log-file {}/{}", &step_output_dir.display(), fields[0]).as_str())];
 
     log::info!("INFO [STEP 3]: Pre-processing completed -> Running...");
 
