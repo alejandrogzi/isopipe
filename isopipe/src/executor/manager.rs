@@ -156,7 +156,8 @@ impl ParallelExecutor {
             }
             ParallelManager::Para => {
                 // INFO: 'para make <step> <jobs> -q <queue> -memoryMb <memory>'
-                let step_code = format!("{}_{}", step, config.get_run_id());
+                let run_id = config.get_run_id();
+                let step_code = format!("{}_{}", step, run_id);
 
                 let cmd = format!(
                     "module load {} && para make {} {} -q {} -memoryMb {} -numCores {}",
@@ -185,7 +186,7 @@ impl ParallelExecutor {
                         String::from_utf8_lossy(&output.stderr)
                     );
 
-                    self.__channel_error(step);
+                    self.__channel_error(step, run_id);
 
                     std::process::exit(1);
                 } else {
@@ -245,7 +246,7 @@ impl ParallelExecutor {
     /// let executor = ParallelExecutor::new(ParallelManager::Para);
     /// executor.__channel_error(&step);
     /// ```
-    pub fn __channel_error(&self, step: &PipelineStep) {
+    pub fn __channel_error(&self, step: &PipelineStep, run_id: String) {
         match self.manager {
             ParallelManager::Para => {
                 if std::env::current_dir()
@@ -256,7 +257,7 @@ impl ParallelExecutor {
                     let dir = std::env::current_dir()
                         .expect("ERROR: Failed to get current directory")
                         .join(".para")
-                        .join(step.to_str())
+                        .join(format!("{}_{}", step, run_id))
                         .join("1");
 
                     // INFO: looping through dir until find .crashed
