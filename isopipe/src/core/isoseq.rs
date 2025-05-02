@@ -76,7 +76,7 @@ pub fn refine(
         jobs.push(job)
     }
 
-    log::info!("INFO [STEP 2]: Pre-processing completed -> Running...");
+    log::info!("INFO [STEP 3]: Pre-processing completed -> Running...");
 
     return jobs;
 }
@@ -130,7 +130,7 @@ pub fn cluster(
         .arg(&args)
         .arg(format!("--log-file {}/{}", &step_output_dir.display(), fields[0]).as_str())];
 
-    log::info!("INFO [STEP 3]: Pre-processing completed -> Running...");
+    log::info!("INFO [STEP 4]: Pre-processing completed -> Running...");
 
     return jobs;
 }

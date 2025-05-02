@@ -4,6 +4,7 @@ use std::path::PathBuf;
 pub mod ccs;
 pub mod isoseq;
 pub mod lima;
+pub mod minimap;
 
 pub fn run(
     config: Config,
@@ -31,11 +32,11 @@ pub fn run_step(
 
     let jobs = match step {
         PipelineStep::Ccs => {
-            log::info!("INFO [STEP 0]: Pre-processing for ccs started...");
+            log::info!("INFO [STEP 1]: Pre-processing for ccs started...");
             ccs::ccs(step, config, &input_dir, &step_output_dir, prefix)
         }
         PipelineStep::Lima => {
-            log::info!("INFO [STEP 1]: Pre-processing for lima started...");
+            log::info!("INFO [STEP 2]: Pre-processing for lima started...");
             lima::lima(
                 step,
                 config,
@@ -45,7 +46,7 @@ pub fn run_step(
             )
         }
         PipelineStep::Refine => {
-            log::info!("INFO [STEP 2]: Pre-processing for isoseq::refine started...");
+            log::info!("INFO [STEP 3]: Pre-processing for isoseq::refine started...");
             isoseq::refine(
                 step,
                 config,
@@ -55,7 +56,7 @@ pub fn run_step(
             )
         }
         PipelineStep::Cluster => {
-            log::info!("INFO [STEP 3]: Pre-processing for isoseq::cluster started...");
+            log::info!("INFO [STEP 4]: Pre-processing for isoseq::cluster started...");
             isoseq::cluster(
                 step,
                 config,
@@ -65,23 +66,13 @@ pub fn run_step(
             )
         }
         PipelineStep::Minimap => {
-            // let output = std::process::Command::new("minimap3")
-            //     .arg("--help")
-            //     .output()
-            //     .expect("ERROR: Failed to execute process");
-
-            // if output.status.success() {
-            //     log::info!("minimap: {}", String::from_utf8_lossy(&output.stdout));
-            // } else {
-            //     log::error!(
-            //         "ERROR: failed to execute minimap\n{}",
-            //         String::from_utf8_lossy(&output.stderr)
-            //     );
-            //     std::process::exit(1);
-            // }
-            //
-
-            todo!()
+            log::info!("INFO [STEP 5]: Pre-processing for minimap started...");
+            minimap::minimap2(
+                step,
+                config,
+                &global_output_dir.join(input_dir),
+                &step_output_dir,
+            )
         }
         PipelineStep::FilterQuality => {
             todo!()
