@@ -1,4 +1,5 @@
 use crate::config::PipelineStep;
+use std::fmt::Write;
 
 /// Struct to represent a job to be executed
 /// by the pipeline
@@ -56,7 +57,7 @@ impl Job {
             PipelineStep::Refine => "isoseq3 refine",
             PipelineStep::Cluster => "isoseq3 cluster",
             PipelineStep::FilterQuality => "isotools iso-polya filter",
-            PipelineStep::Minimap => "minimap3",
+            PipelineStep::Minimap => "minimap2",
             PipelineStep::LoadGenome => "load_genome",
         };
 
@@ -77,9 +78,10 @@ impl Job {
     ///
     /// assert_eq!(job.cmd, "ccs input.bam");
     /// ```
-    pub fn arg(mut self, arg: &str) -> Self {
+    pub fn arg<D: std::fmt::Display>(mut self, arg: D) -> Self {
         self.cmd.push(' ');
-        self.cmd.push_str(arg);
+        write!(&mut self.cmd, "{arg}").expect("ERROR: Failed to append arg to cmd!");
+
         self
     }
 
