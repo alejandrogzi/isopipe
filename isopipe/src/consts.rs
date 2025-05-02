@@ -3,6 +3,7 @@ pub const BAM: &str = "bam";
 pub const SAM: &str = "sam";
 pub const FA: &str = "fa";
 pub const TWOBIT: &str = ".2bit";
+pub const FASTA_GZ: &str = "fasta.gz";
 
 // config pub const keys
 pub const OUTPUT_DIR: &str = "output_dir";
@@ -29,9 +30,8 @@ pub const CLUSTER: &str = "cluster";
 pub const NF_RUNNER: &str = "execute_joblist.nf";
 pub const FOFN: &str = "all.flnc.fofn";
 pub const CLUSTERED_BAM: &str = "all.clustered.bam";
-pub const CLUSTERED_FA: &str = "all.clustered.fasta.gz";
-pub const CU_ALN_BAM: &str = "all.clustered.aligned.bam";
-pub const CU_ALN_SAM: &str = "all.clustered.aligned.sam";
+pub const CLUSTERED: &str = "all.clustered";
+pub const CU_ALN: &str = "all.clustered.aligned";
 pub const GENOME_FA: &str = "genome.fa";
 
 // manager consts
@@ -46,3 +46,4 @@ pub const RUN_ID_LEN: usize = 4;
 
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];
+pub const CLUSTERING_CATEGORIES: &[&str] = &["hq", "lq", "singletons"];

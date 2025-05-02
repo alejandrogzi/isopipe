@@ -29,18 +29,37 @@ pub fn minimap2(
     input_dir: &PathBuf,
     step_output_dir: &PathBuf,
 ) -> Vec<Job> {
+    let mut jobs = Vec::new();
+
     let args = config.get_step_args(step, vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, GENOME]);
     let genome = get_genome(config, step, step_output_dir);
 
-    let reads = input_dir.join(CLUSTERED_FA);
-    let alignment = step_output_dir.join(CU_ALN_SAM);
+    for category in CLUSTERING_CATEGORIES {
+        let alignment = step_output_dir.join(format!("{}.{}.{}", CU_ALN, category, SAM));
+        let reads = input_dir.join(format!("{}.{}.{}", CLUSTERED, category, FASTA_GZ));
 
-    let jobs = vec![Job::new()
-        .task(*step)
-        .arg(&args)
-        .arg(&format!("-o {}", alignment.display()))
-        .arg(&genome)
-        .arg(reads.display())];
+        if !reads.exists()
+            || reads
+                .metadata()
+                .expect(&format!(
+                    "ERROR: failed to get metadata from {}",
+                    reads.display()
+                ))
+                .len()
+                == 0
+        {
+            continue;
+        }
+
+        let job = Job::new()
+            .task(*step)
+            .arg(&args)
+            .arg(&format!("-o {}", alignment.display()))
+            .arg(&genome)
+            .arg(reads.display());
+
+        jobs.push(job);
+    }
 
     log::info!("INFO [STEP 5]: Pre-processing completed -> Running...");
 
