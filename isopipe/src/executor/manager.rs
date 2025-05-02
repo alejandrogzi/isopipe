@@ -128,9 +128,12 @@ impl ParallelExecutor {
         let threads = config
             .get_param(*step, "num-threads")
             .unwrap_or(
-                config
-                    .get_global_param(DEFAULT_THREADS)
-                    .expect("ERROR: No default threads found in global parameters!"),
+                // INFO: covering minimap -t flag -> else, roll up to default
+                config.get_param(*step, "t").unwrap_or(
+                    config
+                        .get_global_param(DEFAULT_THREADS)
+                        .expect("ERROR: No default threads found in global parameters!"),
+                ),
             )
             .to_int();
 
@@ -260,17 +263,27 @@ impl ParallelExecutor {
                         .join(format!("{}_{}", step, run_id))
                         .join("1");
 
+                    log::info!(
+                        "INFO: Checking for crashed processes in directory: {}...",
+                        dir.display()
+                    );
+
                     // INFO: looping through dir until find .crashed
                     for entry in std::fs::read_dir(&dir).expect("ERROR: Failed to read directory") {
-                        let entry = entry.expect("ERROR: Failed to read directory entry");
+                        let entry = entry.expect(&format!(
+                            "ERROR: Failed to read directory entry -> {}",
+                            dir.display(),
+                        ));
                         if entry
                             .file_name()
                             .to_str()
-                            .expect("ERROR: could not get filename!")
+                            .expect(&format!("ERROR: could not get filename -> {:?}", entry))
                             .ends_with(".crashed")
                         {
-                            let error = std::fs::read_to_string(entry.path())
-                                .expect("ERROR: Failed to read error file");
+                            let error = std::fs::read_to_string(entry.path()).expect(&format!(
+                                "ERROR: Failed to read error file -> {}",
+                                entry.path().display()
+                            ));
                             log::error!("ERROR: {}", error);
 
                             return;
