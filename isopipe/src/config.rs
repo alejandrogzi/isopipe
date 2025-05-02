@@ -850,7 +850,7 @@ impl PipelineStep {
             "lima" => Ok(Self::Lima),
             "refine" => Ok(Self::Refine),
             "cluster" => Ok(Self::Cluster),
-            "minimap3" => Ok(Self::Minimap),
+            "minimap2" => Ok(Self::Minimap),
             "filter-quality" => Ok(Self::FilterQuality),
             "load-genome" => Ok(Self::LoadGenome),
             _ => Err(format!("ERROR: Invalid pipeline step: {}", s)),
@@ -907,7 +907,7 @@ impl PipelineStep {
             Self::Lima => "lima".into(),
             Self::Refine => "refine".into(),
             Self::Cluster => "cluster".into(),
-            Self::Minimap => "minimap3".into(),
+            Self::Minimap => "minimap2".into(),
             Self::FilterQuality => "filter-quality".into(),
             Self::LoadGenome => "load-genome".into(),
         }
@@ -1017,6 +1017,14 @@ impl StepParams {
     ///
     /// A string containing the flattened parameters.
     ///
+    /// # Note
+    ///
+    /// All parameters with 2 or less characters are interpreted as short
+    /// flags and will be prefixed with a single dash (`-`). Parameters with
+    /// more than 2 characters will be prefixed with two dashes (`--`).
+    /// Furthremore, all parameters in SPECIAL_PARAMETER will be suffixed with an
+    /// equal sign (`=`).
+    ///
     /// # Example
     ///
     /// ``` rust, no_run
@@ -1038,16 +1046,28 @@ impl StepParams {
             .iter()
             .filter(|(key, _)| !exclude.contains(key.as_str()))
             .map(|(key, value)| {
-                format!(
-                    "--{} {}",
-                    key,
-                    match value {
-                        ParamValue::Int(i) => i.to_string(),
-                        ParamValue::Float(flt) => flt.to_string(),
-                        ParamValue::Bool(b) => b.to_string(),
-                        ParamValue::Str(s) => s.clone(),
+                let mut argument = if key.len() > 2 {
+                    if SPECIAL_PARAMETER.contains(&key.as_str()) {
+                        format!("--{}=", key)
+                    } else {
+                        format!("--{} ", key)
                     }
-                )
+                } else {
+                    if SPECIAL_PARAMETER.contains(&key.as_str()) {
+                        format!("-{}=", key)
+                    } else {
+                        format!("-{} ", key)
+                    }
+                };
+
+                match value {
+                    ParamValue::Int(i) => argument.push_str(&i.to_string()),
+                    ParamValue::Float(flt) => argument.push_str(&flt.to_string()),
+                    ParamValue::Bool(b) => argument.push_str(&b.to_string()),
+                    ParamValue::Str(s) => argument.push_str(&s.clone()),
+                }
+
+                argument
             })
             .collect::<Vec<_>>()
             .join(" ")
