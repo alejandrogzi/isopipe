@@ -1,6 +1,8 @@
 // formats
 pub const BAM: &str = "bam";
 pub const SAM: &str = "sam";
+pub const FA: &str = "fa";
+pub const TWOBIT: &str = "twobit";
 
 // config pub const keys
 pub const OUTPUT_DIR: &str = "output_dir";
@@ -30,6 +32,7 @@ pub const CLUSTERED_BAM: &str = "all.clustered.bam";
 pub const CLUSTERED_FA: &str = "all.clustered.fasta.gz";
 pub const CU_ALN_BAM: &str = "all.clustered.aligned.bam";
 pub const CU_ALN_SAM: &str = "all.clustered.aligned.sam";
+pub const GENOME_FA: &str = "genome.fa";
 
 // manager consts
 pub const ASSETS: &str = "assets";
