@@ -76,7 +76,7 @@ pub fn lima(
         jobs.push(job)
     }
 
-    log::info!("INFO [STEP 1]: Pre-processing completed -> Running...");
+    log::info!("INFO [STEP 2]: Pre-processing completed -> Running...");
 
     return jobs;
 }

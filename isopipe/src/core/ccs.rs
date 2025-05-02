@@ -92,7 +92,7 @@ pub fn ccs(
         jobs.push(job)
     }
 
-    log::info!("INFO [STEP0]: Pre-processing completed -> Running...");
+    log::info!("INFO [STEP 1]: Pre-processing completed -> Running...");
 
     return jobs;
 }
