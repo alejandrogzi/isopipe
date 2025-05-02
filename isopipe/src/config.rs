@@ -917,6 +917,37 @@ impl PipelineStep {
         }
     }
 
+    /// Convert a PipelineStep enum to a unique string.
+    ///
+    /// # Returns
+    ///
+    /// A string containing the pipeline step.
+    ///
+    /// # Note
+    ///
+    /// Solves `PipelineStep::Cluster` and `PipelineStep::Minimap`
+    /// having 'isoseq' as their parent package.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let step = PipelineStep::Ccs;
+    /// let s = step.to_str();
+    ///
+    /// assert_eq!(s, "ccs");
+    /// ```
+    pub fn to_unique_str(&self) -> String {
+        match self {
+            Self::Ccs => "ccs".into(),
+            Self::Lima => "lima".into(),
+            Self::Refine => "refine".into(),
+            Self::Cluster => "cluster".into(),
+            Self::Minimap => "minimap2".into(),
+            Self::FilterQuality => "filter-quality".into(),
+            Self::LoadGenome => "load-genome".into(),
+        }
+    }
+
     /// Convert a PipelineStep enum to an integer.
     ///
     /// # Returns
@@ -999,7 +1030,7 @@ impl std::fmt::Display for PipelineStep {
     /// assert_eq!(format!("{}", step), "ccs");
     /// ```
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_str())
+        write!(f, "{}", self.to_unique_str())
     }
 }
 
