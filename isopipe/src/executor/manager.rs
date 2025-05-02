@@ -159,45 +159,14 @@ impl ParallelExecutor {
             }
             ParallelManager::Para => {
                 // INFO: 'para make <step> <jobs> -q <queue> -memoryMb <memory>'
-                let run_id = config.get_run_id();
-                let step_code = format!("{}_{}", step, run_id);
-
-                let cmd = format!(
-                    "module load {} && para make {} {} -q {} -memoryMb {} -numCores {}",
+                self.__para(
+                    config,
+                    &step.to_unique_str(),
+                    &jobs,
+                    threads as u32,
+                    memory as u32,
                     package,
-                    step_code,
-                    jobs.display(),
-                    config
-                        .global
-                        .get(SHORT_QUEUE)
-                        .expect("ERROR: No short queue found"),
-                    memory * 1024, // WARN: Memory is in MB
-                    threads,
                 );
-
-                log::info!("INFO: Executing command: {}", cmd);
-
-                let output = std::process::Command::new("sh")
-                    .arg("-c")
-                    .arg(cmd)
-                    .output()
-                    .expect("ERROR: Failed to execute command");
-
-                if !output.status.success() {
-                    log::error!(
-                        "ERROR: Failed to execute command: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-
-                    self.__channel_error(step, run_id);
-
-                    std::process::exit(1);
-                } else {
-                    log::info!(
-                        "INFO: Command executed successfully: {}",
-                        String::from_utf8_lossy(&output.stdout)
-                    );
-                }
             }
             ParallelManager::Snakemake => {
                 todo!()
@@ -294,6 +263,124 @@ impl ParallelExecutor {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// Send a custom set of jobs to the executor
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The configuration for the executor
+    /// * `step` - The step to be executed
+    /// * `dir` - The directory containing the jobs
+    /// * `threads` - The number of threads to use
+    /// * `memory` - The amount of memory to use
+    /// * `package` - The package to be executed
+    ///
+    /// # Example
+    ///
+    /// ```rust, no_run
+    /// let config = Config::default();
+    /// let step = "step1";
+    /// let dir = PathBuf::from("/path/to/jobs");
+    /// let threads = 4;
+    /// let memory = 1024;
+    /// let package = "package1";
+    ///
+    /// executor.and_send(&config, step, dir, threads, memory, package);
+    /// ```
+    pub fn and_send(
+        &mut self,
+        config: &Config,
+        step: &str,
+        dir: PathBuf,
+        threads: u32,
+        memory: u32,
+        package: String,
+    ) {
+        match self.manager {
+            ParallelManager::Para => {
+                let jobs = write_jobs(self.jobs.clone(), dir);
+                self.__para(config, step, &jobs, threads, memory, package);
+            }
+            _ => {
+                todo!()
+            }
+        }
+    }
+
+    /// Send a custom set of jobs to para
+    ///
+    /// # Arguments
+    /// * `config` - The configuration for the executor
+    /// * `step` - The step name
+    /// * `jobs` - The path to the jobs file
+    /// * `threads` - The number of threads to use
+    /// * `memory` - The amount of memory to use in MB
+    /// * `package` - The package to use
+    ///
+    /// # Example
+    ///
+    /// ```rust, no_run
+    /// let config = Config::default();
+    /// let step = "step1";
+    /// let dir = PathBuf::from("/path/to/jobs");
+    /// let threads = 4;
+    /// let memory = 1024;
+    /// let package = "package1";
+    ///
+    /// let mut manager = ExecutorManager::new(config);
+    /// manager.__para(&config, step, &dir, threads, memory, package);
+    /// ```
+    pub fn __para(
+        &mut self,
+        config: &Config,
+        step: &str,
+        jobs: &PathBuf,
+        threads: u32,
+        memory: u32,
+        package: String,
+    ) {
+        let run_id = config.get_run_id();
+        let step_code = format!("{}_{}", step, run_id);
+
+        let cmd = format!(
+            "module load {} && para make {} {} -q {} -memoryMb {} -numCores {}",
+            package,
+            step_code,
+            jobs.display(),
+            config
+                .global
+                .get(SHORT_QUEUE)
+                .expect("ERROR: No short queue found"),
+            memory * 1024, // WARN: Memory is in MB
+            threads,
+        );
+
+        log::info!("INFO: Executing command: {}", cmd);
+
+        let output = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(cmd)
+            .output()
+            .expect("ERROR: Failed to execute command");
+
+        if !output.status.success() {
+            log::error!(
+                "ERROR: Failed to execute command: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+
+            if let Ok(step) = PipelineStep::from_str(step) {
+                self.__channel_error(&step, run_id);
+            }
+
+            std::process::exit(1);
+        } else {
+            log::info!(
+                "INFO: Command executed successfully: {}",
+                String::from_utf8_lossy(&output.stdout)
+            );
         }
     }
 }

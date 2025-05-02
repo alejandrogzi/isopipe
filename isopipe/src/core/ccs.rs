@@ -1,4 +1,8 @@
-use crate::{config::*, consts::*, executor::job::Job};
+use crate::{
+    config::*,
+    consts::*,
+    executor::{job::Job, manager::ParallelExecutor},
+};
 use std::path::PathBuf;
 
 /// Run ccs
@@ -29,8 +33,10 @@ pub fn ccs(
     input_dir: &PathBuf,
     step_output_dir: &PathBuf,
     prefix: String,
+    executor: &mut ParallelExecutor,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
+    let mut require_pbi = Vec::new();
 
     let fields = config.get_step_custom_fields(step, vec![CHUNK, REPORT]);
     let args = config.get_step_args(
@@ -38,8 +44,7 @@ pub fn ccs(
         vec![INPUT_DIR, PREFIX, OUTPUT_DIR, CHUNK, MEMORY, TIME, REPORT],
     );
 
-    // WARN: ignoring prefix + .subreads ending -> forcing to isolate samples
-    for (idx, entry) in std::fs::read_dir(input_dir)
+    for (_, entry) in std::fs::read_dir(input_dir)
         .expect("Failed to read assets directory")
         .flatten()
         .filter(|entry| {
@@ -52,18 +57,46 @@ pub fn ccs(
         })
         .enumerate()
     {
-        let idx = idx + 1; // WARN: 1-indexed
+        let chunk_size = fields[0]
+            .parse::<usize>()
+            .expect("ERROR: Failed to parse chunk size");
         let bam = entry.path();
-        let out_bam = step_output_dir.join(format!("{}.ccs.{}.bam", prefix, idx));
 
-        // INFO: order/index known ahead from get_step_custom_fields
-        let chunks = format!("--chunk {}/{}", idx, fields[0]);
-        let report = format!(
-            "--report-file {}/{}_{}.txt",
-            step_output_dir.display(),
-            fields[1],
-            idx
-        );
+        for chunk_idx in 0..chunk_size {
+            let out_bam = step_output_dir.join(format!(
+                "{}.{}.ccs.{}.bam",
+                prefix,
+                bam.file_stem()
+                    .expect(&format!(
+                        "ERROR: failed to get name from bam: {}",
+                        bam.display()
+                    ))
+                    .to_string_lossy(),
+                chunk_idx
+            ));
+
+            let chunks = format!("--chunk {}/{}", chunk_idx, chunk_size);
+            let report = format!(
+                "--report-file {}/{}_{}.txt",
+                step_output_dir.display(),
+                fields[1],
+                chunk_idx
+            );
+
+            let job = Job::new()
+                .task(PipelineStep::Ccs)
+                .arg(bam.to_str().expect("ERROR: failed to convert path to str"))
+                .arg(
+                    out_bam
+                        .to_str()
+                        .expect("ERROR: failed to convert path to str"),
+                )
+                .arg(&chunks)
+                .arg(&args)
+                .arg(&report);
+
+            jobs.push(job)
+        }
 
         // WARN: need to check if bam has a .pbi file -> if not, run pbindex
         let mut pbi = bam.clone();
@@ -74,22 +107,12 @@ pub fn ccs(
                 bam.display()
             );
 
-            generate_pb_index(&bam, &config);
+            require_pbi.push(bam.clone());
         }
+    }
 
-        let job = Job::new()
-            .task(PipelineStep::Ccs)
-            .arg(bam.to_str().expect("ERROR: failed to convert path to str"))
-            .arg(
-                out_bam
-                    .to_str()
-                    .expect("ERROR: failed to convert path to str"),
-            )
-            .arg(&chunks)
-            .arg(&args)
-            .arg(&report);
-
-        jobs.push(job)
+    if !require_pbi.is_empty() {
+        generate_pb_index(require_pbi, &config, executor, step_output_dir);
     }
 
     log::info!("INFO [STEP 1]: Pre-processing completed -> Running...");
@@ -97,11 +120,11 @@ pub fn ccs(
     return jobs;
 }
 
-/// Generates a .pbi for a BAM file.
+/// Generates a .pbi for a set of BAM files in parallel
 ///
 /// # Arguments
 ///
-/// * `bam` - The path to the BAM file.
+/// * `bam` - The paths to the BAM files.
 /// * `config` - The configuration for the pipeline.
 ///
 /// # Example
@@ -109,19 +132,36 @@ pub fn ccs(
 /// ```rust, no_run
 /// generate_pb_index(PathBuf::from("example.bam"), &config);
 /// ```
-fn generate_pb_index(bam: &PathBuf, config: &Config) {
-    let msg = format!("Generating PBINDEX for {}", bam.display());
-    let package = config
-        .packages
-        .get(PBINDEX)
-        .expect("PBINDEX package not found");
-
-    let cmd = format!(
-        "module load {}/{} && pbindex {}",
-        PBINDEX,
-        package,
-        bam.display()
+fn generate_pb_index(
+    bams: Vec<PathBuf>,
+    config: &Config,
+    executor: &mut ParallelExecutor,
+    step_output_dir: &PathBuf,
+) {
+    log::info!(
+        "INFO [STEP 1a]: Generating .pbi indexes for {} BAM files...",
+        bams.len()
     );
 
-    shell(cmd, &msg, PBINDEX);
+    let mut jobs = Vec::new();
+
+    let package = format!(
+        "{}/{}",
+        PBINDEX,
+        config
+            .packages
+            .get(PBINDEX)
+            .expect("PBINDEX package not found")
+    );
+
+    bams.iter().for_each(|bam| {
+        let cmd = format!("pbindex {}", bam.display());
+        let job = Job::from(cmd);
+
+        jobs.push(job);
+    });
+
+    executor
+        .add_jobs(jobs)
+        .and_send(config, PBINDEX, step_output_dir.clone(), 1, 8, package);
 }

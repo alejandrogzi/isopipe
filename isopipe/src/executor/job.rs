@@ -38,6 +38,21 @@ impl Job {
         Self { cmd: String::new() }
     }
 
+    /// Create a new job from a command string
+    ///
+    /// # Example
+    ///
+    /// ```rust, no_run
+    /// use isopipe::executor::job::Job;
+    ///
+    /// let job = Job::from("ccs input.bam output.bam chunks");
+    ///
+    /// assert_eq!(job.cmd, "ccs input.bam output.bam chunks");
+    /// ```
+    pub fn from(cmd: String) -> Self {
+        Self { cmd }
+    }
+
     /// Add a task to the job
     ///
     /// # Example
@@ -56,7 +71,7 @@ impl Job {
             PipelineStep::Lima => "lima",
             PipelineStep::Refine => "isoseq refine",
             PipelineStep::Cluster => "isoseq cluster",
-            PipelineStep::FilterQuality => "isotools iso-polya filter",
+            PipelineStep::Polya => "isotools iso-polya filter",
             PipelineStep::Minimap => "minimap2",
             PipelineStep::LoadGenome => "load_genome",
         };
