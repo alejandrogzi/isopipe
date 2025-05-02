@@ -2,7 +2,7 @@
 pub const BAM: &str = "bam";
 pub const SAM: &str = "sam";
 pub const FA: &str = "fa";
-pub const TWOBIT: &str = "twobit";
+pub const TWOBIT: &str = ".2bit";
 
 // config pub const keys
 pub const OUTPUT_DIR: &str = "output_dir";
