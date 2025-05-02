@@ -10,7 +10,7 @@ run_id = ""
 lima = "1.11.0"
 pbccs = "6.4.0"
 isoseq3 = ""
-minimap3 = ""
+minimap2 = "2.26"
 isotools = "0.0.1"
 pbindex = "1.7.0"
 
@@ -59,6 +59,24 @@ memory = 50                    # memory in GB
 num-threads = 128              # --num-threads [higher the better]
 time = "24.h"                  # time for each job
 log-file = "step4_cluster.log" # log file
+
+[params.minimap]
+G = "1600k"                  # max intron size
+a = ""                       # output in the SAM format, empty
+c = ""                       # output CIGAR in PAF, empty
+eqx = ""                     # write =/X CIGAR operators, empty
+ax = "splice:hq"             # long-read/Pacbio-CCS spliced alignment
+uf = ""                      # how to find GT-AG. f:transcript strand, empty
+secondary = "no"             # output secondary alignments
+C5 = ""                      # splice:hq, empty
+cs = "long"                  # output the cs tag
+output_dir = "step5_minimap" # output dir
+input_dir = "step4_cluster"  # previous step data dir [default]
+memory = 50                  # memory in GB
+t = 128                      # --num-threads [higher the better]
+time = "24.h"                # time for each job
+genome = ""                  # FILL: genome in .fa format or .2bit
+junc-bed = ""                # FILL: reference annotation in .bed format
 
 [params.filter-quality]
 input_dir = "step4_cluster"         # raw data dir [default]
