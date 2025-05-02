@@ -19,9 +19,12 @@ pub const PBINDEX: &str = "pbindex";
 pub const ISOTOOLS: &str = "isotools";
 pub const OUTPUT: &str = "isopipe_run";
 pub const ISOSEQ3: &str = "isoseq3";
+pub const CLUSTER: &str = "cluster";
 
 // filenames
 pub const NF_RUNNER: &str = "execute_joblist.nf";
+pub const FOFN: &str = "all.flnc.fofn";
+pub const CLUSTERED: &str = "all.clustered.bam";
 
 // managers consts
 pub const ASSETS: &str = "assets";

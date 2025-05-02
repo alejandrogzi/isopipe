@@ -37,7 +37,7 @@ isoseq = ""               # leave empty and position
 peek-guess = ""           # leave empty and position
 primers = ""              # FILL: primers file
 output_dir = "step2_lima" # output dir [default]
-input_dir = "step1_ccs"   # raw data dir [default]
+input_dir = "step1_ccs"   # previous step data dir [default]
 memory = 50               # memory in GB
 time = "24.h"             # time for each job
 num-threads = 64          # -j
@@ -45,13 +45,20 @@ num-threads = 64          # -j
 [params.refine]
 primers = ""                # FILL: primers file
 output_dir = "step3_refine" # output dir
-input_dir = "step2_lima"    # raw data dir [default]
+input_dir = "step2_lima"    # previous step data dir [default]
 memory = 50                 # memory in GB
 num-threads = 64            # --num-threads
 time = "24.h"               # time for each job
 
-
 [params.cluster]
+singletons = ""                # leave empty
+verbose = ""                   # leave empty [verbosity as default]
+output_dir = "step4_cluster"   # output dir
+input_dir = "step3_refine"     # previous step data dir [default]
+memory = 50                    # memory in GB
+num-threads = 128              # --num-threads [higher the better]
+time = "24.h"                  # time for each job
+log-file = "step4_cluster.log" # log file
 
 [params.filter-quality]
 input_dir = "step4_cluster"         # raw data dir [default]

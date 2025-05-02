@@ -1,7 +1,7 @@
 use crate::{config::*, consts::*, executor::job::Job};
 use std::path::PathBuf;
 
-/// Run isoseq refine
+/// Run isoseq3 refine
 ///
 /// # Arguments
 /// * `step` - The pipeline step being processed.
@@ -14,7 +14,7 @@ use std::path::PathBuf;
 /// A vector of jobs to be executed.
 ///
 /// # Example
-/// ```
+/// ```rust, no_run
 /// let jobs = __refine(
 ///     &step,
 ///     &config,
@@ -32,10 +32,7 @@ pub fn refine(
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
 
-    let args = config.get_step_args(
-        step,
-        vec![INPUT_DIR, PREFIX, OUTPUT_DIR, MEMORY, TIME, PRIMERS],
-    );
+    let args = config.get_step_args(step, vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, PRIMERS]);
     let fields = config.get_step_custom_fields(step, vec![PRIMERS]);
 
     for entry in std::fs::read_dir(input_dir)
@@ -66,7 +63,7 @@ pub fn refine(
             step_output_dir.join(format!("{}.{}.flnc.{}.bam", prefix, primer_tag, identifier));
 
         let job = Job::new()
-            .task(PipelineStep::Refine)
+            .task(*step)
             .arg(&args)
             .arg(bam.to_str().expect("ERROR: failed to convert path to str"))
             .arg(&fields[0])
@@ -84,6 +81,28 @@ pub fn refine(
     return jobs;
 }
 
+/// Run isoseq3 cluster
+///
+/// # Arguments
+/// * `step` - The pipeline step being processed.
+/// * `config` - The configuration for the pipeline.
+/// * `input_dir` - The directory containing the input files.
+/// * `step_output_dir` - The directory where the output files will be written.
+/// * `prefix` - The prefix to use for the output files.
+///
+/// # Returns
+/// A vector of jobs to be executed.
+///
+/// # Examples
+/// ```rust, no_run
+/// let jobs = cluster(
+///     &step,
+///     &config,
+///     &input_dir,
+///     &step_output_dir,
+///     "prefix".to_string(),
+/// );
+/// ```
 pub fn cluster(
     step: &PipelineStep,
     config: &Config,
@@ -91,50 +110,25 @@ pub fn cluster(
     step_output_dir: &PathBuf,
     prefix: String,
 ) -> Vec<Job> {
-    // isoseq3
-    // cluster
-    // ${P_out_isoC}/ALL.flnc.fofn ${P_out_isoC}/ALL.CuP.bam
-    // --singletons
-    // -verbose
-    // --split-bam $splitBAM
-    // --num-threads $defVars{'nThreadsIsoSeq3'}
-    // --log-file ${P_out_isoC}/ALL.CuP.log
+    let refine_fofn = format!("{}/{}*.{}", input_dir.display(), prefix, BAM);
+    let all_fofn = format!("{}/{}", step_output_dir.display(), FOFN);
 
-    todo!()
+    shell(
+        format!("ls {} > {}", refine_fofn, all_fofn),
+        "INFO: Grouping flnc reads...",
+        CLUSTER,
+    );
 
-    // let args = config
-    //     .params()
-    //     .get(&PipelineStep::Cluster)
-    //     .expect("ERROR: ccs not found in config.toml!")
-    //     .flat(Some(vec![INPUT_DIR, PREFIX, OUTPUT_DIR, MEMORY, TIME]));
+    let args = config.get_step_args(step, vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME]);
+    let out_bam = format!("{}/{}", step_output_dir.display(), CLUSTERED);
 
-    // let mut file_count = 0;
+    let jobs = vec![Job::new()
+        .task(*step)
+        .arg(&all_fofn)
+        .arg(&out_bam)
+        .arg(&args)];
 
-    // for entry in std::fs::read_dir(input_dir)
-    //     .expect("Failed to read assets directory")
-    //     .flatten()
-    //     .filter(|entry| {
-    //         entry
-    //             .path()
-    //             .extension()
-    //             .expect("ERROR: no extension found!")
-    //             == BAM
-    //     })
-    // {
-    //     file_count += 1;
+    log::info!("INFO [STEP 3]: Pre-processing completed -> Running...");
 
-    //     let job = Job::new()
-    //         .task(PipelineStep::Cluster)
-    //         .arg(&args)
-    //         .arg(&output_dir);
-
-    //     jobs.push(job);
-
-    //     if file_count > 1 {
-    //         log::error!(
-    //             "ERROR: more than one .sam file found in input_dir. This is a bug!"
-    //         );
-    //         std::process::exit(1);
-    //     }
-    // }
+    return jobs;
 }
