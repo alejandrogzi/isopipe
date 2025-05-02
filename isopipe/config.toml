@@ -9,7 +9,7 @@ run_id = ""
 [packages]
 lima = "1.11.0"
 pbccs = "6.4.0"
-isoseq3 = ""
+isoseq = "4.0.0"
 minimap2 = "2.26"
 isotools = "0.0.1"
 pbindex = "1.7.0"
@@ -60,7 +60,7 @@ num-threads = 128              # --num-threads [higher the better]
 time = "24.h"                  # time for each job
 log-file = "step4_cluster.log" # log file
 
-[params.minimap]
+[params.minimap2]
 G = "1600k"                  # max intron size
 a = ""                       # output in the SAM format, empty
 c = ""                       # output CIGAR in PAF, empty

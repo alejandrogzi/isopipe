@@ -232,7 +232,7 @@ impl Config {
 
         for pkg in self.packages.clone().keys() {
             if !steps.iter().any(|&s| {
-                if &pkg == &"isoseq3" {
+                if &pkg == &"isoseq" {
                     return PipelineStep::Refine == s || PipelineStep::Cluster == s;
                 }
 
@@ -633,7 +633,6 @@ impl Config {
             PipelineStep::Minimap => {
                 return step.to_str();
             }
-            PipelineStep::Refine | PipelineStep::Cluster => String::from(ISOSEQ3),
             _ => {
                 let mut package = step.to_str();
 
@@ -876,13 +875,13 @@ impl PipelineStep {
     /// ```
     pub fn from_int(i: usize) -> Result<Self, String> {
         match i {
-            0 => Ok(Self::Ccs),
-            1 => Ok(Self::Lima),
-            2 => Ok(Self::Refine),
-            3 => Ok(Self::Cluster),
-            4 => Ok(Self::Minimap),
-            5 => Ok(Self::FilterQuality),
-            6 => Ok(Self::LoadGenome),
+            1 => Ok(Self::Ccs),
+            2 => Ok(Self::Lima),
+            3 => Ok(Self::Refine),
+            4 => Ok(Self::Cluster),
+            5 => Ok(Self::Minimap),
+            6 => Ok(Self::FilterQuality),
+            7 => Ok(Self::LoadGenome),
             _ => Err(format!("ERROR: Invalid pipeline step: {}", i)),
         }
     }
@@ -892,6 +891,11 @@ impl PipelineStep {
     /// # Returns
     ///
     /// A string containing the pipeline step.
+    ///
+    /// # Note
+    ///
+    /// Both `PipelineStep::Cluster` and `PipelineStep::Minimap`
+    /// are converted to their parent package 'isoseq'.
     ///
     /// # Example
     ///
@@ -905,8 +909,8 @@ impl PipelineStep {
         match self {
             Self::Ccs => "ccs".into(),
             Self::Lima => "lima".into(),
-            Self::Refine => "refine".into(),
-            Self::Cluster => "cluster".into(),
+            Self::Refine => "isoseq".into(),
+            Self::Cluster => "isoseq".into(),
             Self::Minimap => "minimap2".into(),
             Self::FilterQuality => "filter-quality".into(),
             Self::LoadGenome => "load-genome".into(),
@@ -929,13 +933,13 @@ impl PipelineStep {
     /// ```
     pub fn to_int(&self) -> usize {
         match self {
-            Self::Ccs => 0,
-            Self::Lima => 1,
-            Self::Refine => 2,
-            Self::Cluster => 3,
-            Self::Minimap => 4,
-            Self::FilterQuality => 5,
-            Self::LoadGenome => 6,
+            Self::Ccs => 1,
+            Self::Lima => 2,
+            Self::Refine => 3,
+            Self::Cluster => 4,
+            Self::Minimap => 5,
+            Self::FilterQuality => 6,
+            Self::LoadGenome => 7,
         }
     }
 

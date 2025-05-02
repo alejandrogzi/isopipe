@@ -22,7 +22,7 @@ pub const ISOPIPE: &str = "isopipe";
 pub const PBINDEX: &str = "pbindex";
 pub const ISOTOOLS: &str = "isotools";
 pub const OUTPUT: &str = "isopipe_run";
-pub const ISOSEQ3: &str = "isoseq3";
+pub const ISOSEQ: &str = "isoseq";
 pub const CLUSTER: &str = "cluster";
 
 // filenames

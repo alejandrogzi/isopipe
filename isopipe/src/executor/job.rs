@@ -54,8 +54,8 @@ impl Job {
         let step_cmd = match step {
             PipelineStep::Ccs => "ccs",
             PipelineStep::Lima => "lima",
-            PipelineStep::Refine => "isoseq3 refine",
-            PipelineStep::Cluster => "isoseq3 cluster",
+            PipelineStep::Refine => "isoseq refine",
+            PipelineStep::Cluster => "isoseq cluster",
             PipelineStep::FilterQuality => "isotools iso-polya filter",
             PipelineStep::Minimap => "minimap2",
             PipelineStep::LoadGenome => "load_genome",
