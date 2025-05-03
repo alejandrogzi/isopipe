@@ -218,6 +218,7 @@ impl Config {
         self.packages.insert(package, version);
     }
 
+    /// [DEPRECATED]
     /// Update packages in the Config based on the updated steps
     ///
     /// # Example
@@ -227,6 +228,7 @@ impl Config {
     ///
     /// config.update_package();
     /// ```
+    #[deprecated = "Dropped loading modules on the fly, no reason to update packages"]
     pub fn update_packages(&mut self) {
         let steps = &self.steps;
 
@@ -325,9 +327,12 @@ impl Config {
     pub fn load(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         self.set_run_id();
 
-        for (package, _) in &self.packages {
-            if package == ISOTOOLS {
-                build_isotools().expect("ERROR: Could not build isotools!");
+        // INFO: since update_packages() is deprecated, we check if
+        // any isotools related step remains
+        for step in &self.steps {
+            match step {
+                PipelineStep::Polya => build_isotools().expect("ERROR: Could not build isotools!"),
+                _ => (),
             }
         }
 
