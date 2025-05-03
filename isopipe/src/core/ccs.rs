@@ -1,6 +1,7 @@
 use crate::{
     config::*,
     consts::*,
+    core::pbindex,
     executor::{job::Job, manager::ParallelExecutor},
 };
 use std::path::PathBuf;
@@ -112,56 +113,10 @@ pub fn ccs(
     }
 
     if !require_pbi.is_empty() {
-        generate_pb_index(require_pbi, &config, executor, step_output_dir);
+        pbindex::pbindex(require_pbi, &config, executor, step_output_dir);
     }
 
     log::info!("INFO [STEP 1]: Pre-processing completed -> Running...");
 
     return jobs;
-}
-
-/// Generates a .pbi for a set of BAM files in parallel
-///
-/// # Arguments
-///
-/// * `bam` - The paths to the BAM files.
-/// * `config` - The configuration for the pipeline.
-///
-/// # Example
-///
-/// ```rust, no_run
-/// generate_pb_index(PathBuf::from("example.bam"), &config);
-/// ```
-fn generate_pb_index(
-    bams: Vec<PathBuf>,
-    config: &Config,
-    executor: &mut ParallelExecutor,
-    step_output_dir: &PathBuf,
-) {
-    log::info!(
-        "INFO [STEP 1a]: Generating .pbi indexes for {} BAM files...",
-        bams.len()
-    );
-
-    let mut jobs = Vec::new();
-
-    let package = format!(
-        "{}/{}",
-        PBINDEX,
-        config
-            .packages
-            .get(PBINDEX)
-            .expect("PBINDEX package not found")
-    );
-
-    bams.iter().for_each(|bam| {
-        let cmd = format!("pbindex {}", bam.display());
-        let job = Job::from(cmd);
-
-        jobs.push(job);
-    });
-
-    executor
-        .add_jobs(jobs)
-        .and_send(config, PBINDEX, step_output_dir.clone(), 1, 8, package);
 }
