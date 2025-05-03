@@ -13,12 +13,13 @@ isoseq = "4.0.0"
 minimap2 = "2.26"
 isotools = "0.0.1"
 pbindex = "1.7.0"
+samtools = "1.14"
 
 [global]
 data_prefix = "foo"                   # FILL: raw data prefix
 global_output_dir = "/path/to/outdir" # FILL: output dir -> {outdir}/isopipe_run_{timestamp}
-long_queue = "long"                   # long queue name
-short_queue = "short"                 # short queue name
+long_queue = "long"                   # AWARE: long queue name
+short_queue = "day"                   # AWARE: short queue name
 default_memory = 16                   # default memory in GB
 default_threads = 8                   # default number of threads
 
@@ -78,11 +79,11 @@ time = "24.h"                # time for each job
 genome = ""                  # FILL: genome in .fa format or .2bit
 junc-bed = ""                # FILL: reference annotation in .bed format
 
-[params.filter-quality]
-input_dir = "step4_cluster"         # raw data dir [default]
-output_dir = "step5_filter_quality" # output dir
-per_id = 0.96                       # --per_id
-clip3 = 50                          # --clip3
-suffix = 30                         # --suffix
-memory = 50                         # memory in GB
-time = "24.h"                       # time for each job
+[params.polya]
+input_dir = "step5_minimap" # raw data dir [default]
+output_dir = "step6_polya"  # output dir
+per_id = 0.96               # --per_id
+clip3 = 50                  # --clip3
+suffix = 30                 # --suffix
+memory = 50                 # memory in GB
+time = "24.h"               # time for each job
