@@ -237,7 +237,7 @@ impl Config {
                 }
 
                 if &pkg == &"isotools" {
-                    return PipelineStep::FilterQuality == s;
+                    return PipelineStep::Polya == s;
                 }
 
                 if &pkg == &"pbccs" || &pkg == &"pbindex" {
@@ -799,6 +799,28 @@ impl Config {
             .expect("ERROR: RUN_ID not found in metadata!")
             .clone()
     }
+
+    /// Get the format package/version for a given package.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let config = Config::default();
+    ///
+    /// let package = "example_package";
+    /// let version = config.get_package_version(package);
+    ///
+    /// println!("Package: {}, Version: {}", package, version);
+    /// ```
+    pub fn get_custom_package(&self, package: &str) -> String {
+        format!(
+            "{}/{}",
+            package,
+            self.metadata
+                .get(package)
+                .expect(&format!("ERROR: {} not found in config.packages!", package))
+        )
+    }
 }
 
 impl Default for Config {
@@ -821,7 +843,7 @@ pub enum PipelineStep {
     Refine,
     Cluster,
     Minimap,
-    FilterQuality,
+    Polya,
     LoadGenome,
 }
 
@@ -850,7 +872,7 @@ impl PipelineStep {
             "refine" => Ok(Self::Refine),
             "cluster" => Ok(Self::Cluster),
             "minimap2" => Ok(Self::Minimap),
-            "filter-quality" => Ok(Self::FilterQuality),
+            "polya" => Ok(Self::Polya),
             "load-genome" => Ok(Self::LoadGenome),
             _ => Err(format!("ERROR: Invalid pipeline step: {}", s)),
         }
@@ -880,7 +902,7 @@ impl PipelineStep {
             3 => Ok(Self::Refine),
             4 => Ok(Self::Cluster),
             5 => Ok(Self::Minimap),
-            6 => Ok(Self::FilterQuality),
+            6 => Ok(Self::Polya),
             7 => Ok(Self::LoadGenome),
             _ => Err(format!("ERROR: Invalid pipeline step: {}", i)),
         }
@@ -912,7 +934,7 @@ impl PipelineStep {
             Self::Refine => "isoseq".into(),
             Self::Cluster => "isoseq".into(),
             Self::Minimap => "minimap2".into(),
-            Self::FilterQuality => "filter-quality".into(),
+            Self::Polya => "polya".into(),
             Self::LoadGenome => "load-genome".into(),
         }
     }
@@ -943,7 +965,7 @@ impl PipelineStep {
             Self::Refine => "refine".into(),
             Self::Cluster => "cluster".into(),
             Self::Minimap => "minimap2".into(),
-            Self::FilterQuality => "filter-quality".into(),
+            Self::Polya => "polya".into(),
             Self::LoadGenome => "load-genome".into(),
         }
     }
@@ -969,7 +991,7 @@ impl PipelineStep {
             Self::Refine => 3,
             Self::Cluster => 4,
             Self::Minimap => 5,
-            Self::FilterQuality => 6,
+            Self::Polya => 6,
             Self::LoadGenome => 7,
         }
     }
