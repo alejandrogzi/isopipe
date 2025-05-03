@@ -641,19 +641,25 @@ impl Config {
                 return step.to_str();
             }
             _ => {
-                let mut package = step.to_str();
+                let packages = step.to_pkg_str();
+                let mut loader = String::new();
 
-                if package == "ccs" {
-                    package = String::from("pbccs");
+                for package in packages.iter() {
+                    let version = self
+                        .packages
+                        .get(package)
+                        .expect(format!("ERROR: Package not found -> {}", package).as_str())
+                        .to_string();
+
+                    if version.is_empty() {
+                        // WARN: introducing 1 more space -> does not matter
+                        loader.push_str(&format!("{} ", package));
+                    } else {
+                        loader.push_str(&format!("{}/{}", package, version));
+                    }
                 }
 
-                let version = self
-                    .packages
-                    .get(&package)
-                    .expect(format!("ERROR: Package not found -> {}", package).as_str())
-                    .to_string();
-
-                format!("{}/{}", package, version)
+                loader
             }
         }
     }
@@ -943,6 +949,37 @@ impl PipelineStep {
             Self::Minimap => "minimap2".into(),
             Self::Polya => "polya".into(),
             Self::LoadGenome => "load-genome".into(),
+        }
+    }
+
+    /// Convert a PipelineStep enum to their package equivalent string.
+    ///
+    /// # Returns
+    ///
+    /// A Vec<String> containing the pipeline step.
+    ///
+    /// # Note
+    ///
+    /// Both `PipelineStep::Cluster` and `PipelineStep::Minimap`
+    /// are converted to their parent package 'isoseq'.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let step = PipelineStep::Ccs;
+    /// let s = step.to_pkg_str();
+    ///
+    /// assert_eq!(s, vec!["pbccs"]);
+    /// ```
+    pub fn to_pkg_str(&self) -> Vec<String> {
+        match self {
+            Self::Ccs => vec!["pbccs".into()],
+            Self::Lima => vec!["lima".into()],
+            Self::Refine => vec!["isoseq".into()],
+            Self::Cluster => vec!["isoseq".into()],
+            Self::Minimap => vec!["minimap2".into()],
+            Self::Polya => vec!["python3".into(), "perl".into()],
+            Self::LoadGenome => vec!["load-genome".into()],
         }
     }
 

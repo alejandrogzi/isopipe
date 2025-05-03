@@ -238,7 +238,10 @@ impl ParallelExecutor {
                     );
 
                     // INFO: looping through dir until find .crashed
-                    for entry in std::fs::read_dir(&dir).expect("ERROR: Failed to read directory") {
+                    for entry in std::fs::read_dir(&dir).expect(&format!(
+                        "ERROR: Failed to read directory {}",
+                        dir.display()
+                    )) {
                         let entry = entry.expect(&format!(
                             "ERROR: Failed to read directory entry -> {}",
                             dir.display(),
