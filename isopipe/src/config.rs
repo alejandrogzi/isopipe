@@ -240,6 +240,10 @@ impl Config {
                     return PipelineStep::Polya == s;
                 }
 
+                if &pkg == &"samtools" {
+                    return PipelineStep::Lima == s;
+                }
+
                 if &pkg == &"pbccs" || &pkg == &"pbindex" {
                     return PipelineStep::Ccs == s;
                 }
