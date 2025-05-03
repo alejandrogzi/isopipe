@@ -3,8 +3,11 @@ use std::path::PathBuf;
 
 pub mod ccs;
 pub mod isoseq;
+pub mod isotools;
 pub mod lima;
 pub mod minimap;
+pub mod pbindex;
+pub mod samtools;
 
 pub fn run(
     config: Config,
@@ -33,17 +36,14 @@ pub fn run_step(
     let jobs = match step {
         PipelineStep::Ccs => {
             log::info!("INFO [STEP 1]: Pre-processing for ccs started...");
-            ccs::ccs(step, config, &input_dir, &step_output_dir, prefix)
+            ccs::ccs(step, config, &input_dir, &step_output_dir, prefix, executor)
         }
         PipelineStep::Lima => {
             log::info!("INFO [STEP 2]: Pre-processing for lima started...");
-            lima::lima(
-                step,
-                config,
-                &global_output_dir.join(input_dir),
-                &step_output_dir,
-                prefix,
-            )
+            let input_dir = &global_output_dir.join(input_dir);
+
+            samtools::merge(input_dir, executor, config);
+            lima::lima(step, config, input_dir, &step_output_dir)
         }
         PipelineStep::Refine => {
             log::info!("INFO [STEP 3]: Pre-processing for isoseq::refine started...");
@@ -52,7 +52,6 @@ pub fn run_step(
                 config,
                 &global_output_dir.join(input_dir),
                 &step_output_dir,
-                prefix,
             )
         }
         PipelineStep::Cluster => {
@@ -62,7 +61,6 @@ pub fn run_step(
                 config,
                 &global_output_dir.join(input_dir),
                 &step_output_dir,
-                prefix,
             )
         }
         PipelineStep::Minimap => {
@@ -74,7 +72,15 @@ pub fn run_step(
                 &step_output_dir,
             )
         }
-        PipelineStep::FilterQuality => {
+        PipelineStep::Polya => {
+            log::info!("INFO [STEP 6]: Pre-processing for polya started...");
+            // polya::polya(
+            //     step,
+            //     config,
+            //     &global_output_dir.join(input_dir),
+            //     &step_output_dir,
+            // );
+
             todo!()
             // isotools iso-polya filter
             //

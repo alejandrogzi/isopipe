@@ -18,13 +18,14 @@ pub const RUN_ID: &str = "run_id";
 pub const LOG_FILE: &str = "log-file";
 pub const GENOME: &str = "genome";
 
-// project-wide pub const
+// project-wide pub const | names
 pub const ISOPIPE: &str = "isopipe";
 pub const PBINDEX: &str = "pbindex";
 pub const ISOTOOLS: &str = "isotools";
 pub const OUTPUT: &str = "isopipe_run";
 pub const ISOSEQ: &str = "isoseq";
 pub const CLUSTER: &str = "cluster";
+pub const SAMTOOLS: &str = "samtools";
 
 // filenames
 pub const NF_RUNNER: &str = "execute_joblist.nf";
@@ -33,6 +34,7 @@ pub const CLUSTERED_BAM: &str = "all.clustered.bam";
 pub const CLUSTERED: &str = "all.clustered";
 pub const CU_ALN: &str = "all.clustered.aligned";
 pub const GENOME_FA: &str = "genome.fa";
+pub const MERGED_BAM: &str = "merged.bam";
 
 // manager consts
 pub const ASSETS: &str = "assets";
