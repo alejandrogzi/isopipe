@@ -28,7 +28,6 @@ pub fn lima(
     config: &Config,
     input_dir: &PathBuf,
     step_output_dir: &PathBuf,
-    prefix: String,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
 
@@ -38,6 +37,7 @@ pub fn lima(
         vec![INPUT_DIR, PREFIX, OUTPUT_DIR, MEMORY, TIME, PRIMERS],
     );
 
+    // INFO: format of files: {prefix}.{name}.ccs.merged.bam
     for entry in std::fs::read_dir(input_dir)
         .expect("Failed to read assets directory")
         .flatten()
@@ -51,19 +51,14 @@ pub fn lima(
         })
     {
         let bam = entry.path();
-        let identifier = bam
+        let basename = bam
             .file_stem()
             .expect("ERROR: failed to get file stem")
-            .to_str()
-            .expect("ERROR: failed to convert path to str")
-            .split('.')
-            .last()
-            .expect("ERROR: failed to get last element from .bam name!");
-
-        let out_bam = step_output_dir.join(format!("{}.fl.{}.bam", prefix, identifier));
+            .to_string_lossy();
+        let out_bam = step_output_dir.join(format!("{}.fl.bam", basename));
 
         let job = Job::new()
-            .task(PipelineStep::Lima)
+            .task(*step)
             .arg(&args)
             .arg(bam.to_str().expect("ERROR: failed to convert path to str"))
             .arg(&fields[0])

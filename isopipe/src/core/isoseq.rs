@@ -28,13 +28,13 @@ pub fn refine(
     config: &Config,
     input_dir: &PathBuf,
     step_output_dir: &PathBuf,
-    prefix: String,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
 
     let args = config.get_step_args(step, vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, PRIMERS]);
     let fields = config.get_step_custom_fields(step, vec![PRIMERS]);
 
+    // INFO: format of files: {prefix}.{name}.ccs.merged.fl.{primers}.bam
     for entry in std::fs::read_dir(input_dir)
         .expect("Failed to read assets directory")
         .flatten()
@@ -48,19 +48,12 @@ pub fn refine(
         })
     {
         let bam = entry.path();
-
-        let name_fields = bam
+        let basename = bam
             .file_stem()
             .expect("ERROR: failed to get file stem")
-            .to_str()
-            .expect("ERROR: failed to convert path to str")
-            .split('.')
-            .collect::<Vec<&str>>();
+            .to_string_lossy();
 
-        let identifier = name_fields.get(2).expect("ERROR: failed to get identifier");
-        let primer_tag = name_fields.get(3).expect("ERROR: failed to get primer tag");
-        let out_bam =
-            step_output_dir.join(format!("{}.{}.flnc.{}.bam", prefix, primer_tag, identifier));
+        let out_bam = step_output_dir.join(format!("{}.flnc.bam", basename));
 
         let job = Job::new()
             .task(*step)
@@ -108,9 +101,8 @@ pub fn cluster(
     config: &Config,
     input_dir: &PathBuf,
     step_output_dir: &PathBuf,
-    prefix: String,
 ) -> Vec<Job> {
-    let refine_fofn = format!("{}/{}*.{}", input_dir.display(), prefix, BAM);
+    let refine_fofn = format!("{}/*flnc.{}", input_dir.display(), BAM);
     let all_fofn = format!("{}/{}", step_output_dir.display(), FOFN);
 
     shell(
