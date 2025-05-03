@@ -370,7 +370,7 @@ impl Config {
 
         self.set_steps(steps);
 
-        self.update_packages();
+        // self.update_packages();
         self.update_params();
 
         self

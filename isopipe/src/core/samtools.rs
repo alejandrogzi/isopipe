@@ -63,6 +63,10 @@ pub fn merge(input_dir: &PathBuf, executor: &mut ParallelExecutor, config: &Conf
         }
     }
 
+    if jobs.is_empty() {
+        return;
+    }
+
     executor.add_jobs(jobs).and_send(
         config,
         SAMTOOLS,
