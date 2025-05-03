@@ -4,7 +4,7 @@ version = "0.0.1"
 authors = "alejandrogzi <alejandrxgzi@gmail.com>"
 repository = "https://github.com/alejandrogzi/isopipe"
 readme = "README.md"
-run_id = ""
+run_id = ""                                            # WARN: leave empty
 
 [packages]
 lima = "1.11.0"
@@ -14,6 +14,8 @@ minimap2 = "2.26"
 isotools = "0.0.1"
 pbindex = "1.7.0"
 samtools = "1.14"
+perl = ""
+python3 = ""
 
 [global]
 data_prefix = "foo"                   # FILL: raw data prefix
@@ -34,8 +36,8 @@ memory = 50              # memory in GB
 time = "24.h"            # time for each job
 
 [params.lima]
-isoseq = ""               # leave empty and position
-peek-guess = ""           # leave empty and position
+isoseq = ""               # WARN: leave empty and position
+peek-guess = ""           # WARN: leave empty and position
 primers = ""              # FILL: primers file
 output_dir = "step2_lima" # output dir [default]
 input_dir = "step1_ccs"   # previous step data dir [default]
@@ -53,8 +55,8 @@ num-threads = 64            # --num-threads
 time = "24.h"               # time for each job
 
 [params.cluster]
-singletons = ""                # leave empty
-verbose = ""                   # leave empty [verbosity as default]
+singletons = ""                # WARN: leave empty
+verbose = ""                   # WARN: leave empty [verbosity as default]
 output_dir = "step4_cluster"   # output dir
 input_dir = "step3_refine"     # previous step data dir [default]
 memory = 50                    # memory in GB
@@ -65,12 +67,12 @@ log-file = "step4_cluster.log" # log file
 [params.minimap2]
 G = "1600k"                  # max intron size
 a = ""                       # output in the SAM format, empty
-c = ""                       # output CIGAR in PAF, empty
-eqx = ""                     # write =/X CIGAR operators, empty
+c = ""                       # WARN: output CIGAR in PAF, leave empty
+eqx = ""                     # WARN: write =/X CIGAR operators, leave empty
 ax = "splice:hq"             # long-read/Pacbio-CCS spliced alignment
-uf = ""                      # how to find GT-AG. f:transcript strand, empty
+uf = ""                      # WARN: how to find GT-AG. f:transcript strand, leave empty
 secondary = "no"             # output secondary alignments
-C5 = ""                      # splice:hq, empty
+C5 = ""                      # WARN: splice:hq, leave empty
 cs = "long"                  # output the cs tag
 output_dir = "step5_minimap" # output dir
 input_dir = "step4_cluster"  # previous step data dir [default]
@@ -81,10 +83,12 @@ genome = ""                  # FILL: genome in .fa format or .2bit
 junc-bed = ""                # FILL: reference annotation in .bed format
 
 [params.polya]
-input_dir = "step5_minimap" # raw data dir [default]
+input_dir = "step5_minimap" # previous step data dir [default]
 output_dir = "step6_polya"  # output dir
-per_id = 0.96               # --per_id
+perID = 96                  # --per_id
 clip3 = 50                  # --clip3
-suffix = 30                 # --suffix
+polyAReadSuffix = 30        # --suffix
 memory = 50                 # memory in GB
 time = "24.h"               # time for each job
+toga = ""                   # FILL: toga query annotation
+assembly = ""               # FILL: assembly name [WILL CHANGE]

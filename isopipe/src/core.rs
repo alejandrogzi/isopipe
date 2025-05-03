@@ -7,6 +7,7 @@ pub mod isotools;
 pub mod lima;
 pub mod minimap;
 pub mod pbindex;
+pub mod polya;
 pub mod samtools;
 
 pub fn run(
@@ -74,75 +75,12 @@ pub fn run_step(
         }
         PipelineStep::Polya => {
             log::info!("INFO [STEP 6]: Pre-processing for polya started...");
-            // polya::polya(
-            //     step,
-            //     config,
-            //     &global_output_dir.join(input_dir),
-            //     &step_output_dir,
-            // );
-
-            todo!()
-            // isotools iso-polya filter
-            //
-            // filterMinimapQuality.perl
-            // $input.sam
-            // -perID 96
-            // -clip3 50
-            // -polyAReadSuffix 30
-
-            // let args = config
-            //     .params()
-            //     .get(&PipelineStep::FilterQuality)
-            //     .expect("ERROR: filter-quality not found in config.toml!")
-            //     .flat(Some(vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME]));
-
-            // let output_dir = format!(
-            //     "-outdir {}",
-            //     global_output_dir
-            //         .join(
-            //             config
-            //                 .get_param(PipelineStep::FilterQuality, OUTPUT_DIR)
-            //                 .expect(
-            //                     "ERROR: output_dir not found for filter-quality in config.toml!"
-            //                 )
-            //                 .to_path_buf(),
-            //         )
-            //         .display()
-            // );
-
-            // let mut file_count = 0;
-
-            // for entry in std::fs::read_dir(input_dir)
-            //     .expect("Failed to read assets directory")
-            //     .flatten()
-            //     .filter(|entry| {
-            //         entry
-            //             .path()
-            //             .extension()
-            //             .and_then(|ext| ext.to_str())
-            //             .map(|ext| ext.eq_ignore_ascii_case(SAM))
-            //             .unwrap_or(false)
-            //     })
-            // {
-            //     file_count += 1;
-
-            //     let sam = format!("--sam {}", entry.path().display());
-
-            //     let job = Job::new()
-            //         .task(PipelineStep::FilterQuality)
-            //         .arg(&sam)
-            //         .arg(&args)
-            //         .arg(&output_dir);
-
-            //     jobs.push(job);
-
-            //     if file_count > 1 {
-            //         log::error!(
-            //             "ERROR: more than one .sam file found in input_dir. This is a bug!"
-            //         );
-            //         std::process::exit(1);
-            //     }
-            // }
+            polya::polya(
+                step,
+                config,
+                &global_output_dir.join(input_dir),
+                &step_output_dir,
+            )
         }
         PipelineStep::LoadGenome => {
             todo!()

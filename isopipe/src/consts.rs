@@ -17,6 +17,8 @@ pub const REPORT: &str = "report-file";
 pub const RUN_ID: &str = "run_id";
 pub const LOG_FILE: &str = "log-file";
 pub const GENOME: &str = "genome";
+pub const TOGA: &str = "toga";
+pub const ASSEMBLY: &str = "assembly";
 
 // project-wide pub const | names
 pub const ISOPIPE: &str = "isopipe";
@@ -26,6 +28,7 @@ pub const OUTPUT: &str = "isopipe_run";
 pub const ISOSEQ: &str = "isoseq";
 pub const CLUSTER: &str = "cluster";
 pub const SAMTOOLS: &str = "samtools";
+pub const POLYA_FIRST_PASS: &str = "polya_first_pass";
 
 // filenames
 pub const NF_RUNNER: &str = "execute_joblist.nf";
@@ -33,8 +36,13 @@ pub const FOFN: &str = "all.flnc.fofn";
 pub const CLUSTERED_BAM: &str = "all.clustered.bam";
 pub const CLUSTERED: &str = "all.clustered";
 pub const CU_ALN: &str = "all.clustered.aligned";
+pub const CU_ALN_HQ_SAM: &str = "all.clustered.aligned.hq.sam";
 pub const GENOME_FA: &str = "genome.fa";
 pub const MERGED_BAM: &str = "merged.bam";
+pub const FILTER_MINIMAP: &str = "filter_minimap_qual.perl";
+pub const CORRECT_MINIMAP: &str = "correct_minimap.py";
+pub const POLYA_GOOD_SAM: &str = "good.sam";
+pub const CORR_MINIMAP_SAM: &str = "corrected.sam";
 
 // manager consts
 pub const ASSETS: &str = "assets";
