@@ -42,6 +42,7 @@ input_dir = "step1_ccs"   # previous step data dir [default]
 memory = 50               # memory in GB
 time = "24.h"             # time for each job
 num-threads = 64          # -j
+chunk-size = 100          # --chunk-size, each thread consumes N ZMWs per chunk
 
 [params.refine]
 primers = ""                # FILL: primers file
