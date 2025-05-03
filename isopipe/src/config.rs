@@ -369,8 +369,6 @@ impl Config {
             .expect("ERROR: An error ocurred while materializing steps!");
 
         self.set_steps(steps);
-
-        // self.update_packages();
         self.update_params();
 
         self
@@ -1375,7 +1373,7 @@ fn run_command(cmd: &mut Command) -> ExitStatus {
     match cmd.status() {
         Ok(status) => status,
         Err(e) => {
-            error!("ERROR: Failed to execute process: {}", e);
+            error!("ERROR: Failed to execute process: {} -> {:?}", e, cmd);
             std::process::exit(1);
         }
     }
@@ -1506,7 +1504,7 @@ pub fn shell(cmd: String, log_msg: &str, tool: &str) {
         .arg("-c")
         .arg(cmd.clone())
         .output()
-        .expect("ERROR: Failed to execute process");
+        .expect(&format!("ERROR: Failed to execute process -> {}", cmd));
 
     if output.status.success() {
         log::info!("INFO [{}]: {}!", tool, log_msg);
