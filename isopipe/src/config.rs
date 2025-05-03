@@ -331,7 +331,9 @@ impl Config {
         // any isotools related step remains
         for step in &self.steps {
             match step {
-                PipelineStep::Polya => build_isotools().expect("ERROR: Could not build isotools!"),
+                PipelineStep::LoadGenome => {
+                    build_isotools().expect("ERROR: Could not build isotools!")
+                }
                 _ => (),
             }
         }
