@@ -8,7 +8,6 @@ use std::path::PathBuf;
 /// * `config` - The configuration for the pipeline.
 /// * `input_dir` - The directory containing the input BAM files.
 /// * `step_output_dir` - The directory where the output files will be written.
-/// * `prefix` - The prefix to be used for the output files.
 ///
 /// # Returns
 /// A vector of jobs to be executed.
@@ -20,7 +19,6 @@ use std::path::PathBuf;
 ///     &config,
 ///     &input_dir,
 ///     &step_output_dir,
-///     "prefix".to_string(),
 /// );
 /// ```
 pub fn lima(

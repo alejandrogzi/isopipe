@@ -20,7 +20,6 @@ use std::path::PathBuf;
 ///     &config,
 ///     &input_dir,
 ///     &step_output_dir,
-///     "prefix".to_string()
 /// );
 /// ```
 pub fn refine(
@@ -93,7 +92,6 @@ pub fn refine(
 ///     &config,
 ///     &input_dir,
 ///     &step_output_dir,
-///     "prefix".to_string(),
 /// );
 /// ```
 pub fn cluster(
