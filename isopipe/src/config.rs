@@ -820,7 +820,7 @@ impl Config {
         format!(
             "{}/{}",
             package,
-            self.metadata
+            self.packages
                 .get(package)
                 .expect(&format!("ERROR: {} not found in config.packages!", package))
         )
