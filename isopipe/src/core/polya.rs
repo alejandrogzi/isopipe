@@ -85,8 +85,8 @@ pub fn polya(
         // INFO: script.perl {}.corrected.sam --polyAReadSuffix 30 --outdir {}
         let second_pass = format!(
             "{} {} -polyAReadSuffix 30 --outdir {}",
+            filter.display(),
             corrected_sam.display(),
-            alignment.display(),
             output_dir.display()
         );
 
