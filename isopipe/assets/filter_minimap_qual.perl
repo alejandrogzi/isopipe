@@ -8,7 +8,7 @@ use warnings;
 use diagnostics;
 use Getopt::Long qw(:config no_ignore_case no_auto_abbrev);
 use POSIX qw(Inf NaN);
-
+use File::Basename;
 
 $| = 1;		# == fflush(stdout)
 my $verbose = 0;
@@ -25,6 +25,7 @@ my $maxClip3=20;
 my $P2P = 0.9;		# transition prob for polyA tail
 my $emitA = 0.99;	# emission prob for A in polyA state
 my $outdir = ".";  # default to the current directory
+my $infile = $ARGV[0];
 
 # HMM matrix for viterbi and traceback
 my @V;	# dynamic programming matrix; every cell holds the log score
@@ -81,13 +82,18 @@ print "Transition PolyA->PolyA state: $P2P    Prob emit A in polyA state: $emitA
 
 ################################
 # output files
-die "ERROR: input file $ARGV[0] does not end with .sam\n" if ($ARGV[0] !~ /.*\.sam$/);
-my $filePrefix = substr($ARGV[0], 0, rindex($ARGV[0], ".sam"));
-my $outGood = $outdir . "/" . $filePrefix . ".good.sam";
-my $outBad = $outdir . "/" . $filePrefix . ".bad.sam";
-my $outTES = $outdir . "/" . $filePrefix . ".TES.bed";
-my $outTESBad5Prime = $outdir . "/" . $filePrefix . ".TESBad5Prime.bed";
-my $outStat = $outdir . "/" . $filePrefix . ".tsv";
+die "ERROR: input file $infile does not end with .sam\n" if ($ARGV[0] !~ /.*\.sam$/);
+
+my $filename = basename($infile, '.sam');  # just the file name without path and .sam
+my $filePrefix = $filename;
+#my $filePrefix = substr($ARGV[0], 0, rindex($ARGV[0], ".sam"));
+
+my $outGood = "$outdir/$filePrefix.good.sam";
+my $outBad = "$outdir/$filePrefix.bad.sam";
+my $outTES = "$outdir/$filePrefix.TES.bed";
+my $outTESBad5Prime = "$outdir/$filePrefix.TESBad5Prime.bed";
+my $outStat = "$outdir/$filePrefix.tsv";
+
 print "read $ARGV[0] and write output to $outGood + $outBad and the TES coordinates of reads to $outTES\n";
 print "output $outTESBad5Prime which contains TES coordinates of reads that align well but only have a 5' clip above our threshold\n" if ($keepBad5Prime);
 die "ERROR: output file $outGood already exists. Pls delete it or rename it\n" if (-e $outGood);
