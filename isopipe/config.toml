@@ -16,6 +16,10 @@ pbindex = "1.7.0"
 samtools = "1.14"
 perl = ""
 python3 = ""
+bedtools = "2.28.0"
+rust = "1.77.1"
+diamond = "2.1.11"
+nextflow = ""
 
 [global]
 data_prefix = "foo"                   # FILL: raw data prefix
@@ -100,3 +104,23 @@ memory = 50                 # memory in GB
 time = "24.h"               # time for each job
 toga = ""                   # FILL: toga query annotation
 assembly = ""               # FILL: assembly name [WILL CHANGE]
+
+[params.fusion]
+input_dir = "step6_polya"   # previous step data dir [default]
+output_dir = "step7_fusion" # output dir
+memory = 50                 # memory in GB
+time = "24.h"               # time for each job
+toga = ""                   # FILL: toga query annotation
+recover = ""                # WARN: leave empty
+prefix = ""                 # WARN: leave empty
+
+[params.orf]
+input_dir = "step7_fusion" # previous step data dir [default]
+output_dir = "step8_orf"   # output dir
+memory = 50                # memory in GB
+time = "24.h"              # time for each job
+toga = ""                  # FILL: toga query annotation
+genome = ""                # FILL: genome in .fa format or .2bit
+blastdb = ""               # FILL: blastdb
+toga_overrule = ""         # WARN: leavy empty
+threshold = 0.3            # threshold for toga overrule
