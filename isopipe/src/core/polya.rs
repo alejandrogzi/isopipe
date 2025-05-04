@@ -51,7 +51,8 @@ pub fn polya(
 
     for category in CLUSTERING_CATEGORIES {
         // INFO: format -> all.clustered.aligned.{hq,lq,singletons}.sam
-        let alignment = input_dir.join(format!("{}.{}.{}", CU_ALN, category, SAM));
+        let filename = PathBuf::from(format!("{}.{}.{}", CU_ALN, category, SAM));
+        let alignment = input_dir.join(&filename);
 
         // INFO: will output all.clustered.aligned.{hq,lq,singletons}.{good,bad}.sam
         // INFO: script.perl {].sam --perID 96 --clip3 50 --polyAReadSuffix 30 --outdir {}/first_pass
@@ -64,25 +65,26 @@ pub fn polya(
         );
 
         // INFO: script.py {toga} {}.good.sam {assembly} {].corrected.sam
+        let corrected_sam = output_dir.join(filename.with_extension(CORR_MINIMAP_SAM));
         let correct_step = format!(
             "python3 {} {} {} {} {}",
             correct.display(),
             fields
                 .get(0)
                 .expect(&format!("ERROR: Could not find TOGA -> {:?}", fields)),
-            alignment.with_extension(POLYA_GOOD_SAM).display(),
+            output_dir
+                .join(filename.with_extension(POLYA_GOOD_SAM))
+                .display(),
             fields
                 .get(1)
                 .expect(&format!("ERROR: Could not find assembly -> {:?}", fields)),
-            output_dir
-                .join(alignment.with_extension(CORR_MINIMAP_SAM))
-                .display()
+            corrected_sam.display()
         );
 
-        // INFO: script.perl {].sam --polyAReadSuffix 30 --outdir {}
+        // INFO: script.perl {}.corrected.sam --polyAReadSuffix 30 --outdir {}
         let second_pass = format!(
             "{} {} -polyAReadSuffix 30 --outdir {}",
-            filter.display(),
+            corrected_sam.display(),
             alignment.display(),
             output_dir.display()
         );

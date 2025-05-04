@@ -1,6 +1,4 @@
-from __future__ import print_function
-
-#!/beegfs/projects/hillerlab/genome/src/correctMinimap/.venv/bin/python3
+#!/usr/bin/env python3
 
 __author__ = "Lucas Koch"
 __maintainer__ = "Lucas Koch"
@@ -8,6 +6,7 @@ __credits__ = ["Lucas Koch", "Michael Hiller", "Ariadna Morales"]
 __license__ = "MIT"
 __version__ = "1.0"
 
+from __future__ import print_function
 
 import shutil
 import subprocess
