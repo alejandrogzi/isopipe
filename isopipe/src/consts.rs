@@ -31,6 +31,8 @@ pub const ISOSEQ: &str = "isoseq";
 pub const CLUSTER: &str = "cluster";
 pub const SAMTOOLS: &str = "samtools";
 pub const POLYA_FIRST_PASS: &str = "polya_first_pass";
+pub const BEDTOOLS: &str = "bedtools";
+pub const BAMTOBED: &str = "bamtobed";
 
 // filenames
 pub const NF_RUNNER: &str = "execute_joblist.nf";
@@ -45,6 +47,8 @@ pub const FILTER_MINIMAP: &str = "filter_minimap_qual.perl";
 pub const CORRECT_MINIMAP: &str = "correct_minimap.py";
 pub const POLYA_GOOD_SAM: &str = "good.sam";
 pub const CORR_MINIMAP_SAM: &str = "corrected.sam";
+pub const CORR_MINIMAP_GOOD_SAM: &str = "corrected.good.sam";
+pub const CORR_MINIMAP_GOOD_BED: &str = "corrected.good.bed";
 
 // manager consts
 pub const ASSETS: &str = "assets";

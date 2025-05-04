@@ -90,9 +90,21 @@ pub fn polya(
             output_dir.display()
         );
 
+        let convert = format!(
+            "{} {} -i {} -bed12 > {}",
+            BEDTOOLS,
+            BAMTOBED,
+            output_dir
+                .join(filename.with_extension(CORR_MINIMAP_GOOD_SAM))
+                .display(),
+            output_dir
+                .join(filename.with_extension(CORR_MINIMAP_GOOD_BED))
+                .display()
+        );
+
         jobs.push(Job::from(format!(
-            "{} && {} && {}",
-            first_pass, correct_step, second_pass
+            "{} && {} && {} && {}",
+            first_pass, correct_step, second_pass, convert
         )));
     }
 
