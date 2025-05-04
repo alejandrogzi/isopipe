@@ -24,6 +24,7 @@ toml = { version = "0.8.20", features = ["parse"] }
 memmap2 = "0.9.5"
 chrono = "0.4.40"
 twobit = "0.2.1"
+iso-fusion = { path = "../isotools/isotools/iso-fusion" }
 
 [profile.release]
 lto = true

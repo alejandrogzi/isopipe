@@ -328,12 +328,10 @@ impl Config {
         self.set_run_id();
 
         // INFO: since update_packages() is deprecated, we check if
-        // any isotools related step remains
+        // any isotools related step remains -> WARN: deprecated also for now
         for step in &self.steps {
             match step {
-                PipelineStep::LoadGenome => {
-                    build_isotools().expect("ERROR: Could not build isotools!")
-                }
+                // PipelineStep::Fusion => build_isotools().expect("ERROR: Could not build isotools!"),
                 _ => (),
             }
         }
@@ -859,7 +857,8 @@ pub enum PipelineStep {
     Cluster,
     Minimap,
     Polya,
-    LoadGenome,
+    Fusion,
+    Orf,
 }
 
 impl PipelineStep {
@@ -888,7 +887,8 @@ impl PipelineStep {
             "cluster" => Ok(Self::Cluster),
             "minimap2" => Ok(Self::Minimap),
             "polya" => Ok(Self::Polya),
-            "load-genome" => Ok(Self::LoadGenome),
+            "fusion" => Ok(Self::Fusion),
+            "orf" => Ok(Self::Orf),
             _ => Err(format!("ERROR: Invalid pipeline step: {}", s)),
         }
     }
@@ -918,7 +918,8 @@ impl PipelineStep {
             4 => Ok(Self::Cluster),
             5 => Ok(Self::Minimap),
             6 => Ok(Self::Polya),
-            7 => Ok(Self::LoadGenome),
+            7 => Ok(Self::Fusion),
+            8 => Ok(Self::Orf),
             _ => Err(format!("ERROR: Invalid pipeline step: {}", i)),
         }
     }
@@ -950,7 +951,8 @@ impl PipelineStep {
             Self::Cluster => "isoseq".into(),
             Self::Minimap => "minimap2".into(),
             Self::Polya => "polya".into(),
-            Self::LoadGenome => "load-genome".into(),
+            Self::Fusion => "fusion".into(),
+            Self::Orf => "orf".into(),
         }
     }
 
@@ -980,8 +982,9 @@ impl PipelineStep {
             Self::Refine => vec!["isoseq".into()],
             Self::Cluster => vec!["isoseq".into()],
             Self::Minimap => vec!["minimap2".into()],
-            Self::Polya => vec!["python3".into(), "perl".into()],
-            Self::LoadGenome => vec!["load-genome".into()],
+            Self::Polya => vec!["python3".into(), "perl".into(), "bedtools".into()],
+            Self::Fusion => vec!["rust".into()],
+            Self::Orf => vec!["python3".into(), "diamond".into(), "nextflow".into()],
         }
     }
 
@@ -1012,7 +1015,8 @@ impl PipelineStep {
             Self::Cluster => "cluster".into(),
             Self::Minimap => "minimap2".into(),
             Self::Polya => "polya".into(),
-            Self::LoadGenome => "load-genome".into(),
+            Self::Fusion => "fusion".into(),
+            Self::Orf => "orf".into(),
         }
     }
 
@@ -1038,7 +1042,8 @@ impl PipelineStep {
             Self::Cluster => 4,
             Self::Minimap => 5,
             Self::Polya => 6,
-            Self::LoadGenome => 7,
+            Self::Fusion => 7,
+            Self::Orf => 8,
         }
     }
 
@@ -1432,6 +1437,7 @@ fn run_command(cmd: &mut Command) -> ExitStatus {
 ///
 /// assert!(run_command(Command::new("isotools").arg("--help")).success());
 /// ```
+#[allow(dead_code)]
 fn build_isotools() -> Result<(), Box<dyn std::error::Error>> {
     let isotools = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()

@@ -71,9 +71,10 @@ impl Job {
             PipelineStep::Lima => "lima",
             PipelineStep::Refine => "isoseq refine",
             PipelineStep::Cluster => "isoseq cluster",
-            PipelineStep::Polya => "isotools iso-polya filter",
+            PipelineStep::Polya => "",
             PipelineStep::Minimap => "minimap2",
-            PipelineStep::LoadGenome => "load_genome",
+            PipelineStep::Fusion => "isotools iso-fusion",
+            PipelineStep::Orf => "",
         };
 
         self.cmd.push_str(step_cmd);

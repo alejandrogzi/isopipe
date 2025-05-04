@@ -63,3 +63,4 @@ pub const RUN_ID_LEN: usize = 4;
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];
 pub const CLUSTERING_CATEGORIES: &[&str] = &["hq", "lq", "singletons"];
+pub const FUSION_TYPES: &[&str] = &["free", "fusions", "review", "fakes"];

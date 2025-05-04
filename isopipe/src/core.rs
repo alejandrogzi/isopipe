@@ -82,7 +82,16 @@ pub fn run_step(
                 &step_output_dir,
             )
         }
-        PipelineStep::LoadGenome => {
+        PipelineStep::Fusion => {
+            log::info!("INFO [STEP 7]: Pre-processing for iso-fusion started...");
+            isotools::iso_fusion(
+                step,
+                config,
+                &global_output_dir.join(input_dir),
+                &step_output_dir,
+            )
+        }
+        PipelineStep::Orf => {
             todo!()
         }
     };
