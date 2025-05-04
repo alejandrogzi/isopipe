@@ -32,6 +32,7 @@ pub fn iso_fusion(
         )
         .split(" ")
         .map(String::from)
+        .filter(|s| !s.is_empty())
         .collect::<Vec<String>>();
 
     for category in CLUSTERING_CATEGORIES {
@@ -59,6 +60,11 @@ pub fn iso_fusion(
         ));
 
         args.extend(parts.clone());
+        // log::debug!(
+        //     "INFO [STEP 7]: Running fusion detection for category {} with parameters: {:?}",
+        //     category,
+        //     args
+        // );
         let _ = lib_iso_fusion(Arc::new(args));
     }
 

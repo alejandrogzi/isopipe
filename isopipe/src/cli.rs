@@ -5,7 +5,7 @@ use crate::config::*;
 use crate::executor::manager::ParallelManager;
 
 pub const MIN_STEP: &str = "0";
-pub const MAX_STEP: &str = "6";
+pub const MAX_STEP: &str = "8";
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
