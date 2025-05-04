@@ -73,6 +73,7 @@ pub fn polya(
                 .get(0)
                 .expect(&format!("ERROR: Could not find TOGA -> {:?}", fields)),
             output_dir
+                .join(POLYA_FIRST_PASS)
                 .join(filename.with_extension(POLYA_GOOD_SAM))
                 .display(),
             fields
