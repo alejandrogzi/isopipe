@@ -27,7 +27,8 @@ default_threads = 8                   # default number of threads
 
 [params.ccs]
 chunk = 100              # --chunk
-num-threads = 64         # -j
+num-threads = 1          # -j
+num-cores = 500          # WARN: HPC
 min-rq = 0.95            # --min-rq
 report-file = "report"   # --report-file
 output_dir = "step1_ccs" # output dir
@@ -52,6 +53,7 @@ output_dir = "step3_refine" # output dir
 input_dir = "step2_lima"    # previous step data dir [default]
 memory = 50                 # memory in GB
 num-threads = 64            # --num-threads
+num-cores = 64              # WARN: HPC
 time = "24.h"               # time for each job
 
 [params.cluster]
@@ -60,7 +62,8 @@ verbose = ""                   # WARN: leave empty [verbosity as default]
 output_dir = "step4_cluster"   # output dir
 input_dir = "step3_refine"     # previous step data dir [default]
 memory = 50                    # memory in GB
-num-threads = 128              # --num-threads [higher the better]
+num-threads = 64               # --num-threads [higher the better]
+num-cores = 64                 # WARN: HPC
 time = "24.h"                  # time for each job
 log-file = "step4_cluster.log" # log file
 
