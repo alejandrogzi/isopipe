@@ -126,7 +126,7 @@ impl ParallelExecutor {
             .to_int();
 
         let threads = config
-            .get_param(*step, "num-cores")
+            .get_param(*step, "num-threads")
             .unwrap_or(
                 // INFO: covering minimap -t flag -> else, roll up to default
                 config.get_param(*step, "t").unwrap_or(
