@@ -73,6 +73,59 @@ parser.add_argument(
 )
 
 
+class CigarFeature:
+    def __init__(self, symbol: str, size: int):
+        self.symbol = symbol
+        self.size = size
+
+    def set_size(self, size: int):
+        self.size = size
+
+    def get_size(self):
+        return self.size
+
+    def __str__(self):
+        return f"{self.size}{self.symbol}"
+
+
+class Cigar:
+    def __init__(self, value_string):
+        new_features = []
+        cig_iter = groupby(value_string, lambda c: c.isdigit())
+        for g, n in cig_iter:
+            next_feature = CigarFeature(
+                size=int("".join(n)), symbol="".join(next(cig_iter)[1])
+            )
+            new_features.append(next_feature)
+        self.features = new_features
+
+    def from_string(self, value_string: str):
+        new_features = []
+        print(value_string)
+        if value_string == "*":
+            yield (0, None)
+            raise StopIteration
+        cig_iter = groupby(value_string, lambda c: c.isdigit())
+        for g, n in cig_iter:
+            new_features.append(CigarFeature(str(n), next(cig_iter)[1]))
+        print(new_features)
+        self.features = new_features
+
+    def get_features(self):
+        return self.features
+
+    def insert_feature(self, feature: CigarFeature, index=-1):
+        features = self.features
+        features.insert(index, feature)
+        self.features = features
+
+    def __str__(self):
+        final_str = ""
+        for feature in self.features:
+            final_str += f"{feature.size}{feature.symbol}"
+        return final_str
+
+
 def rev_comp(my_seq):
     """
     Return reverse complement of a given sequence
@@ -686,56 +739,3 @@ if __name__ == "__main__":
     # parse args
     arguments = parser.parse_args()
     main(arguments)
-
-
-class CigarFeature:
-    def __init__(self, symbol: str, size: int):
-        self.symbol = symbol
-        self.size = size
-
-    def set_size(self, size: int):
-        self.size = size
-
-    def get_size(self):
-        return self.size
-
-    def __str__(self):
-        return f"{self.size}{self.symbol}"
-
-
-class Cigar:
-    def __init__(self, value_string):
-        new_features = []
-        cig_iter = groupby(value_string, lambda c: c.isdigit())
-        for g, n in cig_iter:
-            next_feature = CigarFeature(
-                size=int("".join(n)), symbol="".join(next(cig_iter)[1])
-            )
-            new_features.append(next_feature)
-        self.features = new_features
-
-    def from_string(self, value_string: str):
-        new_features = []
-        print(value_string)
-        if value_string == "*":
-            yield (0, None)
-            raise StopIteration
-        cig_iter = groupby(value_string, lambda c: c.isdigit())
-        for g, n in cig_iter:
-            new_features.append(CigarFeature(str(n), next(cig_iter)[1]))
-        print(new_features)
-        self.features = new_features
-
-    def get_features(self):
-        return self.features
-
-    def insert_feature(self, feature: CigarFeature, index=-1):
-        features = self.features
-        features.insert(index, feature)
-        self.features = features
-
-    def __str__(self):
-        final_str = ""
-        for feature in self.features:
-            final_str += f"{feature.size}{feature.symbol}"
-        return final_str
