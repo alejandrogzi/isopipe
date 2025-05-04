@@ -65,7 +65,7 @@ pub fn polya(
 
         // INFO: script.py {toga} {}.good.sam {assembly} {].corrected.sam
         let correct_step = format!(
-            "{} {} {} {} {}",
+            "python3 {} {} {} {} {}",
             correct.display(),
             fields
                 .get(0)
