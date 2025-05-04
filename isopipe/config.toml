@@ -28,7 +28,7 @@ default_threads = 8                   # default number of threads
 [params.ccs]
 chunk = 100              # --chunk
 num-threads = 1          # -j
-num-cores = 500          # WARN: HPC
+num-cores = 1            # FILL | WARN: HPC [per job]
 min-rq = 0.95            # --min-rq
 report-file = "report"   # --report-file
 output_dir = "step1_ccs" # output dir

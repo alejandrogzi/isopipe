@@ -19,6 +19,8 @@ pub const LOG_FILE: &str = "log-file";
 pub const GENOME: &str = "genome";
 pub const TOGA: &str = "toga";
 pub const ASSEMBLY: &str = "assembly";
+pub const NUM_THREADS: &str = "num-threads";
+pub const NUM_CORES: &str = "num-cores";
 
 // project-wide pub const | names
 pub const ISOPIPE: &str = "isopipe";

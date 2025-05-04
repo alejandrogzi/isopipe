@@ -42,7 +42,9 @@ pub fn ccs(
     let fields = config.get_step_custom_fields(step, vec![CHUNK, REPORT]);
     let args = config.get_step_args(
         step,
-        vec![INPUT_DIR, PREFIX, OUTPUT_DIR, CHUNK, MEMORY, TIME, REPORT],
+        vec![
+            INPUT_DIR, PREFIX, OUTPUT_DIR, CHUNK, MEMORY, TIME, REPORT, NUM_CORES,
+        ],
     );
 
     for (_, entry) in std::fs::read_dir(input_dir)
