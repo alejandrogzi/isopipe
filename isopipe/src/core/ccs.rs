@@ -66,6 +66,8 @@ pub fn ccs(
         let bam = entry.path();
 
         for chunk_idx in 0..chunk_size {
+            let chunk_idx = chunk_idx + 1;
+
             let out_bam = step_output_dir.join(format!(
                 "{}.{}.ccs.{}.bam",
                 prefix,
