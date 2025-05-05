@@ -111,7 +111,6 @@ output_dir = "step7_fusion" # output dir
 memory = 50                 # memory in GB
 time = "24.h"               # time for each job
 toga = ""                   # FILL: toga query annotation
-recover = ""                # WARN: leave empty
 prefix = ""                 # WARN: leave empty
 
 [params.orf]

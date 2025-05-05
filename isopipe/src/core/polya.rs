@@ -50,6 +50,10 @@ pub fn polya(
     let correct = assets.join(CORRECT_MINIMAP);
 
     for category in CLUSTERING_CATEGORIES {
+        if *category == "lq" {
+            continue;
+        }
+
         // INFO: format -> all.clustered.aligned.{hq,lq,singletons}.sam
         let filename = PathBuf::from(format!("{}.{}.{}", CU_ALN, category, SAM));
         let alignment = input_dir.join(&filename);
