@@ -50,6 +50,7 @@ pub fn merge(
             if !merged.exists() {
                 // INFO: format of wildcard: {prefix}.{name}.ccs.*.bam
                 let wildcard = input_dir.join(format!("{}.{}*{}", prefix, group, BAM));
+                let delete = input_dir.join(format!("{}.{}.subreads*", prefix, group));
 
                 // INFO: if merged file does not existe, we merge and delete the unmerged files
                 let cmd = format!(
@@ -57,7 +58,7 @@ pub fn merge(
                     THREADS,
                     merged.display(),
                     wildcard.display(),
-                    wildcard.display(),
+                    delete.display(),
                 );
 
                 pbi.push(merged);
