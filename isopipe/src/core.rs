@@ -43,7 +43,7 @@ pub fn run_step(
             log::info!("INFO [STEP 2]: Pre-processing for lima started...");
             let input_dir = &global_output_dir.join(input_dir);
 
-            samtools::merge(input_dir, executor, config);
+            samtools::merge(input_dir, executor, config, prefix);
             lima::lima(step, config, input_dir, &step_output_dir)
         }
         PipelineStep::Refine => {

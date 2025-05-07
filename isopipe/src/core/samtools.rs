@@ -28,7 +28,12 @@ use std::path::PathBuf;
 ///
 /// samtools::merge(&input_dir, &mut executor, &config);
 /// ```
-pub fn merge(input_dir: &PathBuf, executor: &mut ParallelExecutor, config: &Config) {
+pub fn merge(
+    input_dir: &PathBuf,
+    executor: &mut ParallelExecutor,
+    config: &Config,
+    prefix: String,
+) {
     const THREADS: u32 = 16;
     const MEMORY: u32 = 8;
 
@@ -40,11 +45,11 @@ pub fn merge(input_dir: &PathBuf, executor: &mut ParallelExecutor, config: &Conf
 
     for (group, bams) in groups {
         if bams.len() > 1 {
-            let merged = input_dir.join(format!("{}.ccs.{}", group, MERGED_BAM));
+            let merged = input_dir.join(format!("{}.{}.ccs.{}", prefix, group, MERGED_BAM));
 
             if !merged.exists() {
                 // INFO: format of wildcard: {prefix}.{name}.ccs.*.bam
-                let wildcard = input_dir.join(format!("{}*{}", group, BAM));
+                let wildcard = input_dir.join(format!("{}.{}*{}", prefix, group, BAM));
 
                 // INFO: if merged file does not existe, we merge and delete the unmerged files
                 let cmd = format!(
