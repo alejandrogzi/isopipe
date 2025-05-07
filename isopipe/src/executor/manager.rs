@@ -303,8 +303,9 @@ impl ParallelExecutor {
     ) {
         match self.manager {
             ParallelManager::Para => {
-                let jobs = write_jobs(self.jobs.clone(), dir);
+                let jobs = write_jobs(self.jobs.clone(), dir.clone());
                 self.__para(config, step, &jobs, threads, memory, package);
+                self.reset(dir);
             }
             _ => {
                 todo!()
