@@ -62,6 +62,7 @@ pub const DEFAULT_THREADS: &str = "default_threads";
 // miscellaneous constants
 pub const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 pub const RUN_ID_LEN: usize = 4;
+pub const ORFPY_ENV: &str = "/beegfs/projects/hillerlab/genome/src/ORFTree/.venv/bin/activate";
 
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];

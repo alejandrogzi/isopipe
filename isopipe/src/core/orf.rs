@@ -40,7 +40,8 @@ pub fn orf(
         let fasta = extract(&bed, &twobit, step_output_dir, filename);
 
         let cmd = format!(
-            "{} --fasta {} --alignments {} --output_dir {} {}",
+            "source {} && {} --fasta {} --alignments {} --output_dir {} {}",
+            ORFPY_ENV,
             executable.display(),
             fasta.display(),
             bed.display(),
