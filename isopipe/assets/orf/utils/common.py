@@ -21,7 +21,8 @@ def multiplex_dataset(input_fasta, output_fasta, output_index, silent=False):
 
     # Simple FASTA multiplexing procedure:
     # Using sequences as key, collapse record with equal sequences onto one another
-    if not silent: logging.info("Reading file")
+    if not silent:
+        logging.info("Reading file")
     with open(input_fasta) as handle:
         for record in SeqIO.parse(handle, "fasta"):
             if multiplex_dict.get(record.seq):
@@ -34,10 +35,13 @@ def multiplex_dataset(input_fasta, output_fasta, output_index, silent=False):
 
     collapse_ratio = len(multiplex_dict.keys()) / raw_count
 
-    if not silent: logging.info(f"Reduced number of individual sequences by {100 - round(collapse_ratio * 100, 2)}%")
+    if not silent:
+        logging.info(
+            f"Reduced number of individual sequences by {100 - round(collapse_ratio * 100, 2)}%"
+        )
 
     with open(output_fasta, "w") as fasta:
-        with open(output_index, "w", encoding='utf-8') as index:
+        with open(output_index, "w", encoding="utf-8") as index:
             for i, key in enumerate(multiplex_dict.keys()):
                 index.write(f"sequence_{i}\t{'⍼'.join(multiplex_dict[key])}\n")
                 fasta.write(f">sequence_{i}\n{key}\n")
@@ -57,11 +61,13 @@ def chunk_bed(input_path, chunk_size, output_path, prefix) -> int:
     """
     chunk_index = 0
     chunk_buffer = []
-    with open(input_path, 'r') as f:
+    with open(input_path, "r") as f:
         for i, line in enumerate(f):
             chunk_buffer.append(line)
             if i % chunk_size == 0:
-                with open(f"{output_path}/{prefix}_{chunk_index}.bed", 'w') as output_file:
+                with open(
+                    f"{output_path}/{prefix}_{chunk_index}.bed", "w"
+                ) as output_file:
                     output_file.writelines(chunk_buffer)
                     chunk_buffer = []
                     chunk_index += 1
@@ -86,13 +92,15 @@ def chunk_fasta(input_path, chunk_size, output_path, prefix) -> int:
             i += 1
             chunk_buffer.append(record)
             if i % chunk_size == 0:
-                with open(f"{output_path}/{prefix}_{chunk_index}.pep", 'w') as output_file:
+                with open(
+                    f"{output_path}/{prefix}_{chunk_index}.pep", "w"
+                ) as output_file:
                     SeqIO.write(chunk_buffer, output_file, "fasta")
                     chunk_buffer = []
                     chunk_index += 1
 
     if len(chunk_buffer) > 0:
-        with open(f"{output_path}/{prefix}_{chunk_index}.pep", 'w') as output_file:
+        with open(f"{output_path}/{prefix}_{chunk_index}.pep", "w") as output_file:
             SeqIO.write(chunk_buffer, output_file, "fasta")
             chunk_index += 1
     return chunk_index
@@ -101,14 +109,14 @@ def chunk_fasta(input_path, chunk_size, output_path, prefix) -> int:
 def export_df_orfs(df, input_bed, output_path):
     # populate BED dict
     transcript_dict = dict()
-    with open(input_bed, 'r') as f:
+    with open(input_bed, "r") as f:
         for line in f:
             curr_row = BedRow(line)
             transcript_dict[curr_row.id_str] = curr_row
 
     dropped = 0
     x = 0
-    with open(output_path, 'w', encoding='utf-8') as f:
+    with open(output_path, "w", encoding="utf-8") as f:
         for entry in df.itertuples():
             orf_coords = entry.genomic_coords.split("|")
             source_row = deepcopy(transcript_dict.get(entry.canonical_id))
@@ -148,48 +156,50 @@ def write_results(df: DataFrame, threshold, output_path, with_ground_label=False
     current_id = ""
     current_count = 0
     ranks = []
-    with open(f"{output_path}.uncollapsed.bed", 'w') as bed_file:
+    with open(f"{output_path}.uncollapsed.bed", "w") as bed_file:
         if with_ground_label:
             for _, row in df.iterrows():
-                if row['canonical_id'] != current_id:
-                    current_id = row['canonical_id']
+                if row["canonical_id"] != current_id:
+                    current_id = row["canonical_id"]
                     current_count = 0
-                coords = "\t".join(row['genomic_coords'].split("|"))
-                coords_split = row['genomic_coords'].split("|")
+                coords = "\t".join(row["genomic_coords"].split("|"))
+                coords_split = row["genomic_coords"].split("|")
                 rgb = ""
 
-                if row['ground_label'] and row['class1_probability'] > threshold:
+                if row["ground_label"] and row["class1_probability"] > threshold:
                     rgb = "0,255,0"
 
-                elif not row['ground_label'] and row['class1_probability'] > threshold:
+                elif not row["ground_label"] and row["class1_probability"] > threshold:
                     rgb = "255,0,0"
 
-                elif row['ground_label'] and row['class1_probability'] < threshold:
+                elif row["ground_label"] and row["class1_probability"] < threshold:
                     rgb = "255,165,0"
 
-                elif not row['ground_label'] and row['class1_probability'] < threshold:
+                elif not row["ground_label"] and row["class1_probability"] < threshold:
                     rgb = "0,0,255"
 
                 bed_file.write(
-                    f"{coords[:-1]}\t{row['canonical_id']}_{current_count}_{row['class1_probability']:.4f}\t{row['class1_probability'] * 1000:.2f}\t{coords[-1]}\t{coords_split[1]}\t{coords_split[2]}\t{rgb}\n")
+                    f"{coords[:-1]}\t{row['canonical_id']}_{current_count}_{row['class1_probability']:.4f}\t{row['class1_probability'] * 1000:.2f}\t{coords[-1]}\t{coords_split[1]}\t{coords_split[2]}\t{rgb}\n"
+                )
                 ranks.append(current_count)
                 current_count += 1
 
         else:
             for _, row in df.iterrows():
-                if row['canonical_id'] != current_id:
-                    current_id = row['canonical_id']
+                if row["canonical_id"] != current_id:
+                    current_id = row["canonical_id"]
                     current_count = 0
-                coords = "\t".join(row['genomic_coords'].split("|"))
-                coords_split = row['genomic_coords'].split("|")
+                coords = "\t".join(row["genomic_coords"].split("|"))
+                coords_split = row["genomic_coords"].split("|")
 
-                if row['class1_probability'] > threshold:
+                if row["class1_probability"] > threshold:
                     rgb = "0,0,255"
                 else:
                     rgb = "255,0,0"
 
                 bed_file.write(
-                    f"{coords[:-1]}\t{row['canonical_id']}_{current_count}_{row['class1_probability']:.4f}\t{row['class1_probability'] * 1000:.2f}\t{coords[-1]}\t{coords_split[1]}\t{coords_split[2]}\t{rgb}\n")
+                    f"{coords[:-1]}\t{row['canonical_id']}_{current_count}_{row['class1_probability']:.4f}\t{row['class1_probability'] * 1000:.2f}\t{coords[-1]}\t{coords_split[1]}\t{coords_split[2]}\t{rgb}\n"
+                )
                 ranks.append(current_count)
                 current_count += 1
 
@@ -208,18 +218,22 @@ def map_bed(df, bed_path, output_path):
     # Assume this has already been filtered
     orfs = dict()
     for _, row in df.iterrows():
-        if not orfs.get(row['canonical_id']):
-            orfs[row['canonical_id']] = [(row['genomic_coords'], row['class1_probability'], row['toga_overrule'])]
+        if not orfs.get(row["canonical_id"]):
+            orfs[row["canonical_id"]] = [
+                (row["genomic_coords"], row["class1_probability"], row["toga_overrule"])
+            ]
         else:
-            orf_list = orfs[row['canonical_id']]
-            orf_list.append((row['genomic_coords'], row['class1_probability'], row['toga_overrule']))
-            orfs[row['canonical_id']] = orf_list
+            orf_list = orfs[row["canonical_id"]]
+            orf_list.append(
+                (row["genomic_coords"], row["class1_probability"], row["toga_overrule"])
+            )
+            orfs[row["canonical_id"]] = orf_list
 
     logger.info(f"Extraced ORFs for {len(orfs)} transcripts")
 
-    with open(bed_path, 'r') as f:
-        with open(f"{output_path}/coding.bed", 'w') as coding:
-            with open(f"{output_path}/noncoding.bed", 'w') as noncoding:
+    with open(bed_path, "r") as f:
+        with open(f"{output_path}/coding.bed", "w") as coding:
+            with open(f"{output_path}/noncoding.bed", "w") as noncoding:
                 for line in f:
                     vals = line.strip().split("\t")
                     if orfs.get(vals[3]):

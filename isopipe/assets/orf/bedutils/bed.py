@@ -5,31 +5,41 @@ class ColumnCountError(Exception):
     """
     Raised when the column count of a BED entry does not correspond to a valid format.
     """
+
     def __init__(self, count):
-        super().__init__(f"Found {count} tab-separated columns, expected one of [6, 8, 9, 12]")
+        super().__init__(
+            f"Found {count} tab-separated columns, expected one of [6, 8, 9, 12]"
+        )
         pass
+
 
 class MismatchedBlockCounts(Exception):
     """
     Raised when the block indices and block sizes are of different length.
     """
+
     def __init__(self, indices_length, block_size_length, block_count):
-        super().__init__(f"The total number of block indices ({indices_length}) is inconsisten to the total number of block sizes ({block_size_length}) or the block count {block_count}.")
+        super().__init__(
+            f"The total number of block indices ({indices_length}) is inconsisten to the total number of block sizes ({block_size_length}) or the block count {block_count}."
+        )
         pass
 
 
 class OutOfExonError(Exception):
-    """
+    """ """
 
-    """
     def __init__(self, genomic_position, row_id):
-        super().__init__(f"The genomic position ({genomic_position}) is not inside a block of {row_id}")
+        super().__init__(
+            f"The genomic position ({genomic_position}) is not inside a block of {row_id}"
+        )
         pass
+
 
 class BedRow:
     """
     A Class representing a single row in a BED file.
     """
+
     def __init__(self, row: str):
         features = row.strip().split("\t")
         self.bed_x = len(features)
@@ -66,18 +76,70 @@ class BedRow:
 
     def __str__(self):
         if self.bed_x == 6:
-            return "\t".join(str(x) for x in [self.chrom, str(self.start), str(self.stop), self.id_str, self.score, self.strand])
+            return "\t".join(
+                str(x)
+                for x in [
+                    self.chrom,
+                    str(self.start),
+                    str(self.stop),
+                    self.id_str,
+                    self.score,
+                    self.strand,
+                ]
+            )
         elif self.bed_x == 8:
-            return "\t".join(str(x) for x in [self.chrom, str(self.start), str(self.stop), self.id_str, self.score, self.strand, self.thick_start,
-                              self.thick_stop])
+            return "\t".join(
+                str(x)
+                for x in [
+                    self.chrom,
+                    str(self.start),
+                    str(self.stop),
+                    self.id_str,
+                    self.score,
+                    self.strand,
+                    self.thick_start,
+                    self.thick_stop,
+                ]
+            )
         elif self.bed_x == 9:
-            return "\t".join(str(x) for x in [self.chrom, str(self.start), str(self.stop), self.id_str, self.score, self.strand, self.thick_start,
-                              self.thick_stop, self.rgb])
+            return "\t".join(
+                str(x)
+                for x in [
+                    self.chrom,
+                    str(self.start),
+                    str(self.stop),
+                    self.id_str,
+                    self.score,
+                    self.strand,
+                    self.thick_start,
+                    self.thick_stop,
+                    self.rgb,
+                ]
+            )
         elif self.bed_x == 12:
-            return "\t".join(str(x) for x in [self.chrom, str(self.start), self.stop, self.id_str, self.score, self.strand, self.thick_start,
-                              self.thick_stop, self.rgb, self.block_count,
-                              str(self.block_lens).replace("[", "").replace("]", "").replace(" ", ""),
-                              str(self.block_starts).replace("[", "").replace("]", "").replace(" ", "")])
+            return "\t".join(
+                str(x)
+                for x in [
+                    self.chrom,
+                    str(self.start),
+                    self.stop,
+                    self.id_str,
+                    self.score,
+                    self.strand,
+                    self.thick_start,
+                    self.thick_stop,
+                    self.rgb,
+                    self.block_count,
+                    str(self.block_lens)
+                    .replace("[", "")
+                    .replace("]", "")
+                    .replace(" ", ""),
+                    str(self.block_starts)
+                    .replace("[", "")
+                    .replace("]", "")
+                    .replace(" ", ""),
+                ]
+            )
 
     def get_exon_total_length(self):
         """
@@ -93,14 +155,18 @@ class BedRow:
         """
         return sum(self.block_lens)
 
-    def is_genomic_position_in_block(self, genomic_position: int, force_exon=False) -> bool:
+    def is_genomic_position_in_block(
+        self, genomic_position: int, force_exon=False
+    ) -> bool:
         """
         Safely wrap genomic position <-> block position conversion
         :param force_exon: If set, enforce that the block position must also be within the thickStart / Stop bounds.
         :param genomic_position:
         :return: True if the position is within a block
         """
-        if force_exon and (genomic_position < self.thick_start or genomic_position > self.thick_stop):
+        if force_exon and (
+            genomic_position < self.thick_start or genomic_position > self.thick_stop
+        ):
             return False
 
         if self.start > genomic_position or self.stop < genomic_position:
@@ -137,7 +203,9 @@ class BedRow:
 
         return -1, -1
 
-    def genomic_position_to_block_position(self, genomic_pos: int) -> Optional[Tuple[int, int]]:
+    def genomic_position_to_block_position(
+        self, genomic_pos: int
+    ) -> Optional[Tuple[int, int]]:
         """
         Convert a genomic position into the internal reference bp count of the BedRow.
         :param genomic_pos:
@@ -166,7 +234,6 @@ class BedRow:
         """
         block, remainder = self.get_bp_pos_block(bp_pos)
         return self.start + self.block_starts[block] + remainder
-
 
     def smooth_zero_leading_block(self):
         """
@@ -203,11 +270,13 @@ class BedRow:
             return self.trim_bp_upstream(bp, False)
 
         # Find BP position
-        block_index, remainder  = self.get_bp_pos_block(self.get_exon_total_length() - bp)
+        block_index, remainder = self.get_bp_pos_block(
+            self.get_exon_total_length() - bp
+        )
 
         # Remove blocks if necessary
-        self.block_starts = self.block_starts[:block_index+1]
-        self.block_lens = self.block_lens[:block_index+1]
+        self.block_starts = self.block_starts[: block_index + 1]
+        self.block_lens = self.block_lens[: block_index + 1]
         self.block_count = block_index + 1
 
         # Trim the last block
@@ -218,7 +287,6 @@ class BedRow:
         self.stop = self.start + self.block_starts[-1] + self.block_lens[-1]
         if self.thick_stop > self.stop:
             self.thick_stop = self.stop
-
 
     def trim_bp_upstream(self, bp: int, allow_invert=True):
         """
@@ -234,7 +302,7 @@ class BedRow:
             return self.trim_bp_downstream(bp, False)
 
         # Find BP position
-        block_index, remainder  = self.get_bp_pos_block(bp)
+        block_index, remainder = self.get_bp_pos_block(bp)
 
         # Remove blocks if necessary
         self.block_starts = self.block_starts[block_index:]
@@ -256,7 +324,6 @@ class BedRow:
         if self.block_lens[0] == 0:
             self.smooth_zero_leading_block()
 
-
     def trim_to_genomic_position_downstream(self, genomic_position):
         """
         Takes a genomic position and trims everything downstream (in strand direction) of that position.
@@ -267,7 +334,7 @@ class BedRow:
         # Find BP position
         cut = self.genomic_position_to_block_position(genomic_position)
         # Convert into trimmable block position
-        walked = sum(self.block_lens[:cut[0]]) + cut[1]
+        walked = sum(self.block_lens[: cut[0]]) + cut[1]
         # Trim
         if self.strand == "+":
             self.trim_bp_downstream(self.get_exon_total_length() - walked)
@@ -283,7 +350,7 @@ class BedRow:
         # Find BP position
         cut = self.genomic_position_to_block_position(genomic_position)
         # Convert into trimmable block position
-        walked = sum(self.block_lens[:cut[0]]) + cut[1]
+        walked = sum(self.block_lens[: cut[0]]) + cut[1]
         # Trim
         if self.strand == "-":
             self.trim_bp_upstream(self.get_exon_total_length() - walked)
@@ -298,7 +365,7 @@ class BedRow:
         """
         # Internal reference
         cut = self.genomic_position_to_block_position(genomic_position)
-        walked = sum(self.block_lens[:cut[0]]) + cut[1]
+        walked = sum(self.block_lens[: cut[0]]) + cut[1]
 
         # The walked bp is always in (+) -> invert if on (-) strand
         if self.strand == "-":
@@ -320,7 +387,6 @@ class BedRow:
             block_pos = self.get_total_block_length() - sequence_position
 
         return self.block_position_to_genomic_position(block_pos)
-
 
     ## Deprecated methods
 

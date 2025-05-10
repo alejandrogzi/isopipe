@@ -1,6 +1,7 @@
 """
 Prepare data and run BLASTP & TransDecoder
 """
+
 import logging
 import shutil
 import subprocess
@@ -13,8 +14,11 @@ from .merging import reformat_id_orfipy
 
 logger = logging.getLogger(__name__)
 
-NF_FILE_LINK = "/beegfs/projects/hillerlab/genome/src/ORFTree/nextflow/chunked_diamond.nf"
+NF_FILE_LINK = (
+    "/beegfs/projects/hillerlab/genome/src/ORFTree/nextflow/chunked_diamond.nf"
+)
 NF_CONFIG = "/beegfs/projects/hillerlab/genome/src/ORFTree/nextflow/nextflow.config"
+
 
 def feed_toga(toga_bed, assembly, tmp_dir):
     with open(toga_bed, "r") as f:
@@ -26,20 +30,21 @@ def feed_toga(toga_bed, assembly, tmp_dir):
                 bed_output.write("\t".join(cols[:5]) + "\n")
 
     # Extract raw sequences for TOGA
-    subprocess.run(f"twoBitToFa {assembly} {tmp_dir}/ORF/TOGA_READS.fa -bed={tmp_dir}/ORF/TOGA_BED.bed")
+    subprocess.run(
+        f"twoBitToFa {assembly} {tmp_dir}/ORF/TOGA_READS.fa -bed={tmp_dir}/ORF/TOGA_BED.bed"
+    )
 
 
 def de_multiplex_blast(index_path, blast_results, output_path):
     index_dict = dict()
-    with open(index_path, 'r', encoding='utf-8') as index_file:
+    with open(index_path, "r", encoding="utf-8") as index_file:
         for line in index_file:
             cols = line.strip().split("\t")
             ids = cols[1].split("⍼")
             index_dict[cols[0]] = ids
 
-
-    with open(blast_results, 'r') as blast_file:
-        with open(output_path, 'w') as output_file:
+    with open(blast_results, "r") as blast_file:
+        with open(output_path, "w") as output_file:
             for line in blast_file:
                 # Note: no strip() needed here
                 cols = line.split("\t")
@@ -64,14 +69,21 @@ def run_transdecoder_long_orfs(input_file, output_dir) -> bool:
     """
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
-    transdecoder_args = ["TransDecoder.LongOrfs", "--output_dir", output_dir, "-m", "30", "-t", input_file]
+    transdecoder_args = [
+        "TransDecoder.LongOrfs",
+        "--output_dir",
+        output_dir,
+        "-m",
+        "30",
+        "-t",
+        input_file,
+    ]
     transdecoder_process = subprocess.run(transdecoder_args)
 
     if transdecoder_process.returncode != 0:
         raise RuntimeError(transdecoder_args)
 
     return True
-
 
 
 def run_orfipy(input_file, output_dir) -> bool:
@@ -84,16 +96,22 @@ def run_orfipy(input_file, output_dir) -> bool:
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
 
-    orf_args = ["orfipy",
-                input_file,
-                "--pep", "orfs_raw.pep",
-                "--bed", "orfs.bed",
-                "--partial-5",
-                "--partial-3",
-                "--include-stop",
-                "--min", "100",
-                "--ignore-case",
-                "--outdir", output_dir]
+    orf_args = [
+        "orfipy",
+        input_file,
+        "--pep",
+        "orfs_raw.pep",
+        "--bed",
+        "orfs.bed",
+        "--partial-5",
+        "--partial-3",
+        "--include-stop",
+        "--min",
+        "100",
+        "--ignore-case",
+        "--outdir",
+        output_dir,
+    ]
     orf_process = subprocess.run(orf_args)
 
     if orf_process.returncode != 0:
@@ -102,17 +120,25 @@ def run_orfipy(input_file, output_dir) -> bool:
     return True
 
 
-def run_diamond(input_file, output_file, database, parent_tmp, num_threads=-1, chunk_size=-1, nextflow=False):
+def run_diamond(
+    input_file,
+    output_file,
+    database,
+    parent_tmp,
+    num_threads=-1,
+    chunk_size=-1,
+    nextflow=False,
+):
     """
-	Run Diamond via para.
-	:param parent_tmp: Parent temporary directory
-	:param input_file:
-	:param output_file:
-	:param database:
-	:param num_threads:
-	:param chunk_size:
-	:return:
-	"""
+    Run Diamond via para.
+    :param parent_tmp: Parent temporary directory
+    :param input_file:
+    :param output_file:
+    :param database:
+    :param num_threads:
+    :param chunk_size:
+    :return:
+    """
 
     if nextflow:
         command = f"nextflow {NF_FILE_LINK} -c {NF_CONFIG} --query {input_file} --db {database} --out {output_file} -work-dir {parent_tmp}/TEMP_DIAMOND"
@@ -124,52 +150,72 @@ def run_diamond(input_file, output_file, database, parent_tmp, num_threads=-1, c
         os.makedirs(f"{parent_tmp}/BLASTP")
         chunk_count = chunk_fasta(input_file, chunk_size, chunked_tmp, "BLASTP")
 
-        logger.info(f"Diamond will run on {chunk_count} chunks with {chunk_size} sequences each.")
+        logger.info(
+            f"Diamond will run on {chunk_count} chunks with {chunk_size} sequences each."
+        )
 
         # Create BLAST JOBS for chunked runs
         for i in range(chunk_count):
-            jobs.append(f"diamond blastp -e 1e-10 --sensitive --query {chunked_tmp}/BLASTP_{i}.pep --db {database} -o {chunked_tmp}/BLASTP_{i}.txt\n")
+            jobs.append(
+                f"diamond blastp -e 1e-10 --sensitive --query {chunked_tmp}/BLASTP_{i}.pep --db {database} -o {chunked_tmp}/BLASTP_{i}.txt\n"
+            )
 
         with open(f"{chunked_tmp}/JOBFILE", "w") as jobfile:
             jobfile.writelines(jobs)
 
         # Run on cluster
-        job_run = subprocess.run(f"para make BLASTP_{parent_tmp} {chunked_tmp}/JOBFILE -q shortmed -memoryMb 15000", shell=True, check=True)
+        job_run = subprocess.run(
+            f"para make BLASTP_{parent_tmp} {chunked_tmp}/JOBFILE -q shortmed -memoryMb 15000",
+            shell=True,
+            check=True,
+        )
 
         # Collect results
         logger.info("Merging results from jobs into a single file...")
-        subprocess.run(f"cat {chunked_tmp}/*.txt >> {output_file}", shell=True, check=True)
+        subprocess.run(
+            f"cat {chunked_tmp}/*.txt >> {output_file}", shell=True, check=True
+        )
 
         return job_run
 
 
-def run_blastp(input_file, output_file, database, parent_tmp, num_threads=16, chunk_size=-1):
+def run_blastp(
+    input_file, output_file, database, parent_tmp, num_threads=16, chunk_size=-1
+):
     """
-	Run BLASTP via para.
-	:param parent_tmp: Parent temporary directory
-	:param input_file:
-	:param output_file:
-	:param database:
-	:param num_threads:
-	:param chunk_size:
-	:return:
-	"""
+    Run BLASTP via para.
+    :param parent_tmp: Parent temporary directory
+    :param input_file:
+    :param output_file:
+    :param database:
+    :param num_threads:
+    :param chunk_size:
+    :return:
+    """
     jobs = []
     chunked_tmp = f"{parent_tmp}/BLASTP"
     os.makedirs(f"{parent_tmp}/BLASTP")
     chunk_count = chunk_fasta(input_file, chunk_size, chunked_tmp, "BLASTP")
 
-    logger.info(f"BLASTP will run on {chunk_count} chunks with {chunk_size} sequences each.")
+    logger.info(
+        f"BLASTP will run on {chunk_count} chunks with {chunk_size} sequences each."
+    )
 
     # Create BLAST JOBS for chunked runs
     for i in range(chunk_count):
-        jobs.append(f"blastp -evalue 1e-10 -outfmt 6 -num_threads {num_threads} -db {database} -query {chunked_tmp}/BLASTP_{i}.pep -out {chunked_tmp}/BLASTP_{i}.txt\n")
+        jobs.append(
+            f"blastp -evalue 1e-10 -outfmt 6 -num_threads {num_threads} -db {database} -query {chunked_tmp}/BLASTP_{i}.pep -out {chunked_tmp}/BLASTP_{i}.txt\n"
+        )
 
     with open(f"{chunked_tmp}/JOBFILE", "w") as jobfile:
         jobfile.writelines(jobs)
 
     # Run on cluster
-    job_run = subprocess.run(f"para make BLASTP_{parent_tmp} {chunked_tmp}/JOBFILE -q shortmed", shell=True, check=True)
+    job_run = subprocess.run(
+        f"para make BLASTP_{parent_tmp} {chunked_tmp}/JOBFILE -q shortmed",
+        shell=True,
+        check=True,
+    )
 
     # Collect results
     logger.info("Merging results from jobs into a single file...")
@@ -179,14 +225,17 @@ def run_blastp(input_file, output_file, database, parent_tmp, num_threads=16, ch
 
 
 def filter_inphase(in_file, out_file):
-    with open(out_file, 'w') as o:
-        with open(in_file, 'r') as i:
+    with open(out_file, "w") as o:
+        with open(in_file, "r") as i:
             for line in i:
                 cols = line.strip().split("\t")
                 if cols[-1] == "+":
                     o.write(line)
 
-def export_cds_orfs_bed(bed_file, aligned_bed, nested_data, output_bed, tmp_dir, transdecoder=False):
+
+def export_cds_orfs_bed(
+    bed_file, aligned_bed, nested_data, output_bed, tmp_dir, transdecoder=False
+):
     """
     Export CDS and nested ORFs from a BED-based output of an ORF finder -> specifically orfipy
     :param bed_file: BED ORF file -> chroms are transcript IDs
@@ -211,14 +260,14 @@ def export_cds_orfs_bed(bed_file, aligned_bed, nested_data, output_bed, tmp_dir,
                 cds_dict[my_id] = {
                     "start": int(cols[1]),
                     "stop": int(cols[2]),
-                    "strand": cols[6]
+                    "strand": cols[6],
                 }
             else:
                 my_id = cols[3].split(";")[0][3:].replace("_ORF.", ".p")
                 cds_dict[my_id] = {
                     "start": int(cols[1]),
                     "stop": int(cols[2]),
-                    "strand": cols[5]
+                    "strand": cols[5],
                 }
 
     export_rows = []
@@ -227,7 +276,7 @@ def export_cds_orfs_bed(bed_file, aligned_bed, nested_data, output_bed, tmp_dir,
     logger.info(f"Trimming {aligned_bed} to CDS coordinates")
     print(list(cds_dict.keys())[:10])
     missed = []
-    with open(aligned_bed, 'r') as ref_file:
+    with open(aligned_bed, "r") as ref_file:
         for line in ref_file:
             x = 1
             while True:
@@ -238,16 +287,15 @@ def export_cds_orfs_bed(bed_file, aligned_bed, nested_data, output_bed, tmp_dir,
                     # Exclude reverse-strand predictions
                     # Note that in the orfipy output +/- is relative to the strand of the input transcript
                     # -> + always corresponds the strand the transcript was originally aligned to
-                    if cds_dict.get(my_id)['strand'] != "+":
+                    if cds_dict.get(my_id)["strand"] != "+":
                         x += 1
                         continue
                     try:
-
-                        if cds_dict[my_id]['start'] > 1:
+                        if cds_dict[my_id]["start"] > 1:
                             # my_row.trim_upstream(cds_dict[my_id]['start'])
-                            my_row.trim_bp_upstream(cds_dict[my_id]['start'])
+                            my_row.trim_bp_upstream(cds_dict[my_id]["start"])
                         # my_row.trim_downstream(cds_dict[my_id]['stop'] - cds_dict[my_id]['start'])
-                        my_row.trim_bp_downstream(row_len - cds_dict[my_id]['stop'])
+                        my_row.trim_bp_downstream(row_len - cds_dict[my_id]["stop"])
 
                         # Orfipy-style ID string
                         my_row.id_str = f"{my_row.id_str}.p{x}"
@@ -263,9 +311,8 @@ def export_cds_orfs_bed(bed_file, aligned_bed, nested_data, output_bed, tmp_dir,
                     break
                 x += 1
 
-    with open(f"{tmp_dir}/ExportCDS.bed", 'w') as export_file:
+    with open(f"{tmp_dir}/ExportCDS.bed", "w") as export_file:
         export_file.writelines(export_rows)
-
 
     # Now also include nested ORFs
     orf_for_blast_dict = dict()
@@ -273,9 +320,9 @@ def export_cds_orfs_bed(bed_file, aligned_bed, nested_data, output_bed, tmp_dir,
     safe_drops = 0
     total = 0
     logger.info(f"Trimming {aligned_bed} to nested ORFs")
-    with open(output_bed, 'w') as export_orf_file:
+    with open(output_bed, "w") as export_orf_file:
         export_orf_file.writelines(export_rows)
-        with open(nested_data, 'r') as nested_file:
+        with open(nested_data, "r") as nested_file:
             total += 1
             for line in nested_file:
                 cols = line.split("\t")
@@ -291,7 +338,7 @@ def export_cds_orfs_bed(bed_file, aligned_bed, nested_data, output_bed, tmp_dir,
                         safe_drops += 1
                     else:
                         c += 1
-                    #print(f"Missing: {my_id}")
+                    # print(f"Missing: {my_id}")
                     continue
 
                 # Deep copy in order to not alter the original record
@@ -325,12 +372,17 @@ def export_cds_orfs_bed(bed_file, aligned_bed, nested_data, output_bed, tmp_dir,
                     my_row.block_lens[-1] += 1
                 else:
                     my_row.start -= 1
-                    my_row.block_starts = [my_row.block_starts[0]] + [x + 1 for x in my_row.block_starts[1:]]
+                    my_row.block_starts = [my_row.block_starts[0]] + [
+                        x + 1 for x in my_row.block_starts[1:]
+                    ]
                     my_row.stop -= 1
 
-                if my_row.start + my_row.block_starts[-1] + my_row.block_lens[-1] > my_row.stop:
+                if (
+                    my_row.start + my_row.block_starts[-1] + my_row.block_lens[-1]
+                    > my_row.stop
+                ):
                     c += 1
-                    #print(f"Blocks too long {my_id} / {my_row.block_starts[-1]}")
+                    # print(f"Blocks too long {my_id} / {my_row.block_starts[-1]}")
                     continue
 
                 my_row.thick_start = my_row.start
@@ -361,7 +413,7 @@ def export_cds_orfs(gff_file, aligned_bed, nested_data, output_bed, tmp_dir):
 
     # Load CDS predicted by Transdecoder
     logger.info(f"Loading Transdecoder CDS from {gff_file}")
-    with open(gff_file, 'r') as gff_file:
+    with open(gff_file, "r") as gff_file:
         for line in gff_file:
             if len(line) < 2:
                 continue
@@ -370,29 +422,34 @@ def export_cds_orfs(gff_file, aligned_bed, nested_data, output_bed, tmp_dir):
                 curr_end = int(cols[4])
             if cols[2] == "CDS":
                 my_id = cols[8].split(";")[0][7:]
-                cds_dict[my_id] = {"start": int(cols[3]), "stop": int(cols[4]), "final_stop": curr_end,
-                                   "strand": cols[6]}
+                cds_dict[my_id] = {
+                    "start": int(cols[3]),
+                    "stop": int(cols[4]),
+                    "final_stop": curr_end,
+                    "strand": cols[6],
+                }
 
     export_rows = []
     export_dict = dict()
     dropped_count = 0
     logger.info(f"Trimming {aligned_bed} to CDS coordinates")
-    with open(aligned_bed, 'r') as ref_file:
+    with open(aligned_bed, "r") as ref_file:
         for line in ref_file:
             x = 1
             while True:
                 my_row = BedRow.BedRow(line.strip())
                 my_id = f"{my_row.id_str}.p{x}"
                 if cds_dict.get(my_id):
-
-                    if cds_dict.get(my_id)['strand'] != "+":
+                    if cds_dict.get(my_id)["strand"] != "+":
                         x += 1
                         continue
                     try:
-                        if cds_dict.get(my_id)['strand'] == "+":
-                            if cds_dict[my_id]['start'] > 1:
-                                my_row.trim_upstream(cds_dict[my_id]['start'] - 1)
-                            my_row.trim_downstream(cds_dict[my_id]['stop'] - cds_dict[my_id]['start'] + 1)
+                        if cds_dict.get(my_id)["strand"] == "+":
+                            if cds_dict[my_id]["start"] > 1:
+                                my_row.trim_upstream(cds_dict[my_id]["start"] - 1)
+                            my_row.trim_downstream(
+                                cds_dict[my_id]["stop"] - cds_dict[my_id]["start"] + 1
+                            )
                         my_row.id_str = f"{my_row.id_str}.p{x}"
                         # my_row.thick_start = my_row.start
                         # my_row.thick_stop = my_row.stop
@@ -405,15 +462,15 @@ def export_cds_orfs(gff_file, aligned_bed, nested_data, output_bed, tmp_dir):
                     break
                 x += 1
 
-    with open(f"{tmp_dir}/ExportCDS.bed", 'w') as export_file:
+    with open(f"{tmp_dir}/ExportCDS.bed", "w") as export_file:
         export_file.writelines(export_rows)
 
     orf_for_blast_dict = dict()
     c = 0
     logger.info(f"Trimming {aligned_bed} to nested ORFs")
-    with open(output_bed, 'w') as export_orf_file:
+    with open(output_bed, "w") as export_orf_file:
         export_orf_file.writelines(export_rows)
-        with open(nested_data, 'r') as nested_file:
+        with open(nested_data, "r") as nested_file:
             for line in nested_file:
                 cols = line.split("\t")
                 # Extract ID
@@ -454,11 +511,15 @@ def export_cds_orfs(gff_file, aligned_bed, nested_data, output_bed, tmp_dir):
                     my_row.block_lens[-1] += 1
                 else:
                     my_row.start -= 1
-                    my_row.block_starts = [my_row.block_starts[0]] + [x + 1 for x in my_row.block_starts[1:]]
+                    my_row.block_starts = [my_row.block_starts[0]] + [
+                        x + 1 for x in my_row.block_starts[1:]
+                    ]
                     my_row.stop -= 1
 
-
-                if my_row.start + my_row.block_starts[-1] + my_row.block_lens[-1] > my_row.stop:
+                if (
+                    my_row.start + my_row.block_starts[-1] + my_row.block_lens[-1]
+                    > my_row.stop
+                ):
                     c += 1
                     continue
 
@@ -477,11 +538,23 @@ def get_nested_orfs(input_file):
     :param input_file: File path passed to splitAtMs
     :return:
     """
-    process = subprocess.run(f"/projects/hillerlab/genome/bin/scripts/splitAtMs.perl -minLen 30 -minPercent 0.25 {input_file}", shell=True, check=True)
+    process = subprocess.run(
+        f"/projects/hillerlab/genome/bin/scripts/splitAtMs.perl -minLen 30 -minPercent 0.25 {input_file}",
+        shell=True,
+        check=True,
+    )
     return process.returncode == 0
 
 
-def blast_main(tmp_dir, transcript_fasta_file, transcript_aligned_bed, blast_db, use_blast=False, use_nextflow=False, use_orfipy=True):
+def blast_main(
+    tmp_dir,
+    transcript_fasta_file,
+    transcript_aligned_bed,
+    blast_db,
+    use_blast=False,
+    use_nextflow=False,
+    use_orfipy=True,
+):
     # Step 1: Run Transdecoder on input data
     use_diamond = not use_blast
 
@@ -495,11 +568,16 @@ def blast_main(tmp_dir, transcript_fasta_file, transcript_aligned_bed, blast_db,
 
         logger.info("Transdecoder finished successfully")
         if not os.path.exists(f"{tmp_dir}/ORF/longest_orfs.pep"):
-            logger.error(f"Failed to find Transdecoder results at: {tmp_dir}/ORF/longest_orfs.pep")
+            logger.error(
+                f"Failed to find Transdecoder results at: {tmp_dir}/ORF/longest_orfs.pep"
+            )
             exit(-1)
 
         logger.info("Converting Transdecoder results to BED for later")
-        subprocess.run(f"gff2bed < {tmp_dir}/ORF/longest_orfs.gff3 > {tmp_dir}/ORF/longest_orfs.bed", shell=True)
+        subprocess.run(
+            f"gff2bed < {tmp_dir}/ORF/longest_orfs.gff3 > {tmp_dir}/ORF/longest_orfs.bed",
+            shell=True,
+        )
     else:
         try:
             logger.info("Running orfipy")
@@ -510,31 +588,63 @@ def blast_main(tmp_dir, transcript_fasta_file, transcript_aligned_bed, blast_db,
 
         logger.info("Orfipy finished successfully")
 
-
     # Step 2: Get nested ORFs -> Transdecoder/longest_orfs.pep.nestedORFs.fa
     if not use_orfipy:
         get_nested_orfs(f"{tmp_dir}/ORF/longest_orfs.pep")
-        logger.info(f"Sequences to BLAST written to {tmp_dir}/ORF/longest_orfs.pep.nestedORFs.fa")
+        logger.info(
+            f"Sequences to BLAST written to {tmp_dir}/ORF/longest_orfs.pep.nestedORFs.fa"
+        )
     else:
-        subprocess.run(f"cat {tmp_dir}/ORF/orfs_raw.pep | linearize_fasta > {tmp_dir}/ORF/orfs.pep", shell=True)
+        subprocess.run(
+            f"cat {tmp_dir}/ORF/orfs_raw.pep | linearize_fasta > {tmp_dir}/ORF/orfs.pep",
+            shell=True,
+        )
         get_nested_orfs(f"{tmp_dir}/ORF/orfs.pep")
-        shutil.move(f"{tmp_dir}/ORF/orfs.pep.nestedORFs.fa", f"{tmp_dir}/ORF/longest_orfs.pep.nestedORFs.fa")
-        logger.info(f"Sequences to BLAST written to {tmp_dir}/ORF/longest_orfs.pep.nestedORFs.fa")
+        shutil.move(
+            f"{tmp_dir}/ORF/orfs.pep.nestedORFs.fa",
+            f"{tmp_dir}/ORF/longest_orfs.pep.nestedORFs.fa",
+        )
+        logger.info(
+            f"Sequences to BLAST written to {tmp_dir}/ORF/longest_orfs.pep.nestedORFs.fa"
+        )
 
     # TODO: ORF + length cutoffs
 
-    logger.info("Reducing number of sequences to BLAST by multiplexing common sequences")
+    logger.info(
+        "Reducing number of sequences to BLAST by multiplexing common sequences"
+    )
     if not use_orfipy:
-        multiplex_dataset(f"{tmp_dir}/ORF/longest_orfs.pep.nestedORFs.fa", f"{tmp_dir}/ORF/multiplexed.fa", f"{tmp_dir}/ORF/multiplexed.index")
+        multiplex_dataset(
+            f"{tmp_dir}/ORF/longest_orfs.pep.nestedORFs.fa",
+            f"{tmp_dir}/ORF/multiplexed.fa",
+            f"{tmp_dir}/ORF/multiplexed.index",
+        )
     else:
-        multiplex_dataset(f"{tmp_dir}/ORF/longest_orfs.pep.nestedORFs.fa", f"{tmp_dir}/ORF/multiplexed.fa", f"{tmp_dir}/ORF/multiplexed.index")
+        multiplex_dataset(
+            f"{tmp_dir}/ORF/longest_orfs.pep.nestedORFs.fa",
+            f"{tmp_dir}/ORF/multiplexed.fa",
+            f"{tmp_dir}/ORF/multiplexed.index",
+        )
 
     # Step 3: BLAST P
     logger.info("Running BLAST")
     if use_diamond:
-        result = run_diamond(f"{tmp_dir}/ORF/multiplexed.fa",f"{tmp_dir}/BLASTP/multiplexed.fa.fmt6", blast_db, tmp_dir, chunk_size=3000, nextflow=use_nextflow)
+        result = run_diamond(
+            f"{tmp_dir}/ORF/multiplexed.fa",
+            f"{tmp_dir}/BLASTP/multiplexed.fa.fmt6",
+            blast_db,
+            tmp_dir,
+            chunk_size=3000,
+            nextflow=use_nextflow,
+        )
     else:
-        result = run_blastp(f"{tmp_dir}/ORF/multiplexed.fa",f"{tmp_dir}/BLASTP/multiplexed.fa.fmt6", blast_db, tmp_dir, chunk_size=500)
+        result = run_blastp(
+            f"{tmp_dir}/ORF/multiplexed.fa",
+            f"{tmp_dir}/BLASTP/multiplexed.fa.fmt6",
+            blast_db,
+            tmp_dir,
+            chunk_size=500,
+        )
 
     if result.returncode != 0:
         logger.error("Error running BLAST, dumping output:")
@@ -542,12 +652,31 @@ def blast_main(tmp_dir, transcript_fasta_file, transcript_aligned_bed, blast_db,
         exit(-1)
 
     # Inflate and sort BLAST output
-    de_multiplex_blast(f"{tmp_dir}/ORF/multiplexed.index", f"{tmp_dir}/BLASTP/multiplexed.fa.fmt6", f"{tmp_dir}/BLASTP/longest_orfs.pep.nestedORFs.fa.unsorted.fmt6")
-    subprocess.run(f"sort -k1 < {tmp_dir}/BLASTP/longest_orfs.pep.nestedORFs.fa.unsorted.fmt6 > {tmp_dir}/BLASTP/longest_orfs.pep.nestedORFs.fa.fmt6", shell=True)
+    de_multiplex_blast(
+        f"{tmp_dir}/ORF/multiplexed.index",
+        f"{tmp_dir}/BLASTP/multiplexed.fa.fmt6",
+        f"{tmp_dir}/BLASTP/longest_orfs.pep.nestedORFs.fa.unsorted.fmt6",
+    )
+    subprocess.run(
+        f"sort -k1 < {tmp_dir}/BLASTP/longest_orfs.pep.nestedORFs.fa.unsorted.fmt6 > {tmp_dir}/BLASTP/longest_orfs.pep.nestedORFs.fa.fmt6",
+        shell=True,
+    )
 
     # Step 4: producing rich tracks
     logger.info("Creating rich tracks for ORFs")
     if not use_orfipy:
-        export_cds_orfs(f"{tmp_dir}/ORF/longest_orfs.gff3", transcript_aligned_bed, f"{tmp_dir}/ORF/longest_orfs.pep.nestedORFs.tsv", f"{tmp_dir}/BLASTP/trimmed_alignments.bed", tmp_dir)
+        export_cds_orfs(
+            f"{tmp_dir}/ORF/longest_orfs.gff3",
+            transcript_aligned_bed,
+            f"{tmp_dir}/ORF/longest_orfs.pep.nestedORFs.tsv",
+            f"{tmp_dir}/BLASTP/trimmed_alignments.bed",
+            tmp_dir,
+        )
     else:
-        export_cds_orfs_bed(f"{tmp_dir}/ORF/orfs.bed", transcript_aligned_bed, f"{tmp_dir}/ORF/orfs.pep.nestedORFs.tsv", f"{tmp_dir}/BLASTP/trimmed_alignments.bed", tmp_dir)
+        export_cds_orfs_bed(
+            f"{tmp_dir}/ORF/orfs.bed",
+            transcript_aligned_bed,
+            f"{tmp_dir}/ORF/orfs.pep.nestedORFs.tsv",
+            f"{tmp_dir}/BLASTP/trimmed_alignments.bed",
+            tmp_dir,
+        )
