@@ -81,11 +81,14 @@ pub fn minimap2(
 /// assert_eq!(fasta, "path/to/genome.fa");
 /// ```
 fn twobit_to_fa(genome: String, step_output_dir: &PathBuf) -> String {
-    let mut twobit = TwoBitFile::open(&genome).expect("ERROR: Failed to open 2bit file");
+    let mut twobit =
+        TwoBitFile::open(&genome).expect(&format!("ERROR: Failed to open 2bit file -> {}", genome));
     let fasta = step_output_dir.join(GENOME_FA);
 
-    let mut writer =
-        BufWriter::new(File::create(&fasta).expect("ERROR: Failed to create FASTA file"));
+    let mut writer = BufWriter::new(File::create(&fasta).expect(&format!(
+        "ERROR: Failed to create FASTA file -> {}",
+        fasta.display()
+    )));
 
     let _ = convert::fasta::to_fasta(&mut twobit, &mut writer)
         .expect("ERROR: Failed to convert 2bit to FASTA");
