@@ -25,6 +25,10 @@ memmap2 = "0.9.5"
 chrono = "0.4.40"
 twobit = "0.2.1"
 iso-fusion = { path = "../isotools/isotools/iso-fusion" }
+iso-pack = { path = "../isotools/isotools/iso-pack" }
+config = { path = "../isotools/isotools/config" }
+iso-polya = { path = "../isotools/isotools/iso-polya" }
+dashmap = "6.1.0"
 
 [profile.release]
 lto = true

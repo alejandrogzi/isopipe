@@ -49,6 +49,9 @@ pub const POLYA_GOOD_SAM: &str = "good.sam";
 pub const CORR_MINIMAP_SAM: &str = "corrected.sam";
 pub const CORR_MINIMAP_GOOD_SAM: &str = "corrected.good.sam";
 pub const CORR_MINIMAP_GOOD_BED: &str = "corrected.good.bed";
+pub const TRANSCRIPTS_FA: &str = "transcripts.fa";
+pub const ORF: &str = "orf";
+pub const ORF_EXE: &str = "orf_tree_pipe.py";
 
 // manager consts
 pub const ASSETS: &str = "assets";
@@ -64,3 +67,9 @@ pub const RUN_ID_LEN: usize = 4;
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];
 pub const CLUSTERING_CATEGORIES: &[&str] = &["hq", "lq", "singletons"];
 pub const FUSION_TYPES: &[&str] = &["free", "fusions", "review", "fakes"];
+pub const FUSION_FILES: &[&str] = &[
+    "fusions.free.bed",
+    "fusions.fusions.bed",
+    "fusions.review.bed",
+    "fusions.fakes.bed",
+];

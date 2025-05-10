@@ -176,8 +176,8 @@ def __prepare_toga(
     ("/tmp/TOGA/query_annotation.bed", "/tmp/TOGA/selenocysteine_codons.tsv", "/tmp/TOGA/transcripts_meta.tsv.gz")
     """
     annotation = f"{args.toga}/{QUERY_ANNOTATION}"
-    codons = f"{args.toga}/{CODONS}"
-    tx_meta = f"{args.toga}/{TX_META}"
+    codons = f"{args.toga}/meta/{CODONS}"
+    tx_meta = f"{args.toga}/meta/{TX_META}"
 
     # We expect pre-calculated TOGA inputs and match them against the alignments to computer reciprocal overlaps of
     # at least 80%
@@ -459,19 +459,8 @@ def parse() -> argparse.Namespace:
     )
     parser.add_argument("--blastdb", type=str, metavar="Path to BLAST database", help="BLAST database")
 
-    # INFO
+    # INFO: Unifiying TOGA-dependent flags into one
     parser.add_argument("--toga", type=str, metavar="Path to TOGA directory", help="TOGA results")
-
-    # parser.add_argument("toga_results", type=str, metavar="path", help="TOGA results")
-    # parser.add_argument(
-    #     "toga_masked",
-    #     type=str,
-    #     metavar="path",
-    #     help="TOGA meta/selenocysteine_codons.tsv file",
-    # )
-    # parser.add_argument(
-    #     "toga_query_annotation", type=str, metavar="path", help="TOGA query annotation"
-    # )
 
     parser.add_argument(
         "--output_dir", type=str, metavar="path", help="Output directory"

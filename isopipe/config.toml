@@ -39,7 +39,7 @@ output_dir = "step1_ccs"   # output dir
 input_dir = ""             # FILL: raw data dir [only one inmutable]
 memory = 50                # memory in GB
 time = "24.h"              # time for each job
-log-level = "DEBUG"        # log-level [DEBUG]
+log-level = "INFO"         # log-level [INFO]
 
 [params.lima]
 isoseq = ""               # WARN: leave empty and position
@@ -51,7 +51,8 @@ memory = 50               # memory in GB
 time = "24.h"             # time for each job
 num-threads = 64          # -j
 chunk-size = 100          # --chunk-size, each thread consumes N ZMWs per chunk
-log-level = "DEBUG"       # log-level [DEBUG]
+log-level = "INFO"        # log-level [INFO]
+alarms = "alarms.json"    # error alamrs
 
 [params.refine]
 primers = ""                # FILL: primers file
@@ -61,8 +62,7 @@ memory = 50                 # memory in GB
 num-threads = 64            # --num-threads
 num-cores = 64              # WARN: HPC
 time = "24.h"               # time for each job
-log-level = "DEBUG"         # log-level [DEBUG]
-
+log-level = "INFO"          # log-level [INFO]
 
 [params.cluster]
 singletons = ""                # WARN: leave empty
@@ -74,7 +74,7 @@ num-threads = 64               # --num-threads [higher the better]
 num-cores = 64                 # WARN: HPC
 time = "24.h"                  # time for each job
 log-file = "step4_cluster.log" # log file
-log-level = "DEBUG"            # log-level [DEBUG]
+log-level = "INFO"             # log-level [INFO]
 
 [params.minimap2]
 G = "1600k"                  # max intron size
@@ -116,10 +116,11 @@ prefix = ""                 # WARN: leave empty
 [params.orf]
 input_dir = "step7_fusion" # previous step data dir [default]
 output_dir = "step8_orf"   # output dir
-memory = 50                # memory in GB
+memory = 200               # memory in GB
+num-threads = 48           # --num-threads
 time = "24.h"              # time for each job
-toga = ""                  # FILL: toga query annotation
-genome = ""                # FILL: genome in .fa format or .2bit
+toga = ""                  # FILL: toga query [directory]
 blastdb = ""               # FILL: blastdb
 toga_overrule = ""         # WARN: leavy empty
 threshold = 0.3            # threshold for toga overrule
+genome = ""                # FILL: genome in .fa format or .2bit

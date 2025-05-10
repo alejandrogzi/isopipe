@@ -6,6 +6,7 @@ pub mod isoseq;
 pub mod isotools;
 pub mod lima;
 pub mod minimap;
+pub mod orf;
 pub mod pbindex;
 pub mod polya;
 pub mod samtools;
@@ -16,7 +17,6 @@ pub fn run(
     mut executor: ParallelExecutor,
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("SUCCESS: All dependecies are loaded, starting pipeline...");
-    // log::info!("INFO: Running with the following config: {:#?}", config);
 
     config.steps().iter().for_each(|step| {
         run_step(step, &config, &global_output_dir, &mut executor);
@@ -92,7 +92,13 @@ pub fn run_step(
             )
         }
         PipelineStep::Orf => {
-            todo!()
+            log::info!("INFO [STEP 8]: Pre-processing for orf started...");
+            orf::orf(
+                step,
+                config,
+                &global_output_dir.join(input_dir),
+                &step_output_dir,
+            )
         }
     };
 
