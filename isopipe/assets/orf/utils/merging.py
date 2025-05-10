@@ -400,6 +400,7 @@ def load_toga_two(
         names=TOGA_LABELS,
         usecols=[0, 1, 2, 3],
         index_col=0,
+        compression='gzip'
     )
 
     toga_data = add_masked_labels(toga_data, toga_masked_file)
