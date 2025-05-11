@@ -449,7 +449,10 @@ def parse() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Hillerlab ORF pipeline!")
 
     parser.add_argument(
-        "--fasta", type=str, metavar="Path to transcript sequences [.fa]", help="Transcript FASTA file"
+        "--fasta",
+        type=str,
+        metavar="Path to transcript sequences [.fa]",
+        help="Transcript FASTA file",
     )
     parser.add_argument(
         "--alignments",
@@ -457,10 +460,14 @@ def parse() -> argparse.Namespace:
         metavar="Path to reads aligned to query genome [.bed]",
         help="Transcript alignments in BED format",
     )
-    parser.add_argument("--blastdb", type=str, metavar="Path to BLAST database", help="BLAST database")
+    parser.add_argument(
+        "--blastdb", type=str, metavar="Path to BLAST database", help="BLAST database"
+    )
 
     # INFO: Unifiying TOGA-dependent flags into one
-    parser.add_argument("--toga", type=str, metavar="Path to TOGA directory", help="TOGA results")
+    parser.add_argument(
+        "--toga", type=str, metavar="Path to TOGA directory", help="TOGA results"
+    )
 
     parser.add_argument(
         "--output_dir", type=str, metavar="path", help="Output directory"

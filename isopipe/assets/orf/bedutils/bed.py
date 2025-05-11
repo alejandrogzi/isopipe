@@ -1,4 +1,4 @@
-from typing_extensions import Optional, Tuple
+from typing import Optional, Tuple
 
 
 class ColumnCountError(Exception):
