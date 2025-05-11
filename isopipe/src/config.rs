@@ -655,7 +655,7 @@ impl Config {
                         // WARN: introducing 1 more space -> does not matter
                         loader.push_str(&format!("{} ", package));
                     } else {
-                        loader.push_str(&format!("{}/{}", package, version));
+                        loader.push_str(&format!("{}/{} ", package, version));
                     }
                 }
 
