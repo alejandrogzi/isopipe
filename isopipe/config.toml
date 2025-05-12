@@ -124,3 +124,10 @@ blastdb = ""               # FILL: blastdb
 toga_overrule = ""         # WARN: leavy empty
 threshold = 0.3            # threshold for toga overrule
 genome = ""                # FILL: genome in .fa format or .2bit
+
+[params.polish]
+input_dir = "step8_orf"     # previous step data dir [default]
+output_dir = "step9_polish" # output dir
+toga = ""                   # FILL: toga query annotation
+genome = ""                 # FILL: genome in .2bit
+bigwig = ""                 # FILL: path to SpliceAI dir

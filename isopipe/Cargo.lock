@@ -149,9 +149,9 @@ checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "bigtools"
-version = "0.5.6"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83e0a7f18529896a324e1bb0a733e258c285e10564e21d1aba24216666e52867"
+checksum = "91f1c37f11670ccdb1b49313e8244be46543d06e9e68aae3d182796d8f78f256"
 dependencies = [
  "anyhow",
  "attohttpc",
@@ -856,6 +856,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "iso-cov"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "config",
+ "dashmap",
+ "hashbrown 0.15.2",
+ "iso-pack",
+ "log",
+ "num-traits",
+ "num_cpus",
+ "rand",
+ "rayon",
+ "serde",
+ "serde_json",
+ "simple_logger 5.0.0",
+]
+
+[[package]]
 name = "iso-fusion"
 version = "0.0.9"
 dependencies = [
@@ -873,6 +893,46 @@ dependencies = [
  "serde",
  "serde_json",
  "simple_logger 5.0.0",
+]
+
+[[package]]
+name = "iso-intron"
+version = "0.0.7"
+dependencies = [
+ "anyhow",
+ "bigtools",
+ "clap",
+ "config",
+ "dashmap",
+ "hashbrown 0.15.2",
+ "iso-classify",
+ "iso-pack",
+ "log",
+ "num_cpus",
+ "rayon",
+ "serde_json",
+ "simple_logger 5.0.0",
+ "tempfile",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "iso-orf"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "config",
+ "dashmap",
+ "hashbrown 0.15.2",
+ "iso-classify",
+ "iso-pack",
+ "iso-utr",
+ "log",
+ "num_cpus",
+ "rayon",
+ "simple_logger 5.0.0",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -948,6 +1008,7 @@ dependencies = [
  "iso-fusion",
  "iso-pack",
  "iso-polya",
+ "isotools",
  "log",
  "memmap2",
  "num_cpus",
@@ -957,6 +1018,25 @@ dependencies = [
  "time",
  "toml",
  "twobit",
+]
+
+[[package]]
+name = "isotools"
+version = "0.0.1"
+dependencies = [
+ "clap",
+ "config",
+ "dashmap",
+ "iso-classify",
+ "iso-cov",
+ "iso-fusion",
+ "iso-intron",
+ "iso-orf",
+ "iso-pack",
+ "iso-polya",
+ "iso-utr",
+ "log",
+ "simple_logger 5.0.0",
 ]
 
 [[package]]

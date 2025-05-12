@@ -859,6 +859,7 @@ pub enum PipelineStep {
     Polya,
     Fusion,
     Orf,
+    Polish,
 }
 
 impl PipelineStep {
@@ -889,6 +890,7 @@ impl PipelineStep {
             "polya" => Ok(Self::Polya),
             "fusion" => Ok(Self::Fusion),
             "orf" => Ok(Self::Orf),
+            "polish" => Ok(Self::Polish),
             _ => Err(format!("ERROR: Invalid pipeline step: {}", s)),
         }
     }
@@ -920,6 +922,7 @@ impl PipelineStep {
             6 => Ok(Self::Polya),
             7 => Ok(Self::Fusion),
             8 => Ok(Self::Orf),
+            9 => Ok(Self::Polish),
             _ => Err(format!("ERROR: Invalid pipeline step: {}", i)),
         }
     }
@@ -953,6 +956,7 @@ impl PipelineStep {
             Self::Polya => "polya".into(),
             Self::Fusion => "fusion".into(),
             Self::Orf => "orf".into(),
+            Self::Polish => "polish".into(),
         }
     }
 
@@ -985,6 +989,7 @@ impl PipelineStep {
             Self::Polya => vec!["python3".into(), "perl".into(), "bedtools".into()],
             Self::Fusion => vec!["rust".into()],
             Self::Orf => vec!["python3".into(), "diamond".into(), "nextflow".into()],
+            Self::Polish => vec!["rust".into(), "python3".into()],
         }
     }
 
@@ -1017,6 +1022,7 @@ impl PipelineStep {
             Self::Polya => "polya".into(),
             Self::Fusion => "fusion".into(),
             Self::Orf => "orf".into(),
+            Self::Polish => "polish".into(),
         }
     }
 
@@ -1044,6 +1050,7 @@ impl PipelineStep {
             Self::Polya => 6,
             Self::Fusion => 7,
             Self::Orf => 8,
+            Self::Polish => 9,
         }
     }
 

@@ -100,6 +100,16 @@ pub fn run_step(
                 &step_output_dir,
             )
         }
+        PipelineStep::Polish => {
+            log::info!("INFO [STEP 9]: Pre-processing for isotools polish started...");
+            isotools::polish(
+                step,
+                config,
+                &global_output_dir.join(input_dir),
+                &step_output_dir,
+                executor,
+            )
+        }
     };
 
     executor

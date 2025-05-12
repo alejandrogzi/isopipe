@@ -75,6 +75,7 @@ impl Job {
             PipelineStep::Minimap => "minimap2",
             PipelineStep::Fusion => "isotools iso-fusion",
             PipelineStep::Orf => "",
+            PipelineStep::Polish => "isotools run",
         };
 
         self.cmd.push_str(step_cmd);
