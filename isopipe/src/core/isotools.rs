@@ -1,5 +1,12 @@
 use iso_fusion::lib_iso_fusion;
+use iso_polya::{
+    cli::{AparentArgs, CHUNK_SIZE},
+    core::apa::{calculate_polya, create_joblist, write_bed, RAM_PER_SITE},
+};
+use isotools::lib;
+use packbed::par_reader;
 
+use crate::executor::manager::ParallelExecutor;
 use crate::{config::*, consts::*, executor::job::Job};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -60,11 +67,6 @@ pub fn iso_fusion(
         ));
 
         args.extend(parts.clone());
-        // log::debug!(
-        //     "INFO [STEP 7]: Running fusion detection for category {} with parameters: {:?}",
-        //     category,
-        //     args
-        // );
         let _ = lib_iso_fusion(Arc::new(args));
     }
 
@@ -99,4 +101,179 @@ fn aggregate_fusions(step_output_dir: &PathBuf) -> Vec<Job> {
             Job::from(format!("cat {} > {}", pattern, output))
         })
         .collect()
+}
+
+/// Run iso-polya aparent
+///
+/// # Arguments
+///
+/// * `executor` - The parallel executor
+/// * `config` - The configuration
+/// * `input_dir` - The input directory
+/// * `step_output_dir` - The output directory
+/// * `step` - The pipeline step
+///
+/// # Example
+///
+/// ```rust, no_run
+/// let executor = ParallelExecutor::new();
+/// let config = Config::new();
+/// let input_dir = PathBuf::from("/path/to/input_dir");
+/// let step_output_dir = PathBuf::from("/path/to/step_output_dir");
+/// let step = PipelineStep::new();
+///
+/// iso_polya_aparent(&executor, &config, &input_dir, &step_output_dir, &step);
+/// ```
+fn __iso_polya_aparent(
+    executor: &mut ParallelExecutor,
+    config: &Config,
+    step_output_dir: &PathBuf,
+    step: &PipelineStep,
+    bed: &String,
+    twobit: &String,
+) -> PathBuf {
+    let mem = CHUNK_SIZE as f32 * RAM_PER_SITE * 1024.0;
+    let package = config.get_package_from_step(step);
+
+    let args = vec![
+        String::from("--bed"),
+        bed.clone(),
+        String::from("--twobit"),
+        twobit.clone(),
+        String::from("--outdir"),
+        step_output_dir.display().to_string(),
+    ];
+
+    let accumulator = calculate_polya(AparentArgs::from(args))
+        .expect("ERROR: Failed to calculate polyA apparent");
+    let jobs = create_joblist(&accumulator);
+
+    log::info!("INFO [STEP 9a]: Pre-processing completed -> Running APARENT...");
+    executor.__para(config, &step.to_unique_str(), &jobs, 1, mem as u32, package);
+
+    merge_aparent(step_output_dir.clone())
+}
+
+/// Run isotools on final ORF-called data
+/// [iso-classify, iso-intron, iso-polya, iso-utr]
+pub fn polish(
+    step: &PipelineStep,
+    config: &Config,
+    input_dir: &PathBuf,
+    step_output_dir: &PathBuf,
+    executor: &mut ParallelExecutor,
+) -> Vec<Job> {
+    __aggregate_orfs(input_dir);
+    let jobs = Vec::new();
+
+    let mut args = config
+        .get_step_args(step, vec![INPUT_DIR, OUTPUT_DIR, GENOME])
+        .split(" ")
+        .map(String::from)
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<String>>();
+
+    let twobit = config.get_step_custom_fields(step, vec![GENOME])[0].clone();
+    let bed = format!("{}/{}", input_dir.display(), ORF_OUTPUT);
+    let aparent = __iso_polya_aparent(executor, config, step_output_dir, step, &bed, &twobit);
+
+    log::info!("INFO [STEP 9b]: Pre-processing completed -> Polishing...");
+
+    args.extend(vec![
+        String::from("--query"),
+        bed,
+        String::from("--aparent"),
+        aparent.display().to_string(),
+        String::from("--twobit"),
+        twobit,
+        step_output_dir.display().to_string(),
+    ]);
+
+    // TODO: move "coding.fusions.fusions.orf.bed" from orf step to final dir
+    lib(args);
+
+    return jobs;
+}
+
+/// Aggregate ORF data [only free + fake]
+///
+/// # Arguments
+///
+/// * `input_dir` - The input directory
+///
+/// # Example
+///
+/// ```rust, no_run
+/// let input_dir = PathBuf::from("/path/to/input_dir");
+/// __aggregate_orfs(&input_dir);
+/// ```
+fn __aggregate_orfs(input_dir: &PathBuf) {
+    // INFO: review file has _RVW tag!
+    let cmd = format!(
+        "cat {}/*fakes*bed {}/*review*bed >> {}/*free*bed && rm {}/*fakes*bed {}/*review*bed",
+        input_dir.display(),
+        input_dir.display(),
+        input_dir.display(),
+        input_dir.display(),
+        input_dir.display()
+    );
+
+    let _ = std::process::Command::new("bash")
+        .arg("-c")
+        .arg(cmd.clone())
+        .output()
+        .expect(&format!("ERROR: Failed to aggregate ORF data -> {}", cmd));
+}
+
+/// Merge chunks of APARENT data
+///
+/// # Arguments
+///
+/// * `outdir` - The output directory
+///
+/// # Example
+///
+/// ```rust, no_run
+/// let outdir = PathBuf::from("/path/to/output_dir");
+/// merge_aparent(&outdir);
+/// ```
+fn merge_aparent(outdir: PathBuf) -> PathBuf {
+    let assets = outdir.join(APARENT_CHUNKS);
+    let mut beds = Vec::new();
+
+    for entry in std::fs::read_dir(assets.clone())
+        .expect("ERROR: Failed to read assets directory")
+        .flatten()
+    {
+        let path = entry.path();
+        if let Some(ext) = path.extension() {
+            match ext.to_str() {
+                Some("bed") => beds.push(path),
+                _ => {}
+            }
+        }
+    }
+
+    let bed = par_reader(beds).expect("ERROR: Failed to merge bed files");
+    let bed_dest = assets.join(APARENT_OUTPUT);
+    write_bed(bed_dest.clone(), bed);
+
+    log::info!("INFO: Merged chunks and cleaning...");
+    for entry in std::fs::read_dir(assets).expect("ERROR: Failed to read assets directory") {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            if path
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .starts_with("polya")
+            {
+                let _ = std::fs::remove_file(path);
+            }
+        }
+    }
+
+    log::info!("SUCCESS: APPARENT finished successfully!");
+    return bed_dest;
 }

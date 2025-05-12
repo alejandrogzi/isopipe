@@ -33,6 +33,7 @@ pub const SAMTOOLS: &str = "samtools";
 pub const POLYA_FIRST_PASS: &str = "polya_first_pass";
 pub const BEDTOOLS: &str = "bedtools";
 pub const BAMTOBED: &str = "bamtobed";
+pub const POLYA_APARENT: &str = "aparent";
 
 // filenames
 pub const NF_RUNNER: &str = "execute_joblist.nf";
@@ -52,6 +53,9 @@ pub const CORR_MINIMAP_GOOD_BED: &str = "corrected.good.bed";
 pub const TRANSCRIPTS_FA: &str = "transcripts.fa";
 pub const ORF: &str = "orf";
 pub const ORF_EXE: &str = "orf_tree_pipe.py";
+pub const ORF_OUTPUT: &str = "coding.fusions.free.orf.bed";
+pub const APARENT_CHUNKS: &str = "TMP_CHUNKS";
+pub const APARENT_OUTPUT: &str = "iso_polya_aparent.bed";
 
 // manager consts
 pub const ASSETS: &str = "assets";
