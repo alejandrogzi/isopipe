@@ -40,12 +40,13 @@ pub fn orf(
         let fasta = extract(&bed, &twobit, step_output_dir, filename);
 
         let cmd = format!(
-            "source {} && {} --fasta {} --alignments {} --output_dir {} {}",
+            "source {} && {} --fasta {} --alignments {} --output_dir {} --suffix {} {}",
             ORFPY_ENV,
             executable.display(),
             fasta.display(),
             bed.display(),
             step_output_dir.display(),
+            file.replace(".bed", ".orf"),
             args
         );
 
