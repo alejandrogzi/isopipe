@@ -22,7 +22,7 @@ from typing import Tuple
 MODEL_PATH = "/beegfs/projects/hillerlab/genome/src/ORFTree/model.joblib"
 QUERY_ANNOTATION = "query_annotation.bed"
 CODONS = "selenocysteine_codons.tsv"
-TX_META = "transcripts_meta.tsv.gz"
+TX_META = "transcript_meta.tsv.gz"
 FEATURES = [
     "blast_pid",
     "blast_e-value",
@@ -67,7 +67,7 @@ def main(args):
     (tx_meta, bed, codons, df) = __prepare_toga(args, tmp_dir, df)
     df = __run_toga(tx_meta, bed, codons, df, tmp_dir)
 
-    __predict(df, tmp_dir)
+    __predict(df, tmp_dir, args)
 
     logger.info("Done")
 
@@ -300,7 +300,7 @@ def __run_tai(args, tmp_dir: str) -> None:
     logger.info("INFO: Exiting TranslationAI module")
 
 
-def __predict(df: pd.DataFrame, tmp_dir: str) -> None:
+def __predict(df: pd.DataFrame, tmp_dir: str, args: argparse.Namespace) -> None:
     """
     Run the prediction module
 
@@ -416,15 +416,18 @@ def __predict(df: pd.DataFrame, tmp_dir: str) -> None:
     )
     df.drop_duplicates(inplace=True, subset=["canonical_id", "genomic_coords"])
     ranks = write_results(
-        df, args.threshold, f"{args.output_dir}/predictions", with_ground_label=False
+        df,
+        args.threshold,
+        f"{args.output_dir}/predictions_{args.suffix}",
+        with_ground_label=False,
     )
 
     # Store the rank of a prediction compared to its peers
     df["rank"] = ranks
-    df.to_csv(f"{args.output_dir}/predictions.tsv", sep="\t")
+    df.to_csv(f"{args.output_dir}/predictions_{args.suffix}.tsv", sep="\t")
 
     logger.info(f"Writing (non-)coding BEDs to output dir to {args.output_dir}")
-    map_bed(df, args.alignments, args.output_dir)
+    map_bed(df, args.alignments, args.output_dir, args.suffix)
     logger.info("BED files written")
 
     if not args.keep_temp:
@@ -493,6 +496,12 @@ def parse() -> argparse.Namespace:
         "--no-reduce",
         action="store_true",
         help="Use a non-default threshold for classification",
+    )
+    parser.add_argument(
+        "--suffix",
+        type=str,
+        default="",
+        help="Suffix for the output files (default: empty)",
     )
 
     return parser.parse_args()

@@ -280,7 +280,7 @@ def export_cds_orfs_bed(
         for line in ref_file:
             x = 1
             while True:
-                my_row = BedRow.BedRow(line.strip())
+                my_row = BedRow(line.strip())
                 my_id = f"{my_row.id_str}.p{x}"
                 row_len = my_row.get_exon_total_length()
                 if cds_dict.get(my_id):
@@ -437,7 +437,7 @@ def export_cds_orfs(gff_file, aligned_bed, nested_data, output_bed, tmp_dir):
         for line in ref_file:
             x = 1
             while True:
-                my_row = BedRow.BedRow(line.strip())
+                my_row = BedRow(line.strip())
                 my_id = f"{my_row.id_str}.p{x}"
                 if cds_dict.get(my_id):
                     if cds_dict.get(my_id)["strand"] != "+":

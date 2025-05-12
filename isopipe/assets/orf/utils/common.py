@@ -206,7 +206,7 @@ def write_results(df: DataFrame, threshold, output_path, with_ground_label=False
     return ranks
 
 
-def map_bed(df, bed_path, output_path):
+def map_bed(df, bed_path, output_path, suffix: str):
     """
     Takes a pandas dataframe and an input BED file and maps to two output files for coding and non-coding transcripts.
     Coding transcripts will have their thickStart / thickEnd fields modified to the ORF candidates.
@@ -232,8 +232,8 @@ def map_bed(df, bed_path, output_path):
     logger.info(f"Extraced ORFs for {len(orfs)} transcripts")
 
     with open(bed_path, "r") as f:
-        with open(f"{output_path}/coding.bed", "w") as coding:
-            with open(f"{output_path}/noncoding.bed", "w") as noncoding:
+        with open(f"{output_path}/coding.{suffix}.bed", "w") as coding:
+            with open(f"{output_path}/noncoding.{suffix}.bed", "w") as noncoding:
                 for line in f:
                     vals = line.strip().split("\t")
                     if orfs.get(vals[3]):
