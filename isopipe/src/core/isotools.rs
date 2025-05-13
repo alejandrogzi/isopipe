@@ -156,6 +156,24 @@ fn __iso_polya_aparent(
 
 /// Run isotools on final ORF-called data
 /// [iso-classify, iso-intron, iso-polya, iso-utr]
+///
+/// # Arguments
+///
+/// * `step` - The pipeline step
+/// * `config` - The configuration
+/// * `input_dir` - The input directory
+/// * `step_output_dir` - The output directory
+/// * `executor` - The parallel executor
+///
+/// # Returns
+///
+/// A vector of jobs
+///
+/// # Example
+///
+/// ```rust
+/// let jobs = polish(&step, &config, &input_dir, &step_output_dir, &executor);
+/// ```
 pub fn polish(
     step: &PipelineStep,
     config: &Config,
