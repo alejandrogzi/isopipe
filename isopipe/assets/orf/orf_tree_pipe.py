@@ -300,7 +300,7 @@ def __run_tai(args, tmp_dir: str) -> None:
     logger.info("INFO: Exiting TranslationAI module")
 
 
-def __predict(df: pd.DataFrame, tmp_dir: str, args: argparse.Namespace) -> None:
+def __predict(df: pd.DataFrame, tmp_dir: str, args: argparse.Namespace, toga_query_annotation: str) -> None:
     """
     Run the prediction module
 
@@ -370,7 +370,7 @@ def __predict(df: pd.DataFrame, tmp_dir: str, args: argparse.Namespace) -> None:
                 transcripts[row.id_str] = row
 
         toga_rows = dict()
-        with open(args.toga_query_annotation, "r") as f:
+        with open(toga_query_annotation, "r") as f:
             for line in f:
                 row = BedRow(line)
                 toga_rows[row.id_str] = row
