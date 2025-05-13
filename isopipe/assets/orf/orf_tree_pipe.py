@@ -67,7 +67,7 @@ def main(args):
     (tx_meta, bed, codons, df) = __prepare_toga(args, tmp_dir, df)
     df = __run_toga(tx_meta, bed, codons, df, tmp_dir)
 
-    __predict(df, tmp_dir, args)
+    __predict(df, tmp_dir, args, bed)
 
     logger.info("Done")
 
