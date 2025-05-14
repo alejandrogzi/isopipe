@@ -300,7 +300,9 @@ def __run_tai(args, tmp_dir: str) -> None:
     logger.info("INFO: Exiting TranslationAI module")
 
 
-def __predict(df: pd.DataFrame, tmp_dir: str, args: argparse.Namespace, toga_query_annotation: str) -> None:
+def __predict(
+    df: pd.DataFrame, tmp_dir: str, args: argparse.Namespace, toga_query_annotation: str
+) -> None:
     """
     Run the prediction module
 
@@ -335,7 +337,10 @@ def __predict(df: pd.DataFrame, tmp_dir: str, args: argparse.Namespace, toga_que
     df["class1_probability"] = probs[:, 1]
     df.reset_index(inplace=True)
 
-    df.to_csv(f"{args.output_dir}/predictions_uncollapsed.tsv", sep="\t")
+    # ERROR: does not make any sense to keep this -> we filter the df in the next line!
+    # ERROR: multiple runs will generate HUGE files
+    # ERROR: writes with index, messing up columns -> should be index=False
+    # df.to_csv(f"{args.output_dir}/predictions_uncollapsed.tsv", sep="\t")
 
     # Drop extremly redudant rows
     logger.info("Applying BLAST nested cutoff")
@@ -353,7 +358,11 @@ def __predict(df: pd.DataFrame, tmp_dir: str, args: argparse.Namespace, toga_que
 
     if args.toga_overrule:
         logger.info("Applying TOGA overrules")
-        df = df.reset_index()
+        # ERROR: why not dropping past index? -> moving all columns!
+        df = df.reset_index(drop=True)
+
+        # ERROR: forcing them to be str -> 0 inserted as int
+        df["toga_pid"] = df["toga_pid"].astype(str)
 
         sequences = dict()
         with open(args.fasta) as handle:
@@ -384,18 +393,31 @@ def __predict(df: pd.DataFrame, tmp_dir: str, args: argparse.Namespace, toga_que
 
         overrule_rows = []
         for x in overrule_ids:
-            x["class1_probability"] = x["toga_pid"] / 100
+            # ERROR: will throw an error because toga_pid is str
+            # ERROR: probably this was done to introduce 0s -> which does not make any sense!
+            # x["class1_probability"] = x["toga_pid"] / 100
+            # CHANGE: directly setting this to 0 -> since toga_overrule is True
+            # the filtering below will let them pass!
+            x["class1_probability"] = 0
             x["toga_overrule"] = True
+
+            # ERROR: filling up this with 0 does not make any sense -> why not NaNs?!
             if str(x["genomic_coords"]) != "0":
                 overrule_rows.append(x)
 
-    df.to_csv(f"{args.output_dir}/predictions_raw.tsv", sep="\t")
+    # ERROR: if not args.suffix this overwrites the file with multiple runs!
+    # INFO: maintaining this output just for debugging purposes!
+    df.to_csv(f"{args.output_dir}/predictions_raw_{args.suffix}.tsv", sep="\t")
 
     logger.info("Trimming secondary ORFs (this will take some time)")
+
     # Apply threshold
+    # INFO: changed toga_overrule arm to be more idiomatic + as_type for safety!
     df = df.loc[
-        (df["class1_probability"] >= args.threshold) | (df["toga_overrule"] == True)
+        (df["class1_probability"] >= args.threshold)
+        | (df["toga_overrule"].astype(bool))
     ]
+
     # Apply secondary ORFs
     df = df.groupby("canonical_id", group_keys=False).apply(
         filter_by_relative_score_strict
@@ -403,7 +425,7 @@ def __predict(df: pd.DataFrame, tmp_dir: str, args: argparse.Namespace, toga_que
     logger.info(f"Trimmed secondary ORF candidates, dataset reduced to {len(df)} rows")
 
     if args.toga_overrule:
-        logger.info(f"Appending ORF predictions from TOGA overrules")
+        logger.info("Appending ORF predictions from TOGA overrules")
         df = pd.concat([df, pd.DataFrame(overrule_rows)], ignore_index=True)
 
     logger.info(f"Writing un-collapsed output BED to {args.output_dir}")

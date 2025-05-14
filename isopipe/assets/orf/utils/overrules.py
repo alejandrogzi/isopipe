@@ -112,6 +112,7 @@ def toga_overrule_a(
         # Skip transcripts with one annotated ORF
         if predictions.iloc[0]["class1_probability"] > threshold:
             continue
+
         filtered_labels = {
             "FI": predictions[predictions["toga_label"] == "FI"]
             .sort_values(by="toga_pid", ascending=False)
