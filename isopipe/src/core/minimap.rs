@@ -48,6 +48,10 @@ pub fn minimap2(
                 .len()
                 == 0
         {
+            log::warn!(
+                "WARN: {} does not exist or is empty! -> skipping...",
+                reads.display()
+            );
             continue;
         }
 
@@ -190,11 +194,18 @@ fn __build_non_cannonical(input_dir: &PathBuf) -> Vec<PathBuf> {
                 .unwrap_or(false)
         })
     {
-        let file = entry.path();
+        log::info!("INFO: Found non-cannonical file {}", entry.path().display());
 
-        if file.is_file() {
-            files.push(file);
-        }
+        let file = entry.path();
+        files.push(file);
+    }
+
+    if files.is_empty() {
+        log::error!(
+            "ERROR: No non-cannonical files found in {}!",
+            input_dir.display()
+        );
+        std::process::exit(1);
     }
 
     return files;
