@@ -735,6 +735,28 @@ impl Config {
             .collect()
     }
 
+    /// Get a custom field for a given step.
+    ///
+    /// # Arguments
+    ///
+    /// * `step` - The step for which to retrieve the custom field.
+    /// * `field` - The name of the field to retrieve.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let step = PipelineStep::Ccs;
+    /// let config = Config::default();
+    /// let custom_field = config.get_step_custom_field(&step, "field1");
+    ///
+    /// assert_eq!(custom_field, "value1");
+    /// ```
+    pub fn get_step_custom_field(&self, step: &PipelineStep, field: &str) -> String {
+        self.get_param(*step, field)
+            .expect(format!("ERROR: {} not found for {} in config.toml!", field, step).as_str())
+            .to_string()
+    }
+
     /// Get arguments for a given step.
     ///
     /// # Arguments

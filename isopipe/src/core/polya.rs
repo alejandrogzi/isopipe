@@ -67,14 +67,16 @@ pub fn polya(
         }
 
         let cmd = __build_cmd(
-            &filename, &alignment, &args, output_dir, &filter, &correct, &fields,
+            &filename, &alignment, &args, output_dir, &filter, &correct, &fields, step, config,
         );
 
         jobs.push(Job::from(cmd));
     }
 
     if jobs.is_empty() {
-        let jobs = __build_non_cannonical(input_dir, &args, output_dir, &filter, &correct, &fields);
+        let jobs = __build_non_cannonical(
+            input_dir, &args, output_dir, &filter, &correct, &fields, step, config,
+        );
 
         return jobs;
     }
@@ -132,6 +134,8 @@ fn __build_cmd(
     filter: &PathBuf,
     correct: &PathBuf,
     fields: &Vec<String>,
+    step: &PipelineStep,
+    config: &Config,
 ) -> String {
     // INFO: will output all.clustered.aligned.{hq,lq,singletons}.{good,bad}.sam
     // INFO: script.perl {].sam --perID 96 --clip3 50 --polyAReadSuffix 30 --outdir {}/first_pass
@@ -162,11 +166,19 @@ fn __build_cmd(
     );
 
     // INFO: script.perl {}.corrected.sam --polyAReadSuffix 30 --outdir {}
+    // INFO: second run will have +2 --perID -> make it compatible with 98 [quick fix]
+    let per_id = config
+        .get_step_custom_field(step, PER_ID)
+        .parse::<u32>()
+        .unwrap_or(96)
+        + 2;
+
     let second_pass = format!(
-        "{} {} -polyAReadSuffix 30 --outdir {}",
+        "{} {} -polyAReadSuffix 30 --outdir {} --perID {}",
         filter.display(),
         corrected_sam.display(),
-        output_dir.display()
+        output_dir.display(),
+        per_id
     );
 
     let convert = format!(
@@ -231,6 +243,8 @@ fn __build_non_cannonical(
     filter: &PathBuf,
     correct: &PathBuf,
     fields: &Vec<String>,
+    step: &PipelineStep,
+    config: &Config,
 ) -> Vec<Job> {
     log::warn!(
         "WARN: No cannonical jobs found to run for polya in {} -> trying to grab any .sam!",
@@ -264,6 +278,8 @@ fn __build_non_cannonical(
             &filter,
             &correct,
             &fields,
+            step,
+            config,
         );
 
         jobs.push(Job::from(cmd));

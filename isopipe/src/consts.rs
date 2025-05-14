@@ -22,6 +22,7 @@ pub const TOGA: &str = "toga";
 pub const ASSEMBLY: &str = "assembly";
 pub const NUM_THREADS: &str = "num-threads";
 pub const NUM_CORES: &str = "num-cores";
+pub const PER_ID: &str = "perID";
 
 // project-wide pub const | names
 pub const ISOPIPE: &str = "isopipe";
