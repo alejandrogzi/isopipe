@@ -32,6 +32,7 @@ pub fn iso_fusion(
     input_dir: &PathBuf,
     step_output_dir: &PathBuf,
 ) -> Vec<Job> {
+    let mut non_cannonical = true;
     let parts = config
         .get_step_args(
             step,
@@ -56,6 +57,12 @@ pub fn iso_fusion(
             category,
             CORR_MINIMAP_GOOD_BED
         );
+
+        if !std::path::Path::new(&query).exists() {
+            log::warn!("WARN: {} does not exist, skipping...", query);
+            continue;
+        }
+
         args.extend(vec![String::from("--query"), query]);
 
         let prefix = step_output_dir.join(format!("{}", category));
@@ -67,12 +74,27 @@ pub fn iso_fusion(
         ));
 
         args.extend(parts.clone());
+
+        if *category == "singletons" {
+            args.extend(vec![
+                String::from("--suffix"),
+                SINGLETONS.to_string(),
+                String::from("--colorize"),
+                SGN_COLOR.to_string(),
+            ]);
+        }
+
         let _ = lib_iso_fusion(Arc::new(args));
+        non_cannonical = false;
     }
 
-    let jobs = aggregate_fusions(step_output_dir);
     log::info!("INFO [STEP 7]: Pre-processing completed -> Running...");
 
+    if non_cannonical {
+        __build_non_cannonical_fusions(input_dir, step_output_dir, parts);
+    }
+
+    let jobs = __aggregate_fusions(step_output_dir);
     return jobs;
 }
 
@@ -88,7 +110,7 @@ pub fn iso_fusion(
 /// ```
 /// let jobs = aggregate_fusions(&step_output_dir);
 /// ```
-fn aggregate_fusions(step_output_dir: &PathBuf) -> Vec<Job> {
+fn __aggregate_fusions(step_output_dir: &PathBuf) -> Vec<Job> {
     FUSION_TYPES
         .iter()
         .map(|ty| {
@@ -101,6 +123,67 @@ fn aggregate_fusions(step_output_dir: &PathBuf) -> Vec<Job> {
             Job::from(format!("cat {} > {}", pattern, output))
         })
         .collect()
+}
+
+/// Build non-cannonical fusions
+///
+/// # Arguments
+///
+/// * `input_dir` - The input directory
+/// * `step_output_dir` - The output directory
+/// * `parts` - The parts to be used
+///
+/// # Example
+///
+/// ```rust, no_run
+/// let input_dir = PathBuf::from("/path/to/input_dir");
+/// let step_output_dir = PathBuf::from("/path/to/step_output_dir");
+/// let parts = vec![String::from("--part1"), String::from("--part2")];
+///
+/// __build_non_cannonical_fusions(&input_dir, &step_output_dir, parts);
+/// ```
+fn __build_non_cannonical_fusions(
+    input_dir: &PathBuf,
+    step_output_dir: &PathBuf,
+    parts: Vec<String>,
+) {
+    log::warn!(
+        "WARN: No cannonical jobs found to run for isotools fusion in {} -> trying to grab any .corrected.good.bed!",
+        input_dir.display()
+    );
+
+    for (idx, entry) in std::fs::read_dir(input_dir)
+        .expect("Failed to read assets directory")
+        .flatten()
+        .filter(|entry| {
+            entry
+                .path()
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext.eq_ignore_ascii_case(CORR_MINIMAP_GOOD_BED))
+                .unwrap_or(false)
+        })
+        .enumerate()
+    {
+        let mut args = Vec::new();
+        let query = entry.path();
+
+        args.extend(vec![
+            String::from("--query"),
+            query.to_string_lossy().to_string(),
+        ]);
+
+        let prefix = step_output_dir.join(format!("reads_{}", idx));
+        args.extend(vec![String::from("--prefix"), prefix.display().to_string()]);
+
+        std::fs::create_dir_all(&prefix).expect(&format!(
+            "ERROR: Failed to create directory {}",
+            prefix.display()
+        ));
+
+        args.extend(parts.clone());
+        let _ = lib_iso_fusion(Arc::new(args));
+    }
 }
 
 /// Run iso-polya aparent

@@ -4,6 +4,7 @@ pub const SAM: &str = "sam";
 pub const FA: &str = "fa";
 pub const TWOBIT: &str = ".2bit";
 pub const FASTA_GZ: &str = "fasta.gz";
+pub const FASTQ_GZ: &str = "fastq.gz";
 
 // config pub const keys
 pub const OUTPUT_DIR: &str = "output_dir";
@@ -56,6 +57,7 @@ pub const ORF_EXE: &str = "orf_tree_pipe.py";
 pub const ORF_OUTPUT: &str = "coding.fusions.free.orf.bed";
 pub const APARENT_CHUNKS: &str = "TMP_CHUNKS";
 pub const APARENT_OUTPUT: &str = "iso_polya_aparent.bed";
+pub const SINGLETONS: &str = "SGN";
 
 // manager consts
 pub const ASSETS: &str = "assets";
@@ -67,6 +69,7 @@ pub const DEFAULT_THREADS: &str = "default_threads";
 pub const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 pub const RUN_ID_LEN: usize = 4;
 pub const ORFPY_ENV: &str = "/beegfs/projects/hillerlab/genome/src/ORFTree/.venv/bin/activate";
+pub const SGN_COLOR: &str = "51,153,255";
 
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];

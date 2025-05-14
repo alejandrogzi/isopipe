@@ -61,6 +61,31 @@ pub fn minimap2(
         jobs.push(job);
     }
 
+    if jobs.is_empty() {
+        let reads = __build_non_cannonical(input_dir);
+
+        for file in reads {
+            let basename = file
+                .file_stem()
+                .expect(&format!(
+                    "ERROR: Failed to get file stem from {}",
+                    file.display()
+                ))
+                .to_str()
+                .unwrap();
+            let alignment = step_output_dir.join(format!("aligned.{}.{}", basename, SAM));
+
+            let job = Job::new()
+                .task(*step)
+                .arg(&args)
+                .arg(&format!("-o {}", alignment.display()))
+                .arg(&genome)
+                .arg(file.display());
+
+            jobs.push(job);
+        }
+    }
+
     log::info!("INFO [STEP 5]: Pre-processing completed -> Running...");
 
     return jobs;
@@ -125,4 +150,52 @@ fn get_genome(config: &Config, step: &PipelineStep, step_output_dir: &PathBuf) -
     };
 
     genome
+}
+
+/// Builds a list of non-canonical files
+///
+/// # Arguments
+///
+/// * `input_dir` - The input directory
+///
+/// # Returns
+///
+/// A vector of paths to the non-canonical files
+///
+/// # Example
+///
+/// ```rust, no_run
+/// let input_dir = PathBuf::from("path/to/input");
+/// let files = __build_non_cannonical(&input_dir);
+///
+/// assert_eq!(files.len(), 2);
+/// ```
+fn __build_non_cannonical(input_dir: &PathBuf) -> Vec<PathBuf> {
+    log::warn!(
+        "WARN: No cannonical jobs found to run for minimap2 in {} -> trying to grab any .fast[a,q].gz!",
+        input_dir.display()
+    );
+
+    let mut files = Vec::new();
+
+    for entry in std::fs::read_dir(input_dir)
+        .expect("Failed to read assets directory")
+        .flatten()
+        .filter(|entry| {
+            entry
+                .path()
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext.eq_ignore_ascii_case(FASTA_GZ) || ext.eq_ignore_ascii_case(FASTQ_GZ))
+                .unwrap_or(false)
+        })
+    {
+        let file = entry.path();
+
+        if file.is_file() {
+            files.push(file);
+        }
+    }
+
+    return files;
 }

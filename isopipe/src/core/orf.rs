@@ -11,6 +11,29 @@ use packbed::{record::Bed6, unpack};
 use rayon::prelude::*;
 use std::path::PathBuf;
 
+/// Run ORF prediction on fusion files
+///
+/// # Arguments
+///
+/// * `step` - Pipeline step
+/// * `config` - Pipeline configuration
+/// * `input_dir` - Path to the input directory
+/// * `step_output_dir` - Path to the output directory
+///
+/// # Returns
+///
+/// * Vec<Job> - List of jobs to be executed
+///
+/// # Example
+///
+/// ```rust, no_run
+/// let jobs = orf(
+///     &step,
+///     &config,
+///     &input_dir,
+///     &step_output_dir,
+/// );
+/// ```
 pub fn orf(
     step: &PipelineStep,
     config: &Config,
