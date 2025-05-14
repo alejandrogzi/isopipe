@@ -158,9 +158,9 @@ fn __build_non_cannonical_fusions(
         .filter(|entry| {
             entry
                 .path()
-                .extension()
+                .file_name()
                 .and_then(|ext| ext.to_str())
-                .map(|ext| ext.eq_ignore_ascii_case(CORR_MINIMAP_GOOD_BED))
+                .map(|name| name.ends_with(CORR_MINIMAP_GOOD_BED))
                 .unwrap_or(false)
         })
         .enumerate()

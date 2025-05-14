@@ -188,9 +188,9 @@ fn __build_non_cannonical(input_dir: &PathBuf) -> Vec<PathBuf> {
         .filter(|entry| {
             entry
                 .path()
-                .extension()
+                .file_name()
                 .and_then(|ext| ext.to_str())
-                .map(|ext| ext.eq_ignore_ascii_case(FASTA_GZ) || ext.eq_ignore_ascii_case(FASTQ_GZ))
+                .map(|name| name.ends_with(FASTA_GZ) || name.ends_with(FASTQ_GZ))
                 .unwrap_or(false)
         })
     {
