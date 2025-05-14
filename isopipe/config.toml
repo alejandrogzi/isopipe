@@ -97,7 +97,7 @@ junc-bed = ""                # FILL: reference annotation in .bed format
 [params.polya]
 input_dir = "step5_minimap" # previous step data dir [default]
 output_dir = "step6_polya"  # output dir
-perID = 96                  # --per_id
+perID = 96                  # --per_id, 2nd pass will have number+2
 clip3 = 50                  # --clip3
 polyAReadSuffix = 30        # --suffix
 memory = 50                 # memory in GB
