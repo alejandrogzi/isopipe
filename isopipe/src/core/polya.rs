@@ -58,6 +58,14 @@ pub fn polya(
         let filename = PathBuf::from(format!("{}.{}.{}", CU_ALN, category, SAM));
         let alignment = input_dir.join(&filename);
 
+        if !alignment.exists() || std::fs::metadata(&alignment).unwrap().len() == 0 {
+            log::warn!(
+                "WARNING: {} does not exist or its empty!",
+                alignment.display()
+            );
+            continue;
+        }
+
         let cmd = __build_cmd(
             &filename, &alignment, &args, output_dir, &filter, &correct, &fields,
         );
