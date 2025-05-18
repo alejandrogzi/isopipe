@@ -75,12 +75,10 @@ pub fn run_step(
         }
         PipelineStep::Polya => {
             log::info!("INFO [STEP 6]: Pre-processing for polya started...");
-            polya::polya(
-                step,
-                config,
-                &global_output_dir.join(input_dir),
-                &step_output_dir,
-            )
+            let input_dir = &global_output_dir.join(input_dir);
+
+            minimap::compress(config, &input_dir, executor);
+            polya::polya(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Fusion => {
             log::info!("INFO [STEP 7]: Pre-processing for iso-fusion started...");

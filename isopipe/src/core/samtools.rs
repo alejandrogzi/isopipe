@@ -134,3 +134,43 @@ fn scan_groups(input_dir: &PathBuf) -> HashMap<String, Vec<PathBuf>> {
 
     groups
 }
+
+/// Generates a .bai for a set of BAM files in parallel
+///
+/// # Arguments
+///
+/// * `bam` - The paths to the BAM files.
+/// * `config` - The configuration for the pipeline.
+/// * `executor` - The executor for parallel jobs.
+/// * `step_output_dir` - The output directory for the step.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// samtools::index(PathBuf::from("example.bam"), &config, &mut executor, &PathBuf::from("output"));
+/// ```
+pub fn index(
+    bams: Vec<PathBuf>,
+    config: &Config,
+    executor: &mut ParallelExecutor,
+    step_output_dir: &PathBuf,
+) {
+    log::info!(
+        "INFO [SAMTOOLS]: Generating .bai indexes for {} BAM files...",
+        bams.len()
+    );
+
+    let mut jobs = Vec::new();
+    let package = config.get_custom_package(SAMTOOLS);
+
+    bams.iter().for_each(|bam| {
+        let cmd = format!("samtools index -@ 8 {}", bam.display());
+        let job = Job::from(cmd);
+
+        jobs.push(job);
+    });
+
+    executor
+        .add_jobs(jobs)
+        .and_send(config, "index", step_output_dir.clone(), 1, 8, package);
+}
