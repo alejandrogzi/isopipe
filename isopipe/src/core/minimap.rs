@@ -1,13 +1,7 @@
-use crate::{
-    config::*,
-    consts::*,
-    executor::{job::Job, manager::ParallelExecutor},
-};
+use crate::{config::*, consts::*, executor::job::Job};
 
 use std::{fs::File, io::BufWriter, path::PathBuf};
 use twobit::{convert, TwoBitFile};
-
-use super::samtools;
 
 /// Run minimap2
 ///
@@ -42,6 +36,13 @@ pub fn minimap2(
 
     for category in CLUSTERING_CATEGORIES {
         let alignment = step_output_dir.join(format!("{}.{}.{}", CU_ALN, category, SAM));
+
+        let bam = alignment.with_extension(BAM);
+        let compression = format!(
+            "| {SAMTOOLS} view -@ 8 -b - | {SAMTOOLS} sort -@ 8 -o {}",
+            bam.display()
+        );
+
         let reads = input_dir.join(format!("{}.{}.{}", CLUSTERED, category, FASTA_GZ));
 
         if !reads.exists()
@@ -66,7 +67,8 @@ pub fn minimap2(
             .arg(&args)
             .arg(&format!("-o {}", alignment.display()))
             .arg(&genome)
-            .arg(reads.display());
+            .arg(reads.display())
+            .arg(compression);
 
         jobs.push(job);
     }
@@ -84,13 +86,19 @@ pub fn minimap2(
                 .to_str()
                 .unwrap();
             let alignment = step_output_dir.join(format!("aligned.{}.{}", basename, SAM));
+            let bam = alignment.with_extension(BAM);
+            let compression = format!(
+                "| {SAMTOOLS} view -@ 8 -b - | {SAMTOOLS} sort -@ 8 -o {}",
+                bam.display()
+            );
 
             let job = Job::new()
                 .task(*step)
                 .arg(&args)
                 .arg(&format!("-o {}", alignment.display()))
                 .arg(&genome)
-                .arg(file.display());
+                .arg(file.display())
+                .arg(compression);
 
             jobs.push(job);
         }
@@ -215,64 +223,4 @@ fn __build_non_cannonical(input_dir: &PathBuf) -> Vec<PathBuf> {
     }
 
     return files;
-}
-
-/// Convert all .sam files in step into .bam + .bai
-///
-/// # Arguments
-/// * `config` - The configuration for the pipeline
-/// * `executor` - Parallel executor
-/// * `step_output_dir` - The directory to write the output files to
-///
-/// # Example
-/// ```
-/// let jobs = compress(
-///     &config,
-///     &step_output_dir,
-///     &mut executor,
-/// );
-/// ```
-pub fn compress(config: &Config, step_output_dir: &PathBuf, executor: &mut ParallelExecutor) {
-    log::info!(
-        "INFO [SAMTOOLS]: Converting SAM to BAM in {}...",
-        &step_output_dir.display()
-    );
-
-    let mut jobs = Vec::new();
-    let mut bams = Vec::new();
-
-    let package = config.get_custom_package(SAMTOOLS);
-
-    for entry in std::fs::read_dir(step_output_dir)
-        .expect("Failed to read assets directory")
-        .flatten()
-        .filter(|entry| {
-            entry
-                .path()
-                .file_name()
-                .and_then(|ext| ext.to_str())
-                .map(|name| name.ends_with(SAM))
-                .unwrap_or(false)
-        })
-    {
-        let sam = entry.path();
-        let bam = sam.with_extension(BAM);
-
-        let cmd = format!(
-            "samtools view -bS -@ 8 {} | samtools sort -@ 8 -o {} && rm {}",
-            sam.display(),
-            bam.display(),
-            sam.display()
-        );
-        let job = Job::from(cmd);
-
-        jobs.push(job);
-        bams.push(bam);
-    }
-
-    executor
-        .add_jobs(jobs)
-        .and_send(config, "convert", step_output_dir.clone(), 1, 8, package);
-
-    samtools::index(bams, config, executor, step_output_dir);
 }

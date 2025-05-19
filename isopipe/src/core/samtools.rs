@@ -149,28 +149,32 @@ fn scan_groups(input_dir: &PathBuf) -> HashMap<String, Vec<PathBuf>> {
 /// ```rust, no_run
 /// samtools::index(PathBuf::from("example.bam"), &config, &mut executor, &PathBuf::from("output"));
 /// ```
-pub fn index(
-    bams: Vec<PathBuf>,
-    config: &Config,
-    executor: &mut ParallelExecutor,
-    step_output_dir: &PathBuf,
-) {
-    log::info!(
-        "INFO [SAMTOOLS]: Generating .bai indexes for {} BAM files...",
-        bams.len()
-    );
+pub fn index(config: &Config, input_dir: &PathBuf, executor: &mut ParallelExecutor) {
+    log::info!("INFO [SAMTOOLS]: Generating .bai indexes for BAM files...",);
 
     let mut jobs = Vec::new();
     let package = config.get_custom_package(SAMTOOLS);
 
-    bams.iter().for_each(|bam| {
+    for entry in std::fs::read_dir(input_dir)
+        .expect("Failed to read assets directory")
+        .flatten()
+        .filter(|entry| {
+            entry
+                .path()
+                .file_name()
+                .and_then(|ext| ext.to_str())
+                .map(|name| name.ends_with(BAM))
+                .unwrap_or(false)
+        })
+    {
+        let bam = entry.path();
         let cmd = format!("samtools index -@ 8 {}", bam.display());
         let job = Job::from(cmd);
 
         jobs.push(job);
-    });
+    }
 
     executor
         .add_jobs(jobs)
-        .and_send(config, "index", step_output_dir.clone(), 1, 8, package);
+        .and_send(config, "index", input_dir.clone(), 1, 8, package);
 }

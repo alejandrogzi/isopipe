@@ -77,7 +77,7 @@ pub fn run_step(
             log::info!("INFO [STEP 6]: Pre-processing for polya started...");
             let input_dir = &global_output_dir.join(input_dir);
 
-            minimap::compress(config, &input_dir, executor);
+            samtools::index(config, &input_dir, executor);
             polya::polya(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Fusion => {
