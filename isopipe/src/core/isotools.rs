@@ -1,6 +1,7 @@
+use config::CHUNK_SIZE;
 use iso_fusion::lib_iso_fusion;
 use iso_polya::{
-    cli::{AparentArgs, CHUNK_SIZE},
+    cli::AparentArgs,
     core::apa::{calculate_polya, create_joblist, write_bed, RAM_PER_SITE},
 };
 use isotools::lib;
