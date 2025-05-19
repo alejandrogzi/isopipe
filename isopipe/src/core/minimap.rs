@@ -259,7 +259,7 @@ pub fn compress(config: &Config, step_output_dir: &PathBuf, executor: &mut Paral
         let bam = sam.with_extension(BAM);
 
         let cmd = format!(
-            "samtools view -bS {} > {} && rm {}",
+            "samtools view -bS -@ 8 {} | samtools sort -@ 8 -o {} && rm {}",
             sam.display(),
             bam.display(),
             sam.display()
