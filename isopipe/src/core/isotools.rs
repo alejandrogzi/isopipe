@@ -416,36 +416,44 @@ pub fn iso_split(
     let outdir = step_output_dir.join(CHUNKS);
 
     let entries = std::fs::read_dir(input_dir)
-        .expect("Failed to read input directory")
+        .expect("ERROR: Failed to read input directory")
         .flatten()
         .map(|entry| entry.path())
         .filter(|path| {
-            path.extension()
-                .and_then(|ext| ext.to_str())
-                .map(|_| {
-                    path.ends_with(FASTQ_GZ)
-                        || path.ends_with(FQ_GZ)
-                        || path.ends_with(HQ_FASTA_GZ)
-                        || path.ends_with(HQ_FA_GZ)
-                        || path.ends_with(SGN_FASTA_GZ)
-                        || path.ends_with(SGN_FA_GZ)
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|filename| {
+                    filename.ends_with(FASTQ_GZ)
+                        || filename.ends_with(FQ_GZ)
+                        || filename.ends_with(HQ_FASTA_GZ)
+                        || filename.ends_with(HQ_FA_GZ)
+                        || filename.ends_with(SGN_FASTA_GZ)
+                        || filename.ends_with(SGN_FA_GZ)
                 })
                 .unwrap_or(false)
         })
         .collect::<Vec<_>>();
 
-    log::info!(
-        "INFO [ISO-SPLIT]: Found {} files in {}",
-        entries.len(),
-        input_dir.display(),
-    );
+    if entries.is_empty() {
+        log::error!(
+            "ERROR: could not find any .fa/.fq in {}!",
+            input_dir.display()
+        );
+        std::process::exit(1);
+    } else {
+        log::info!(
+            "INFO [ISO-SPLIT]: Found {} files in {}",
+            entries.len(),
+            input_dir.display(),
+        );
+    }
 
     let (fq, fa): (Vec<_>, Vec<_>) = entries
         .into_iter()
         .partition(|path| path.ends_with(FASTQ_GZ) || path.ends_with(FQ_GZ));
 
-    process_fa(&fa, &chunks, &outdir);
-    process_fq(&fq, &chunks, &outdir);
+    process_fa(&fa, &chunks, &outdir).expect("ERROR: something failed while processing .fa files!");
+    process_fq(&fq, &chunks, &outdir).expect("ERROR: something failed while processing .fq files!");
 
     return outdir;
 }
@@ -462,9 +470,13 @@ pub fn iso_split(
 /// ```rust, no_run
 /// process_fa(&files, &chunks, &outdir);
 /// ```
-fn process_fa(files: &[PathBuf], chunks: &str, outdir: &PathBuf) {
+fn process_fa(
+    files: &[PathBuf],
+    chunks: &str,
+    outdir: &PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
     if files.is_empty() {
-        return;
+        return Ok(());
     }
 
     for file in files {
@@ -484,6 +496,8 @@ fn process_fa(files: &[PathBuf], chunks: &str, outdir: &PathBuf) {
 
         let _ = lib_iso_split(args);
     }
+
+    Ok(())
 }
 
 /// Process a collection of fastq files
@@ -498,9 +512,13 @@ fn process_fa(files: &[PathBuf], chunks: &str, outdir: &PathBuf) {
 /// ```rust, no_run
 /// process_fq(&files, &chunks, &outdir);
 /// ```
-fn process_fq(files: &[PathBuf], chunks: &str, outdir: &PathBuf) {
+fn process_fq(
+    files: &[PathBuf],
+    chunks: &str,
+    outdir: &PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
     if files.is_empty() {
-        return;
+        return Ok(());
     }
 
     log::info!(
@@ -526,4 +544,6 @@ fn process_fq(files: &[PathBuf], chunks: &str, outdir: &PathBuf) {
 
         let _ = lib_iso_split(args);
     });
+
+    Ok(())
 }
