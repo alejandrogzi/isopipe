@@ -404,6 +404,12 @@ pub fn iso_split(
     input_dir: &PathBuf,
     step_output_dir: &PathBuf,
 ) -> PathBuf {
+    log::info!(
+        "INFO [ISO-SPLIT]: Spltting files in {} and writing to {}",
+        input_dir.display(),
+        step_output_dir.display()
+    );
+
     let chunk_val = crate::numerical!(config.get_step_custom_field(step, CHUNK) => usize)
         .expect("Missing or invalid chunk size");
     let chunks = format!("--chunks {}", chunk_val);

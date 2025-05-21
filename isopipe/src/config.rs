@@ -694,16 +694,33 @@ impl Config {
     ) -> (PathBuf, PathBuf) {
         let input_dir = self
             .get_param(*step, INPUT_DIR)
-            .expect("ERROR: input_dir not found for ccs in config.toml!")
+            .unwrap_or_else(|| panic!("ERROR: input_dir not found in config.toml for {:?}!", step))
             .to_path_buf();
+
         let step_output_dir = global_output_dir.join(
             self.get_param(*step, OUTPUT_DIR)
-                .expect("ERROR: output_dir not found for ccs in config.toml!")
+                .unwrap_or_else(|| {
+                    panic!("ERROR: output_dir not found in config.toml for {:?}!", step)
+                })
                 .to_path_buf(),
         );
-        std::fs::create_dir_all(&step_output_dir).expect("ERROR: failed to create output dir!");
 
-        (input_dir, step_output_dir)
+        std::fs::create_dir_all(&step_output_dir).unwrap_or_else(|e| {
+            panic!(
+                "ERROR: failed to create output dir -> {:?}!/n{e}",
+                step_output_dir
+            )
+        });
+
+        // INFO: return early for ccs -> only inmutable path!
+        if step == &PipelineStep::Ccs {
+            return (input_dir, step_output_dir);
+        }
+
+        match input_dir.is_absolute() {
+            true => return (input_dir, step_output_dir),
+            false => return (global_output_dir.join(input_dir), step_output_dir),
+        }
     }
 
     /// Get custom fields for a given step.
@@ -1627,5 +1644,20 @@ macro_rules! numerical {
                 stringify!($t)
             )
         })
+    }};
+}
+
+#[macro_export]
+macro_rules! isotools {
+    () => {{
+        use std::path::Path;
+        std::fs::canonicalize(Path::new($crate::consts::ISOTOOLS_RELEASE))
+            .expect("Failed to canonicalize ISOTOOLS_RELEASE path")
+    }};
+    ($subpath:expr) => {{
+        use std::path::Path;
+        let base = std::fs::canonicalize(Path::new($crate::consts::ISOTOOLS_RELEASE))
+            .expect("Failed to canonicalize ISOTOOLS_RELEASE path");
+        base.join($subpath)
     }};
 }

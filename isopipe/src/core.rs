@@ -41,73 +41,41 @@ pub fn run_step(
         }
         PipelineStep::Lima => {
             log::info!("INFO [STEP 2]: Pre-processing for lima started...");
-            let input_dir = &global_output_dir.join(input_dir);
 
-            samtools::merge(input_dir, executor, config, prefix);
-            lima::lima(step, config, input_dir, &step_output_dir)
+            samtools::merge(&input_dir, executor, config, prefix);
+            lima::lima(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Refine => {
             log::info!("INFO [STEP 3]: Pre-processing for isoseq::refine started...");
-            isoseq::refine(
-                step,
-                config,
-                &global_output_dir.join(input_dir),
-                &step_output_dir,
-            )
+            isoseq::refine(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Cluster => {
             log::info!("INFO [STEP 4]: Pre-processing for isoseq::cluster started...");
-            isoseq::cluster(
-                step,
-                config,
-                &global_output_dir.join(input_dir),
-                &step_output_dir,
-            )
+            isoseq::cluster(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Minimap => {
             log::info!("INFO [STEP 5]: Pre-processing for minimap started...");
-            let input_dir = isotools::iso_split(
-                step,
-                config,
-                &global_output_dir.join(input_dir),
-                &step_output_dir,
-            );
+
+            let input_dir = isotools::iso_split(step, config, &input_dir, &step_output_dir);
             minimap::minimap2(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Polya => {
             log::info!("INFO [STEP 6]: Pre-processing for polya started...");
-            let input_dir = &global_output_dir.join(input_dir);
 
             samtools::index(config, &input_dir, executor);
             polya::polya(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Fusion => {
             log::info!("INFO [STEP 7]: Pre-processing for iso-fusion started...");
-            isotools::iso_fusion(
-                step,
-                config,
-                &global_output_dir.join(input_dir),
-                &step_output_dir,
-            )
+            isotools::iso_fusion(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Orf => {
             log::info!("INFO [STEP 8]: Pre-processing for orf started...");
-            orf::orf(
-                step,
-                config,
-                &global_output_dir.join(input_dir),
-                &step_output_dir,
-            )
+            orf::orf(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Polish => {
             log::info!("INFO [STEP 9]: Pre-processing for isotools polish started...");
-            isotools::polish(
-                step,
-                config,
-                &global_output_dir.join(input_dir),
-                &step_output_dir,
-                executor,
-            )
+            isotools::polish(step, config, &input_dir, &step_output_dir, executor)
         }
     };
 
