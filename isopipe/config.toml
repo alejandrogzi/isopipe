@@ -88,9 +88,10 @@ C5 = ""                      # WARN: splice:hq, leave empty
 cs = "long"                  # output the cs tag
 output_dir = "step5_minimap" # output dir
 input_dir = "step4_cluster"  # previous step data dir [default]
-memory = 50                  # memory in GB
-t = 128                      # --num-threads [higher the better]
+memory = 60                  # memory in GB
+t = 8                        # --num-threads [higher the better]
 time = "24.h"                # time for each job
+chunk = "500k"               # WARN: controls iso-split fa/fq output [default: 500k]
 genome = ""                  # FILL: genome in .fa format or .2bit
 junc-bed = ""                # FILL: reference annotation in .bed format
 
