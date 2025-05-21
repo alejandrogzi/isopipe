@@ -155,7 +155,8 @@ pub fn index(config: &Config, input_dir: &PathBuf, executor: &mut ParallelExecut
     let mut jobs = Vec::new();
     let package = config.get_custom_package(SAMTOOLS);
 
-    for entry in std::fs::read_dir(input_dir)
+    // INFO: loop over {step5}/bam
+    for entry in std::fs::read_dir(input_dir.join(BAM))
         .expect("Failed to read assets directory")
         .flatten()
         .filter(|entry| {

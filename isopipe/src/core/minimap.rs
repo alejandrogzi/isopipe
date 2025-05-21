@@ -1,6 +1,10 @@
 use crate::{config::*, consts::*, executor::job::Job};
 
-use std::{fs::File, io::BufWriter, path::PathBuf};
+use std::{
+    fs::{create_dir_all, File},
+    io::BufWriter,
+    path::PathBuf,
+};
 use twobit::{convert, TwoBitFile};
 
 /// Run minimap2
@@ -10,6 +14,12 @@ use twobit::{convert, TwoBitFile};
 /// * `config` - The configuration for the pipeline
 /// * `input_dir` - The directory containing the input files
 /// * `step_output_dir` - The directory to write the output files to
+///
+///
+/// # Note
+///
+/// 'input_dir' points to CHUNKS, the output of the chunking part
+/// considering only hg and singletons
 ///
 /// # Returns
 /// A vector of jobs to run
@@ -31,43 +41,53 @@ pub fn minimap2(
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
 
-    let args = config.get_step_args(step, vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, GENOME]);
+    let args = config.get_step_args(
+        step,
+        vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, GENOME, CHUNK],
+    );
     let genome = get_genome(config, step, step_output_dir);
 
-    for category in CLUSTERING_CATEGORIES {
-        let alignment = step_output_dir.join(format!("{}.{}.{}", CU_ALN, category, SAM));
+    let _ = create_dir_all(&step_output_dir.join(SAM));
+    let _ = create_dir_all(&step_output_dir.join(BAM));
 
-        let bam = alignment.with_extension(BAM);
+    for entry in std::fs::read_dir(input_dir)
+        .expect("Failed to read input directory")
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .and_then(|ext| ext.to_str())
+                .map(|_| {
+                    path.ends_with(FASTQ_GZ)
+                        || path.ends_with(FQ_GZ)
+                        || path.ends_with(HQ_FASTA_GZ)
+                        || path.ends_with(HQ_FA_GZ)
+                        || path.ends_with(SGN_FASTA_GZ)
+                        || path.ends_with(SGN_FA_GZ)
+                })
+                .unwrap_or(false)
+        })
+    {
+        // INFO: send anything .f[a/q] inside chunks/
+        let sam = &step_output_dir
+            .join(SAM)
+            .join(entry.with_extension(SAM).file_name().unwrap());
+        let bam = &step_output_dir
+            .join(BAM)
+            .join(entry.with_extension(BAM).file_name().unwrap());
+
         let compression = format!(
-            "| {SAMTOOLS} view -@ 8 -b - | {SAMTOOLS} sort -@ 8 -o {}",
+            "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {}",
+            sam.display(),
             bam.display()
         );
-
-        let reads = input_dir.join(format!("{}.{}.{}", CLUSTERED, category, FASTA_GZ));
-
-        if !reads.exists()
-            || reads
-                .metadata()
-                .expect(&format!(
-                    "ERROR: failed to get metadata from {}",
-                    reads.display()
-                ))
-                .len()
-                == 0
-        {
-            log::warn!(
-                "WARN: {} does not exist or is empty! -> skipping...",
-                reads.display()
-            );
-            continue;
-        }
 
         let job = Job::new()
             .task(*step)
             .arg(&args)
-            .arg(&format!("-o {}", alignment.display()))
+            .arg(&format!("-o {}", sam.display()))
             .arg(&genome)
-            .arg(reads.display())
+            .arg(entry.display())
             .arg(compression);
 
         jobs.push(job);
@@ -85,10 +105,15 @@ pub fn minimap2(
                 ))
                 .to_str()
                 .unwrap();
-            let alignment = step_output_dir.join(format!("aligned.{}.{}", basename, SAM));
-            let bam = alignment.with_extension(BAM);
+            let alignment = step_output_dir
+                .join(SAM)
+                .join(format!("aligned.{}.{}", basename, SAM));
+            let bam = step_output_dir
+                .join(BAM)
+                .join(format!("aligned.{}.{}", basename, BAM));
             let compression = format!(
-                "| {SAMTOOLS} view -@ 8 -b - | {SAMTOOLS} sort -@ 8 -o {}",
+                "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {}",
+                alignment.display(),
                 bam.display()
             );
 
@@ -197,21 +222,25 @@ fn __build_non_cannonical(input_dir: &PathBuf) -> Vec<PathBuf> {
     let mut files = Vec::new();
 
     for entry in std::fs::read_dir(input_dir)
-        .expect("Failed to read assets directory")
+        .expect("Failed to read input directory")
         .flatten()
-        .filter(|entry| {
-            entry
-                .path()
-                .file_name()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
                 .and_then(|ext| ext.to_str())
-                .map(|name| name.ends_with(FASTA_GZ) || name.ends_with(FASTQ_GZ))
+                .map(|_| {
+                    path.ends_with(FASTQ_GZ)
+                        || path.ends_with(FQ_GZ)
+                        || path.ends_with(HQ_FASTA_GZ)
+                        || path.ends_with(HQ_FA_GZ)
+                        || path.ends_with(SGN_FASTA_GZ)
+                        || path.ends_with(SGN_FA_GZ)
+                })
                 .unwrap_or(false)
         })
     {
-        log::info!("INFO: Found non-cannonical file {}", entry.path().display());
-
-        let file = entry.path();
-        files.push(file);
+        log::info!("INFO: Found non-cannonical file {}", entry.display());
+        files.push(entry);
     }
 
     if files.is_empty() {

@@ -4,13 +4,16 @@ use iso_polya::{
     cli::AparentArgs,
     core::apa::{calculate_polya, create_joblist, write_bed, RAM_PER_SITE},
 };
+use iso_split::lib_iso_split;
 use isotools::lib;
 use packbed::par_reader;
+use rayon::prelude::*;
+
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::executor::manager::ParallelExecutor;
 use crate::{config::*, consts::*, executor::job::Job};
-use std::path::PathBuf;
-use std::sync::Arc;
 
 /// Run isotools iso-fusion
 ///
@@ -378,4 +381,123 @@ fn merge_aparent(outdir: PathBuf) -> PathBuf {
 
     log::info!("SUCCESS: APPARENT finished successfully!");
     return bed_dest;
+}
+
+/// Run isotools iso-split
+///
+/// # Arguments
+/// * `step` - The pipeline step
+/// * `config` - The configuration
+/// * `input_dir` - The input directory
+/// * `step_output_dir` - The output directory
+///
+/// # Returns
+/// A vector of jobs
+///
+/// # Example
+/// ```
+/// let jobs = iso_fusion(&step, &config, &input_dir, &step_output_dir);
+/// ```
+pub fn iso_split(
+    step: &PipelineStep,
+    config: &Config,
+    input_dir: &PathBuf,
+    step_output_dir: &PathBuf,
+) -> PathBuf {
+    let chunk_val = crate::numerical!(config.get_step_custom_field(step, CHUNK) => usize)
+        .expect("Missing or invalid chunk size");
+    let chunks = format!("--chunks {}", chunk_val);
+    let outdir = step_output_dir.join(CHUNKS);
+
+    let entries = std::fs::read_dir(input_dir)
+        .expect("Failed to read input directory")
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .and_then(|ext| ext.to_str())
+                .map(|_| {
+                    path.ends_with(FASTQ_GZ)
+                        || path.ends_with(FQ_GZ)
+                        || path.ends_with(HQ_FASTA_GZ)
+                        || path.ends_with(HQ_FA_GZ)
+                        || path.ends_with(SGN_FASTA_GZ)
+                        || path.ends_with(SGN_FA_GZ)
+                })
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+
+    let (fq, fa): (Vec<_>, Vec<_>) = entries
+        .into_iter()
+        .partition(|path| path.ends_with(FASTQ_GZ) || path.ends_with(FQ_GZ));
+
+    process_fa(&fa, &chunks, &outdir);
+    process_fq(&fq, &chunks, &outdir);
+
+    return outdir;
+}
+
+/// Process a collection of fasta files
+///
+/// # Arguments
+/// * `files` - Collection of fasta files
+/// * `chunks` - Number of chunks
+/// * `outdir` - Output directory
+///
+/// # Example
+///
+/// ```rust, no_run
+/// process_fa(&files, &chunks, &outdir);
+/// ```
+fn process_fa(files: &[PathBuf], chunks: &str, outdir: &PathBuf) {
+    for file in files {
+        let suffix = file
+            .file_stem()
+            .expect("Could not get file stem")
+            .to_str()
+            .expect("ERROR: Invalid UTF-8 in file name");
+
+        let args = vec![
+            format!("--file {}", file.display()),
+            chunks.to_string(),
+            format!("--outdir {}", outdir.display()),
+            format!("--suffix {}", suffix),
+            "--threads 16".to_string(),
+        ];
+
+        let _ = lib_iso_split(args);
+    }
+}
+
+/// Process a collection of fastq files
+///
+/// # Arguments
+/// * `files` - Collection of fasta files
+/// * `chunks` - Number of chunks
+/// * `outdir` - Output directory
+///
+/// # Example
+///
+/// ```rust, no_run
+/// process_fq(&files, &chunks, &outdir);
+/// ```
+fn process_fq(files: &[PathBuf], chunks: &str, outdir: &PathBuf) {
+    files.par_iter().for_each(|file| {
+        let suffix = file
+            .file_stem()
+            .expect("ERROR: Could not get file stem")
+            .to_str()
+            .expect("ERROR: Invalid UTF-8 in file name");
+
+        let args = vec![
+            format!("--file {}", file.display()),
+            chunks.to_string(),
+            format!("--outdir {}", outdir.display()),
+            format!("--suffix {}", suffix),
+            "--threads 1".to_string(),
+        ];
+
+        let _ = lib_iso_split(args);
+    });
 }

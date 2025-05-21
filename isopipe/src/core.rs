@@ -66,12 +66,13 @@ pub fn run_step(
         }
         PipelineStep::Minimap => {
             log::info!("INFO [STEP 5]: Pre-processing for minimap started...");
-            minimap::minimap2(
+            let input_dir = isotools::iso_split(
                 step,
                 config,
                 &global_output_dir.join(input_dir),
                 &step_output_dir,
-            )
+            );
+            minimap::minimap2(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Polya => {
             log::info!("INFO [STEP 6]: Pre-processing for polya started...");

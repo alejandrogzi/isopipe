@@ -5,6 +5,14 @@ pub const FA: &str = "fa";
 pub const TWOBIT: &str = ".2bit";
 pub const FASTA_GZ: &str = "fasta.gz";
 pub const FASTQ_GZ: &str = "fastq.gz";
+pub const FQ: &str = "fq";
+pub const FQ_GZ: &str = "fq.gz";
+pub const FASTA: &str = "fasta";
+pub const FA_GZ: &str = "fa.gz";
+pub const HQ_FA_GZ: &str = "hq.fa.gz";
+pub const HQ_FASTA_GZ: &str = "hq.fasta.gz";
+pub const SGN_FA_GZ: &str = "singletons.fa.gz";
+pub const SGN_FASTA_GZ: &str = "singletons.fasta.gz";
 
 // config pub const keys
 pub const OUTPUT_DIR: &str = "output_dir";
@@ -14,6 +22,7 @@ pub const MEMORY: &str = "memory";
 pub const TIME: &str = "time";
 pub const PREFIX: &str = "prefix";
 pub const CHUNK: &str = "chunk";
+pub const CHUNKS: &str = "chunks";
 pub const REPORT: &str = "report-file";
 pub const RUN_ID: &str = "run_id";
 pub const LOG_FILE: &str = "log-file";

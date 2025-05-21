@@ -1205,6 +1205,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "iso-split"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "config",
+ "flate2",
+ "log",
+ "memchr",
+ "memmap2",
+ "num_cpus",
+ "rayon",
+ "simple_logger 5.0.0",
+]
+
+[[package]]
 name = "iso-utr"
 version = "0.0.7"
 dependencies = [
@@ -1234,6 +1250,7 @@ dependencies = [
  "iso-fusion",
  "iso-pack",
  "iso-polya",
+ "iso-split",
  "isotools",
  "log",
  "memmap2",

@@ -1596,3 +1596,36 @@ pub fn shell(cmd: String, log_msg: &str, tool: &str) {
         std::process::exit(1);
     }
 }
+
+/// Macro to convert a String with a
+/// numerical suffix into its numerical representation
+///
+/// # Example
+///
+/// ```rust, no_run
+/// let number: &str = "50k";
+/// let parsed_number = numerical!(number => u32);
+/// ```
+#[macro_export]
+macro_rules! numerical {
+    ($num_str:expr => $t:ty) => {{
+        let s = $num_str.trim().to_lowercase();
+        let (num_part, multiplier) = if s.ends_with('k') {
+            (&s[..s.len() - 1], 1_000)
+        } else if s.ends_with('m') {
+            (&s[..s.len() - 1], 1_000_000)
+        } else if s.ends_with('g') {
+            (&s[..s.len() - 1], 1_000_000_000)
+        } else {
+            (&s[..], 1)
+        };
+
+        num_part.parse::<$t>().map(|n| n * multiplier).map_err(|_| {
+            format!(
+                "ERROR: failed to parse '{}' as {}",
+                $num_str,
+                stringify!($t)
+            )
+        })
+    }};
+}

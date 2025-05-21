@@ -30,6 +30,7 @@ iso-pack = { path = "../isotools/isotools/iso-pack" }
 config = { path = "../isotools/isotools/config" }
 iso-polya = { path = "../isotools/isotools/iso-polya" }
 isotools = { path = "../isotools/isotools/entry" }
+iso-split = { path = "../isotools/isotools/iso-split" }
 
 [profile.release]
 lto = true
