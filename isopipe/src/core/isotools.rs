@@ -405,7 +405,7 @@ pub fn iso_split(
     step_output_dir: &PathBuf,
 ) -> PathBuf {
     log::info!(
-        "INFO [ISO-SPLIT]: Spltting files in {} and writing to {}",
+        "INFO [ISO-SPLIT]: Preparing to split files in {} and writing to {}/chunks",
         input_dir.display(),
         step_output_dir.display()
     );
@@ -434,6 +434,12 @@ pub fn iso_split(
         })
         .collect::<Vec<_>>();
 
+    log::info!(
+        "INFO [ISO-SPLIT]: Found {} files in {}",
+        entries.len(),
+        input_dir.display(),
+    );
+
     let (fq, fa): (Vec<_>, Vec<_>) = entries
         .into_iter()
         .partition(|path| path.ends_with(FASTQ_GZ) || path.ends_with(FQ_GZ));
@@ -457,6 +463,10 @@ pub fn iso_split(
 /// process_fa(&files, &chunks, &outdir);
 /// ```
 fn process_fa(files: &[PathBuf], chunks: &str, outdir: &PathBuf) {
+    if files.is_empty() {
+        return;
+    }
+
     for file in files {
         let suffix = file
             .file_stem()
@@ -489,6 +499,16 @@ fn process_fa(files: &[PathBuf], chunks: &str, outdir: &PathBuf) {
 /// process_fq(&files, &chunks, &outdir);
 /// ```
 fn process_fq(files: &[PathBuf], chunks: &str, outdir: &PathBuf) {
+    if files.is_empty() {
+        return;
+    }
+
+    log::info!(
+        "INFO [ISO-SPLIT]: Splitting {} in chunks of size {}",
+        files.len(),
+        chunks
+    );
+
     files.par_iter().for_each(|file| {
         let suffix = file
             .file_stem()
