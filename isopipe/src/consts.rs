@@ -99,3 +99,11 @@ pub const FUSION_FILES: &[&str] = &[
     "fusions.review.bed",
     "fusions.fakes.bed",
 ];
+pub const GZ_EXTENSIONS: &[&str] = &[
+    ".fastq.gz",
+    ".fq.gz",
+    ".hq.fasta.gz",
+    ".hq.fa.gz",
+    ".singleton.fasta.gz",
+    ".singleton.fa.gz",
+];
