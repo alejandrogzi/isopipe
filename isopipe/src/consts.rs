@@ -1,6 +1,7 @@
 // formats | extensions
 pub const BAM: &str = "bam";
 pub const SAM: &str = "sam";
+pub const BED: &str = "bed";
 pub const FA: &str = "fa";
 pub const TWOBIT: &str = ".2bit";
 pub const FASTA_GZ: &str = "fasta.gz";
@@ -13,6 +14,9 @@ pub const HQ_FA_GZ: &str = "hq.fa.gz";
 pub const HQ_FASTA_GZ: &str = "hq.fasta.gz";
 pub const SGN_FA_GZ: &str = "singletons.fa.gz";
 pub const SGN_FASTA_GZ: &str = "singletons.fasta.gz";
+pub const BED_ACCEPT: &str = "good.bed";
+pub const BED_REJECT: &str = "bad.bed";
+pub const BED_SGN_ACCEPT: &str = "singletons.good.bed";
 
 // config pub const keys
 pub const OUTPUT_DIR: &str = "output_dir";
@@ -104,6 +108,6 @@ pub const GZ_EXTENSIONS: &[&str] = &[
     ".fq.gz",
     ".hq.fasta.gz",
     ".hq.fa.gz",
-    ".singleton.fasta.gz",
-    ".singleton.fa.gz",
+    ".singletons.fasta.gz",
+    ".singletons.fa.gz",
 ];

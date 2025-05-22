@@ -1,9 +1,4 @@
-use crate::{
-    config::*,
-    consts::*,
-    executor::{job::Job, manager::__get_assets_dir},
-    isotools,
-};
+use crate::{cat, config::*, consts::*, executor::job::Job, isotools};
 use std::{fs::create_dir_all, path::PathBuf};
 
 /// Run polya mod [3 steps]
@@ -64,10 +59,17 @@ pub fn polya(
     {
         let bam = entry.path();
 
+        // INFO: for cannonical runs this yields -> chunk*{run}.singletons
+        // INFO: and outputs chunk*{run}.singletons.good.bed
         let bind = bam.with_extension("");
         let prefix = bind
             .file_stem()
             .unwrap_or_else(|| panic!("ERROR: could not build prefix for {:?}", bam));
+
+        if std::fs::metadata(&bam).unwrap().len() == 0 {
+            log::warn!("WARNING: {} its empty!", bam.display());
+            continue;
+        }
 
         let cmd = format!(
             "{} {} --bam {} {args} --prefix {} --outdir {}",
@@ -80,44 +82,6 @@ pub fn polya(
 
         jobs.push(Job::from(cmd));
     }
-
-    // let fields = config.get_step_custom_fields(step, vec![TOGA, ASSEMBLY]);
-    // let assets = __get_assets_dir();
-
-    // let filter = assets.join(FILTER_MINIMAP);
-    // let correct = assets.join(CORRECT_MINIMAP);
-
-    // for category in CLUSTERING_CATEGORIES {
-    //     if *category == "lq" {
-    //         continue;
-    //     }
-
-    //     // INFO: cannonical format -> all.clustered.aligned.{hq,lq,singletons}.sam
-    //     let filename = PathBuf::from(format!("{}.{}.{}", CU_ALN, category, SAM));
-    //     let alignment = input_dir.join(&filename);
-
-    //     if !alignment.exists() || std::fs::metadata(&alignment).unwrap().len() == 0 {
-    //         log::warn!(
-    //             "WARNING: {} does not exist or its empty!",
-    //             alignment.display()
-    //         );
-    //         continue;
-    //     }
-
-    //     let cmd = __build_cmd(
-    //         &filename, &alignment, &args, output_dir, &filter, &correct, &fields, step, config,
-    //     );
-
-    //     jobs.push(Job::from(cmd));
-    // }
-
-    // if jobs.is_empty() {
-    //     let jobs = __build_non_cannonical(
-    //         input_dir, &args, output_dir, &filter, &correct, &fields, step, config,
-    //     );
-
-    //     return jobs;
-    // }
 
     log::info!("INFO [STEP 6]: Pre-processing completed -> Running...");
 
@@ -164,6 +128,7 @@ pub fn polya(
 ///  &fields,
 /// );
 /// ```
+#[deprecated]
 fn __build_cmd(
     filename: &PathBuf,
     alignment: &PathBuf,
@@ -274,6 +239,7 @@ fn __build_cmd(
 ///   &fields,
 /// );
 /// ```
+#[deprecated]
 fn __build_non_cannonical(
     input_dir: &PathBuf,
     args: &String,
@@ -326,4 +292,53 @@ fn __build_non_cannonical(
     log::info!("INFO [STEP 6]: Pre-processing completed -> Running...");
 
     jobs
+}
+
+/// Merges polya .bed results into a single .bed per category
+pub fn merge(input_dir: &PathBuf) {
+    log::info!(
+        "INFO [MERGE]: Merging polyA segmentation results in {}...",
+        &input_dir.join(POLYA_PARTS).display()
+    );
+
+    let accepted = input_dir.join("all.aligned.accept.bed");
+    let rejected = input_dir.join("all.aligned.reject.bed");
+    let singletons = input_dir.join("all.aligned.singletons.bed");
+
+    let files = std::fs::read_dir(input_dir.join(POLYA_PARTS))
+        .expect("Failed to read assets directory")
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|entry| {
+            entry
+                .file_name()
+                .and_then(|ext| ext.to_str())
+                .map(|name| name.ends_with(BED))
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+
+    if files.is_empty() {
+        log::error!("ERROR: could not find any .bed in {}!", input_dir.display());
+        std::process::exit(1);
+    }
+
+    // INFO: is necessary to separete singletons into a single file
+    let mut sgns = Vec::new();
+    let mut good = Vec::new();
+    let mut bad = Vec::new();
+
+    for path in files {
+        if path.ends_with(BED_SGN_ACCEPT) {
+            sgns.push(path);
+        } else if path.ends_with(BED_ACCEPT) {
+            good.push(path);
+        } else if path.ends_with(BED_REJECT) {
+            bad.push(path);
+        }
+    }
+
+    cat!(&sgns, singletons);
+    cat!(&good, accepted);
+    cat!(&bad, rejected);
 }

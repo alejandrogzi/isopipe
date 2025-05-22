@@ -67,6 +67,8 @@ pub fn run_step(
         }
         PipelineStep::Fusion => {
             log::info!("INFO [STEP 7]: Pre-processing for iso-fusion started...");
+
+            polya::merge(&input_dir);
             isotools::iso_fusion(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Orf => {

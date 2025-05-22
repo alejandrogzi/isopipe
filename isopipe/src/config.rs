@@ -4,6 +4,7 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
+use std::io::{self, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 use std::thread;
@@ -1614,6 +1615,21 @@ pub fn shell(cmd: String, log_msg: &str, tool: &str) {
     }
 }
 
+/// Concatenate all files in `files` into `output`.
+pub fn cat<P: AsRef<Path>>(files: &Vec<PathBuf>, output: P) -> io::Result<()> {
+    let outfile = File::create(output)?;
+    let mut writer = BufWriter::new(outfile);
+
+    for file in files {
+        let infile = File::open(file)?;
+        let mut reader = BufReader::new(infile);
+        io::copy(&mut reader, &mut writer)?;
+    }
+
+    writer.flush()?;
+    Ok(())
+}
+
 /// Macro to convert a String with a
 /// numerical suffix into its numerical representation
 ///
@@ -1647,6 +1663,15 @@ macro_rules! numerical {
     }};
 }
 
+/// Macro to get the path of an isotools
+/// tool binary file directly
+///
+/// # Example
+///
+/// ```rust, no_run
+/// let tool: &str = "iso-polya";
+/// let binary = isotools!(tool);
+/// ```
 #[macro_export]
 macro_rules! isotools {
     () => {{
@@ -1660,4 +1685,21 @@ macro_rules! isotools {
             .expect("ERROR: failed to canonicalize ISOTOOLS_RELEASE path!");
         base.join($subpath)
     }};
+}
+
+/// Macro to get cat a collection of files
+/// into a single output
+///
+/// # Example
+///
+/// ```rust, no_run
+/// let files = vec!["file1.bed", "file2.bed"];
+/// let output = "merged.bed"
+/// cat!(files output);
+/// ```
+#[macro_export]
+macro_rules! cat {
+    ($files:expr, $out:expr) => {
+        let _ = cat($files, $out);
+    };
 }

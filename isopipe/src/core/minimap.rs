@@ -61,6 +61,8 @@ pub fn minimap2(
                 .unwrap_or(false)
         })
     {
+        let entry = entry.with_extension(""); // INFO: discard .gz
+
         // INFO: send anything .f[a/q] inside chunks/
         let sam = &step_output_dir
             .join(SAM)
@@ -70,9 +72,10 @@ pub fn minimap2(
             .join(entry.with_extension(BAM).file_name().unwrap());
 
         let compression = format!(
-            "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {}",
+            "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {} && rm {}",
             sam.display(),
-            bam.display()
+            bam.display(),
+            sam.display()
         );
 
         let job = Job::new()
