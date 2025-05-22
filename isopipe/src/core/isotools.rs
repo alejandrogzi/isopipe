@@ -479,9 +479,10 @@ fn process_fa(
     }
 
     for file in files {
-        let suffix = file
+        let bind = file.with_extension("");
+        let suffix = bind
             .file_stem()
-            .expect("Could not get file stem")
+            .unwrap_or_else(|| panic!("ERROR: could not build prefix for {:?}", file))
             .to_str()
             .expect("ERROR: Invalid UTF-8 in file name");
 
@@ -532,9 +533,10 @@ fn process_fq(
     );
 
     files.par_iter().for_each(|file| {
-        let suffix = file
+        let bind = file.with_extension("");
+        let suffix = bind
             .file_stem()
-            .expect("ERROR: Could not get file stem")
+            .unwrap_or_else(|| panic!("ERROR: could not build prefix for {:?}", file))
             .to_str()
             .expect("ERROR: Invalid UTF-8 in file name");
 

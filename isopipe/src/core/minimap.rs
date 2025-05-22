@@ -55,7 +55,7 @@ pub fn minimap2(
         .flatten()
         .map(|entry| entry.path())
         .filter(|path| {
-            path.extension()
+            path.file_name()
                 .and_then(|ext| ext.to_str())
                 .map(|_| {
                     path.ends_with(FASTQ_GZ)
@@ -99,13 +99,10 @@ pub fn minimap2(
         for file in reads {
             let basename = file
                 .file_stem()
-                .expect(&format!(
-                    "ERROR: Failed to get file stem from {}",
-                    file.display()
-                ))
+                .unwrap_or_else(|| panic!("ERROR: Failed to get file stem from {}", file.display()))
                 .to_str()
                 .unwrap();
-            let alignment = step_output_dir
+            let sam = step_output_dir
                 .join(SAM)
                 .join(format!("aligned.{}.{}", basename, SAM));
             let bam = step_output_dir
@@ -113,14 +110,14 @@ pub fn minimap2(
                 .join(format!("aligned.{}.{}", basename, BAM));
             let compression = format!(
                 "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {}",
-                alignment.display(),
+                sam.display(),
                 bam.display()
             );
 
             let job = Job::new()
                 .task(*step)
                 .arg(&args)
-                .arg(&format!("-o {}", alignment.display()))
+                .arg(&format!("-o {}", sam.display()))
                 .arg(&genome)
                 .arg(file.display())
                 .arg(compression);
@@ -221,6 +218,7 @@ fn __build_non_cannonical(input_dir: &PathBuf) -> Vec<PathBuf> {
 
     let mut files = Vec::new();
 
+    // INFO: only considering .fasta.gz + fa.gz; others are already considered as cannonical!
     for entry in std::fs::read_dir(input_dir)
         .expect("Failed to read input directory")
         .flatten()
@@ -228,14 +226,7 @@ fn __build_non_cannonical(input_dir: &PathBuf) -> Vec<PathBuf> {
         .filter(|path| {
             path.extension()
                 .and_then(|ext| ext.to_str())
-                .map(|_| {
-                    path.ends_with(FASTQ_GZ)
-                        || path.ends_with(FQ_GZ)
-                        || path.ends_with(HQ_FASTA_GZ)
-                        || path.ends_with(HQ_FA_GZ)
-                        || path.ends_with(SGN_FASTA_GZ)
-                        || path.ends_with(SGN_FA_GZ)
-                })
+                .map(|_| path.ends_with(FASTA_GZ) || path.ends_with(FA_GZ))
                 .unwrap_or(false)
         })
     {
