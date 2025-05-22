@@ -2,8 +2,9 @@ use crate::{
     config::*,
     consts::*,
     executor::{job::Job, manager::__get_assets_dir},
+    isotools,
 };
-use std::path::PathBuf;
+use std::{fs::create_dir_all, path::PathBuf};
 
 /// Run polya mod [3 steps]
 ///
@@ -35,51 +36,88 @@ pub fn polya(
     step: &PipelineStep,
     config: &Config,
     input_dir: &PathBuf,
-    output_dir: &PathBuf,
+    step_output_dir: &PathBuf,
 ) -> Vec<Job> {
+    let binary = isotools!(ISO_POLYA);
     let mut jobs = Vec::new();
+
+    let parts = &step_output_dir.join(POLYA_PARTS);
+    let _ = create_dir_all(parts);
 
     let args = config.get_step_args(
         step,
         vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, TOGA, ASSEMBLY],
     );
-    let fields = config.get_step_custom_fields(step, vec![TOGA, ASSEMBLY]);
-    let assets = __get_assets_dir();
 
-    let filter = assets.join(FILTER_MINIMAP);
-    let correct = assets.join(CORRECT_MINIMAP);
+    // WARN: input_dir needs to be suffixed by /bam
+    for entry in std::fs::read_dir(input_dir.join(BAM))
+        .expect("Failed to read assets directory")
+        .flatten()
+        .filter(|entry| {
+            entry
+                .path()
+                .file_name()
+                .and_then(|ext| ext.to_str())
+                .map(|name| name.ends_with(BAM))
+                .unwrap_or(false)
+        })
+    {
+        let bam = entry.path();
 
-    for category in CLUSTERING_CATEGORIES {
-        if *category == "lq" {
-            continue;
-        }
+        let bind = bam.with_extension("");
+        let prefix = bind
+            .file_stem()
+            .unwrap_or_else(|| panic!("ERROR: could not build prefix for {:?}", bam));
 
-        // INFO: cannonical format -> all.clustered.aligned.{hq,lq,singletons}.sam
-        let filename = PathBuf::from(format!("{}.{}.{}", CU_ALN, category, SAM));
-        let alignment = input_dir.join(&filename);
-
-        if !alignment.exists() || std::fs::metadata(&alignment).unwrap().len() == 0 {
-            log::warn!(
-                "WARNING: {} does not exist or its empty!",
-                alignment.display()
-            );
-            continue;
-        }
-
-        let cmd = __build_cmd(
-            &filename, &alignment, &args, output_dir, &filter, &correct, &fields, step, config,
+        let cmd = format!(
+            "{} {} --bam {} {args} --prefix {} --outdir {}",
+            binary.display(),
+            SEGMENT,
+            bam.display(),
+            prefix.to_string_lossy(),
+            &parts.display()
         );
 
         jobs.push(Job::from(cmd));
     }
 
-    if jobs.is_empty() {
-        let jobs = __build_non_cannonical(
-            input_dir, &args, output_dir, &filter, &correct, &fields, step, config,
-        );
+    // let fields = config.get_step_custom_fields(step, vec![TOGA, ASSEMBLY]);
+    // let assets = __get_assets_dir();
 
-        return jobs;
-    }
+    // let filter = assets.join(FILTER_MINIMAP);
+    // let correct = assets.join(CORRECT_MINIMAP);
+
+    // for category in CLUSTERING_CATEGORIES {
+    //     if *category == "lq" {
+    //         continue;
+    //     }
+
+    //     // INFO: cannonical format -> all.clustered.aligned.{hq,lq,singletons}.sam
+    //     let filename = PathBuf::from(format!("{}.{}.{}", CU_ALN, category, SAM));
+    //     let alignment = input_dir.join(&filename);
+
+    //     if !alignment.exists() || std::fs::metadata(&alignment).unwrap().len() == 0 {
+    //         log::warn!(
+    //             "WARNING: {} does not exist or its empty!",
+    //             alignment.display()
+    //         );
+    //         continue;
+    //     }
+
+    //     let cmd = __build_cmd(
+    //         &filename, &alignment, &args, output_dir, &filter, &correct, &fields, step, config,
+    //     );
+
+    //     jobs.push(Job::from(cmd));
+    // }
+
+    // if jobs.is_empty() {
+    //     let jobs = __build_non_cannonical(
+    //         input_dir, &args, output_dir, &filter, &correct, &fields, step, config,
+    //     );
+
+    //     return jobs;
+    // }
 
     log::info!("INFO [STEP 6]: Pre-processing completed -> Running...");
 

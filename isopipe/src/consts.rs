@@ -1,4 +1,4 @@
-// formats
+// formats | extensions
 pub const BAM: &str = "bam";
 pub const SAM: &str = "sam";
 pub const FA: &str = "fa";
@@ -45,8 +45,12 @@ pub const POLYA_FIRST_PASS: &str = "polya_first_pass";
 pub const BEDTOOLS: &str = "bedtools";
 pub const BAMTOBED: &str = "bamtobed";
 pub const POLYA_APARENT: &str = "aparent";
+pub const ISO_POLYA: &str = "iso-polya";
+pub const ISO_SPLIT: &str = "iso-split";
+pub const SEGMENT: &str = "segment";
+pub const POLYA_PARTS: &str = "parts";
 
-// filenames
+// filenames | suffixes
 pub const NF_RUNNER: &str = "execute_joblist.nf";
 pub const FOFN: &str = "all.flnc.fofn";
 pub const CLUSTERED_BAM: &str = "all.clustered.bam";
@@ -80,6 +84,10 @@ pub const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 pub const RUN_ID_LEN: usize = 4;
 pub const ORFPY_ENV: &str = "/beegfs/projects/hillerlab/genome/src/ORFTree/.venv/bin/activate";
 pub const SGN_COLOR: &str = "51,153,255";
+pub const ISOTOOLS_RELEASE: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../isotools/isotools/target/release"
+);
 
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];

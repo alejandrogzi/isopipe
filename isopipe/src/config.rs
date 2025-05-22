@@ -1652,12 +1652,12 @@ macro_rules! isotools {
     () => {{
         use std::path::Path;
         std::fs::canonicalize(Path::new($crate::consts::ISOTOOLS_RELEASE))
-            .expect("Failed to canonicalize ISOTOOLS_RELEASE path")
+            .expect("ERROR: failed to canonicalize ISOTOOLS_RELEASE path!")
     }};
     ($subpath:expr) => {{
         use std::path::Path;
         let base = std::fs::canonicalize(Path::new($crate::consts::ISOTOOLS_RELEASE))
-            .expect("Failed to canonicalize ISOTOOLS_RELEASE path");
+            .expect("ERROR: failed to canonicalize ISOTOOLS_RELEASE path!");
         base.join($subpath)
     }};
 }
