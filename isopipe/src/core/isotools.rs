@@ -410,9 +410,8 @@ pub fn iso_split(
         step_output_dir.display()
     );
 
-    let chunk_val = crate::numerical!(config.get_step_custom_field(step, CHUNK) => usize)
+    let chunks = crate::numerical!(config.get_step_custom_field(step, CHUNK) => usize)
         .expect("Missing or invalid chunk size");
-    let chunks = format!("--chunks {}", chunk_val);
     let outdir = step_output_dir.join(CHUNKS);
 
     let entries = std::fs::read_dir(input_dir)
@@ -472,7 +471,7 @@ pub fn iso_split(
 /// ```
 fn process_fa(
     files: &[PathBuf],
-    chunks: &str,
+    chunks: &usize,
     outdir: &PathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if files.is_empty() {
@@ -487,11 +486,16 @@ fn process_fa(
             .expect("ERROR: Invalid UTF-8 in file name");
 
         let args = vec![
-            format!("--file {}", file.display()),
-            chunks.to_string(),
-            format!("--outdir {}", outdir.display()),
-            format!("--suffix {}", suffix),
-            "--threads 16".to_string(),
+            "--file".to_string(),
+            file.display().to_string(),
+            "--chunks".to_string(),
+            format!("{}", chunks),
+            "--outdir".to_string(),
+            outdir.display().to_string(),
+            "--suffix".to_string(),
+            suffix.to_string(),
+            "--threads".to_string(),
+            "16".to_string(),
         ];
 
         let _ = lib_iso_split(args);
@@ -514,7 +518,7 @@ fn process_fa(
 /// ```
 fn process_fq(
     files: &[PathBuf],
-    chunks: &str,
+    chunks: &usize,
     outdir: &PathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if files.is_empty() {
@@ -535,11 +539,16 @@ fn process_fq(
             .expect("ERROR: Invalid UTF-8 in file name");
 
         let args = vec![
-            format!("--file {}", file.display()),
-            chunks.to_string(),
-            format!("--outdir {}", outdir.display()),
-            format!("--suffix {}", suffix),
-            "--threads 1".to_string(),
+            "--file".to_string(),
+            file.display().to_string(),
+            "--chunks".to_string(),
+            format!("{}", chunks),
+            "--outdir".to_string(),
+            outdir.display().to_string(),
+            "--suffix".to_string(),
+            suffix.to_string(),
+            "--threads".to_string(),
+            "1".to_string(),
         ];
 
         let _ = lib_iso_split(args);
