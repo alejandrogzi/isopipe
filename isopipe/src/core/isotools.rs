@@ -451,8 +451,8 @@ pub fn iso_split(
         .into_iter()
         .partition(|path| path.ends_with(FASTQ_GZ) || path.ends_with(FQ_GZ));
 
-    process_fa(&fa, &chunks, &outdir).expect("ERROR: something failed while processing .fa files!");
-    process_fq(&fq, &chunks, &outdir).expect("ERROR: something failed while processing .fq files!");
+    process_fa(&fa, &chunks, &outdir);
+    process_fq(&fq, &chunks, &outdir);
 
     return outdir;
 }
@@ -469,40 +469,12 @@ pub fn iso_split(
 /// ```rust, no_run
 /// process_fa(&files, &chunks, &outdir);
 /// ```
-fn process_fa(
-    files: &[PathBuf],
-    chunks: &usize,
-    outdir: &PathBuf,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if files.is_empty() {
-        return Ok(());
-    }
-
-    for file in files {
-        let bind = file.with_extension("");
-        let suffix = bind
-            .file_stem()
-            .unwrap_or_else(|| panic!("ERROR: could not build prefix for {:?}", file))
-            .to_str()
-            .expect("ERROR: Invalid UTF-8 in file name");
-
-        let args = vec![
-            "--file".to_string(),
-            file.display().to_string(),
-            "--chunks".to_string(),
-            format!("{}", chunks),
-            "--outdir".to_string(),
-            outdir.display().to_string(),
-            "--suffix".to_string(),
-            suffix.to_string(),
-            "--threads".to_string(),
-            "16".to_string(),
-        ];
-
-        let _ = lib_iso_split(args);
-    }
-
-    Ok(())
+fn process_fa(files: &[PathBuf], chunks: &usize, outdir: &PathBuf) {
+    process_reads(&files, *chunks, outdir.to_path_buf(), 16, |files, func| {
+        for file in files {
+            func(file);
+        }
+    });
 }
 
 /// Process a collection of fastq files
@@ -517,22 +489,51 @@ fn process_fa(
 /// ```rust, no_run
 /// process_fq(&files, &chunks, &outdir);
 /// ```
-fn process_fq(
-    files: &[PathBuf],
-    chunks: &usize,
-    outdir: &PathBuf,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn process_fq(files: &[PathBuf], chunks: &usize, outdir: &PathBuf) {
+    process_reads(&files, *chunks, outdir.clone(), 1, |files, func| {
+        files.par_iter().for_each(|file| func(file));
+    });
+}
+
+/// Generic processor for a collection of input
+/// FASTA/FASTQ files using either sequential or
+/// parallel iteration.
+///
+/// # Arguments
+/// * `files` - A slice of `PathBuf`s representing the input files.
+/// * `chunks` - The number of chunks to split each file into.
+/// * `outdir` - The output directory where the chunks should be written.
+/// * `process` - A higher-order function that accepts the list of files and a closure to process each file.
+///   This allows you to choose between sequential (`iter()`) and parallel (`par_iter()`) processing.
+///
+/// # Examples
+///
+/// ## Sequential processing (e.g., FASTA)
+/// ```rust, no_run
+/// process_reads(&files, &chunks, &outdir, |files, func| {
+///     for file in files {
+///         func(file);
+///     }
+/// })?;
+/// ```
+///
+/// ## Parallel processing (e.g., FASTQ)
+/// ```rust, no_run
+/// use rayon::prelude::*;
+///
+/// process_reads(&files, &chunks, &outdir, |files, func| {
+///     files.par_iter().for_each(|file| func(file));
+/// })?;
+/// ```
+fn process_reads<F>(files: &[PathBuf], chunks: usize, outdir: PathBuf, threads: usize, process: F)
+where
+    F: Fn(&[PathBuf], Arc<dyn Fn(&PathBuf) + Sync + Send>) + Send + Sync,
+{
     if files.is_empty() {
-        return Ok(());
+        return;
     }
 
-    log::info!(
-        "INFO [ISO-SPLIT]: Splitting {} in chunks of size {}",
-        files.len(),
-        chunks
-    );
-
-    files.par_iter().for_each(|file| {
+    let split = Arc::new(move |file: &PathBuf| {
         let bind = file.with_extension("");
         let suffix = bind
             .file_stem()
@@ -541,20 +542,21 @@ fn process_fq(
             .expect("ERROR: Invalid UTF-8 in file name");
 
         let args = vec![
+            "split".to_string(),
             "--file".to_string(),
             file.display().to_string(),
             "--chunks".to_string(),
-            format!("{}", chunks),
+            chunks.to_string(),
             "--outdir".to_string(),
-            outdir.display().to_string(),
+            outdir.clone().display().to_string(),
             "--suffix".to_string(),
             suffix.to_string(),
             "--threads".to_string(),
-            "1".to_string(),
+            format!("{}", threads),
         ];
 
         let _ = lib_iso_split(args);
     });
 
-    Ok(())
+    process(files, split);
 }
