@@ -542,7 +542,6 @@ where
             .expect("ERROR: Invalid UTF-8 in file name");
 
         let args = vec![
-            "split".to_string(),
             "--file".to_string(),
             file.display().to_string(),
             "--chunks".to_string(),
