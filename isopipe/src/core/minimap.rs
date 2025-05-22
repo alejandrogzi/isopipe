@@ -51,20 +51,13 @@ pub fn minimap2(
     let _ = create_dir_all(&step_output_dir.join(BAM));
 
     for entry in std::fs::read_dir(input_dir)
-        .expect("Failed to read input directory")
+        .expect("ERROR: failed to read input directory")
         .flatten()
         .map(|entry| entry.path())
         .filter(|path| {
             path.file_name()
-                .and_then(|ext| ext.to_str())
-                .map(|_| {
-                    path.ends_with(FASTQ_GZ)
-                        || path.ends_with(FQ_GZ)
-                        || path.ends_with(HQ_FASTA_GZ)
-                        || path.ends_with(HQ_FA_GZ)
-                        || path.ends_with(SGN_FASTA_GZ)
-                        || path.ends_with(SGN_FA_GZ)
-                })
+                .and_then(|name| name.to_str())
+                .map(|filename| GZ_EXTENSIONS.iter().any(|ext| filename.ends_with(ext)))
                 .unwrap_or(false)
         })
     {
@@ -94,36 +87,11 @@ pub fn minimap2(
     }
 
     if jobs.is_empty() {
-        let reads = __build_non_cannonical(input_dir);
-
-        for file in reads {
-            let basename = file
-                .file_stem()
-                .unwrap_or_else(|| panic!("ERROR: Failed to get file stem from {}", file.display()))
-                .to_str()
-                .unwrap();
-            let sam = step_output_dir
-                .join(SAM)
-                .join(format!("aligned.{}.{}", basename, SAM));
-            let bam = step_output_dir
-                .join(BAM)
-                .join(format!("aligned.{}.{}", basename, BAM));
-            let compression = format!(
-                "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {}",
-                sam.display(),
-                bam.display()
-            );
-
-            let job = Job::new()
-                .task(*step)
-                .arg(&args)
-                .arg(&format!("-o {}", sam.display()))
-                .arg(&genome)
-                .arg(file.display())
-                .arg(compression);
-
-            jobs.push(job);
-        }
+        log::warn!(
+            "WARN: No cannonical jobs found to run for minimap2 in {} -> trying to grab any .fasta.gz!",
+            input_dir.display()
+        );
+        build_non_cannonical(input_dir, step_output_dir, step, args, genome, &mut jobs);
     }
 
     log::info!("INFO [STEP 5]: Pre-processing completed -> Running...");
@@ -210,37 +178,66 @@ fn get_genome(config: &Config, step: &PipelineStep, step_output_dir: &PathBuf) -
 ///
 /// assert_eq!(files.len(), 2);
 /// ```
-fn __build_non_cannonical(input_dir: &PathBuf) -> Vec<PathBuf> {
-    log::warn!(
-        "WARN: No cannonical jobs found to run for minimap2 in {} -> trying to grab any .fast[a,q].gz!",
-        input_dir.display()
-    );
-
-    let mut files = Vec::new();
-
+fn build_non_cannonical(
+    input_dir: &PathBuf,
+    step_output_dir: &PathBuf,
+    step: &PipelineStep,
+    args: String,
+    genome: String,
+    jobs: &mut Vec<Job>,
+) {
     // INFO: only considering .fasta.gz + fa.gz; others are already considered as cannonical!
     for entry in std::fs::read_dir(input_dir)
-        .expect("Failed to read input directory")
+        .expect("ERROR: failed to read input directory!")
         .flatten()
         .map(|entry| entry.path())
         .filter(|path| {
-            path.extension()
-                .and_then(|ext| ext.to_str())
-                .map(|_| path.ends_with(FASTA_GZ) || path.ends_with(FA_GZ))
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .map(|filename| filename.ends_with(FASTA_GZ) || filename.ends_with(FA_GZ))
                 .unwrap_or(false)
         })
     {
         log::info!("INFO: Found non-cannonical file {}", entry.display());
-        files.push(entry);
+
+        let bind = entry.with_extension("");
+        let basename = bind
+            .file_stem()
+            .unwrap_or_else(|| panic!("ERROR: Failed to get file stem from {}", entry.display()))
+            .to_string_lossy();
+
+        // INFO: each one to sam/ or bam/
+        let sam = step_output_dir
+            .join(SAM)
+            .join(format!("aligned.{}.{}", basename, SAM));
+        let bam = step_output_dir
+            .join(BAM)
+            .join(format!("aligned.{}.{}", basename, BAM));
+
+        let compression = format!(
+            "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {}",
+            sam.display(),
+            bam.display()
+        );
+
+        let job = Job::new()
+            .task(*step)
+            .arg(&args)
+            .arg(&format!("-o {}", sam.display()))
+            .arg(&genome)
+            .arg(entry.display())
+            .arg(compression);
+
+        jobs.push(job);
     }
 
-    if files.is_empty() {
+    if jobs.is_empty() {
         log::error!(
             "ERROR: No non-cannonical files found in {}!",
             input_dir.display()
         );
         std::process::exit(1);
+    } else {
+        log::info!("INFO: sending {} non-cannonical jobs...", jobs.len());
     }
-
-    return files;
 }
