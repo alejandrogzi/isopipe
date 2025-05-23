@@ -56,7 +56,8 @@ pub fn run_step(
         PipelineStep::Minimap => {
             log::info!("INFO [STEP 5]: Pre-processing for minimap started...");
 
-            let input_dir = isotools::iso_split(step, config, &input_dir, &step_output_dir);
+            let input_dir =
+                isotools::iso_split(step, config, &input_dir, &step_output_dir, executor);
             minimap::minimap2(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Polya => {

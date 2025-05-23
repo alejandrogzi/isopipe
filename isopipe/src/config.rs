@@ -1026,7 +1026,7 @@ impl PipelineStep {
             Self::Refine => vec!["isoseq".into()],
             Self::Cluster => vec!["isoseq".into()],
             Self::Minimap => vec!["minimap2".into(), "samtools".into()],
-            Self::Polya => vec!["python3".into(), "perl".into(), "bedtools".into()],
+            Self::Polya => vec!["rust".into()],
             Self::Fusion => vec!["rust".into()],
             Self::Orf => vec!["python3".into(), "diamond".into(), "nextflow".into()],
             Self::Polish => vec!["rust".into(), "python3".into()],

@@ -4,16 +4,14 @@ use iso_polya::{
     cli::AparentArgs,
     core::apa::{calculate_polya, create_joblist, write_bed, RAM_PER_SITE},
 };
-use iso_split::lib_iso_split;
 use isotools::lib;
 use packbed::par_reader;
-use rayon::prelude::*;
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::executor::manager::ParallelExecutor;
 use crate::{config::*, consts::*, executor::job::Job};
+use crate::{executor::manager::ParallelExecutor, isotools};
 
 /// Run isotools iso-fusion
 ///
@@ -403,6 +401,7 @@ pub fn iso_split(
     config: &Config,
     input_dir: &PathBuf,
     step_output_dir: &PathBuf,
+    executor: &mut ParallelExecutor,
 ) -> PathBuf {
     log::info!(
         "INFO [ISO-SPLIT]: Preparing to split files in {} and writing to {}/chunks",
@@ -414,6 +413,8 @@ pub fn iso_split(
         .expect("Missing or invalid chunk size");
     let outdir = step_output_dir.join(CHUNKS);
 
+    // WARN: if any of the entries is FASTQ_GZ we assume the whole run is non-cannonical
+    // WARN: would not make any sense combining both -> user should make two different runs and merge
     let entries = std::fs::read_dir(input_dir)
         .expect("ERROR: Failed to read input directory")
         .flatten()
@@ -447,101 +448,54 @@ pub fn iso_split(
         );
     }
 
-    let (fq, fa): (Vec<_>, Vec<_>) = entries
-        .into_iter()
-        .partition(|path| path.ends_with(FASTQ_GZ) || path.ends_with(FQ_GZ));
-
-    process_fa(&fa, &chunks, &outdir);
-    process_fq(&fq, &chunks, &outdir);
+    split_reads(entries, &chunks, &outdir, executor, config, step, input_dir);
 
     return outdir;
 }
 
-/// Process a collection of fasta files
-///
-/// # Arguments
-/// * `files` - Collection of fasta files
-/// * `chunks` - Number of chunks
-/// * `outdir` - Output directory
-///
-/// # Example
-///
-/// ```rust, no_run
-/// process_fa(&files, &chunks, &outdir);
-/// ```
-fn process_fa(files: &[PathBuf], chunks: &usize, outdir: &PathBuf) {
-    process_reads(&files, *chunks, outdir.to_path_buf(), 16, |files, func| {
-        for file in files {
-            func(file);
-        }
-    });
-}
-
-/// Process a collection of fastq files
-///
-/// # Arguments
-/// * `files` - Collection of fasta files
-/// * `chunks` - Number of chunks
-/// * `outdir` - Output directory
-///
-/// # Example
-///
-/// ```rust, no_run
-/// process_fq(&files, &chunks, &outdir);
-/// ```
-fn process_fq(files: &[PathBuf], chunks: &usize, outdir: &PathBuf) {
-    process_reads(&files, *chunks, outdir.clone(), 1, |files, func| {
-        files.par_iter().for_each(|file| func(file));
-    });
-}
-
 /// Generic processor for a collection of input
-/// FASTA/FASTQ files using either sequential or
-/// parallel iteration.
+/// FASTA/FASTQ files
 ///
 /// # Arguments
+///
 /// * `files` - A slice of `PathBuf`s representing the input files.
 /// * `chunks` - The number of chunks to split each file into.
 /// * `outdir` - The output directory where the chunks should be written.
-/// * `process` - A higher-order function that accepts the list of files and a closure to process each file.
-///   This allows you to choose between sequential (`iter()`) and parallel (`par_iter()`) processing.
-///
-/// # Examples
-///
-/// ## Sequential processing (e.g., FASTA)
-/// ```rust, no_run
-/// process_reads(&files, &chunks, &outdir, |files, func| {
-///     for file in files {
-///         func(file);
-///     }
-/// })?;
-/// ```
-///
-/// ## Parallel processing (e.g., FASTQ)
-/// ```rust, no_run
-/// use rayon::prelude::*;
-///
-/// process_reads(&files, &chunks, &outdir, |files, func| {
-///     files.par_iter().for_each(|file| func(file));
-/// })?;
-/// ```
-fn process_reads<F>(files: &[PathBuf], chunks: usize, outdir: PathBuf, threads: usize, process: F)
-where
-    F: Fn(&[PathBuf], Arc<dyn Fn(&PathBuf) + Sync + Send>) + Send + Sync,
-{
-    if files.is_empty() {
-        return;
-    }
+fn split_reads(
+    files: Vec<PathBuf>,
+    chunks: &usize,
+    outdir: &PathBuf,
+    executor: &mut ParallelExecutor,
+    config: &Config,
+    step: &PipelineStep,
+    input_dir: &PathBuf,
+) {
+    log::info!(
+        "INFO [ISO-SPLIT]: Running iso-split on {} files!",
+        files.len()
+    );
 
-    let split = Arc::new(move |file: &PathBuf| {
+    let mut jobs = Vec::new();
+    let mut global_threads = 0;
+
+    files.iter().for_each(|file| {
+        let threads = if file.ends_with(FASTQ_GZ) { 1 } else { 16 };
+
+        // WARN: if any of the entries is FASTQ_GZ we assume the whole run is non-cannonical
+        // WARN: would not make any sense combining both -> user should make two different runs and merge
+        // WARN: here enforcing the amount of threads dependent on extension!
+        if global_threads < 1 {
+            global_threads = threads
+        }
+
         let bind = file.with_extension("");
         let suffix = bind
             .file_stem()
-            .unwrap_or_else(|| panic!("ERROR: could not build prefix for {:?}", file))
-            .to_str()
-            .expect("ERROR: Invalid UTF-8 in file name");
+            .unwrap_or_else(|| panic!("ERROR: could not build prefix for {:?}", file));
 
-        let args = vec![
+        let cmd = format!(
+            "{} {} {} {} {} {} {} {} {} {} {}",
+            isotools!(ISO_SPLIT).display(),
             "--file".to_string(),
             file.display().to_string(),
             "--chunks".to_string(),
@@ -549,13 +503,20 @@ where
             "--outdir".to_string(),
             outdir.clone().display().to_string(),
             "--suffix".to_string(),
-            suffix.to_string(),
+            suffix.to_string_lossy(),
             "--threads".to_string(),
             format!("{}", threads),
-        ];
+        );
 
-        let _ = lib_iso_split(args);
+        jobs.push(Job::from(cmd));
     });
 
-    process(files, split);
+    executor.add_jobs(jobs).and_send(
+        config,
+        "iso-split",
+        input_dir.clone(),
+        global_threads,
+        8,
+        config.get_package_from_step(step),
+    );
 }

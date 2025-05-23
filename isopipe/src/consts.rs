@@ -76,6 +76,9 @@ pub const ORF_OUTPUT: &str = "coding.fusions.free.orf.bed";
 pub const APARENT_CHUNKS: &str = "TMP_CHUNKS";
 pub const APARENT_OUTPUT: &str = "iso_polya_aparent.bed";
 pub const SINGLETONS: &str = "SGN";
+pub const ALN_POLYA_ACCEPT: &str = "all.aligned.accept.bed";
+pub const ALN_POLYA_REJECT: &str = "all.aligned.reject.bed";
+pub const ALN_POLYA_SGN: &str = "all.aligned.singletons.bed";
 
 // manager consts
 pub const ASSETS: &str = "assets";
@@ -111,3 +114,4 @@ pub const GZ_EXTENSIONS: &[&str] = &[
     ".singletons.fasta.gz",
     ".singletons.fa.gz",
 ];
+pub const ALN_POLYA_FILES: &[&str] = &[ALN_POLYA_SGN, ALN_POLYA_ACCEPT, ALN_POLYA_REJECT];
