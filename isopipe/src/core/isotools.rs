@@ -45,20 +45,15 @@ pub fn iso_fusion(
         .filter(|s| !s.is_empty())
         .collect::<Vec<String>>();
 
-    for category in CLUSTERING_CATEGORIES {
-        if *category == "lq" {
+    for file in ALN_POLYA_FILES {
+        if *file == ALN_POLYA_REJECT {
             continue;
         }
 
         let mut args = Vec::new();
 
-        let query = format!(
-            "{}/{}.{}.{}",
-            input_dir.display(),
-            CU_ALN,
-            category,
-            CORR_MINIMAP_GOOD_BED
-        );
+        // WARN: will need to change for the corrected minimap step suffix!
+        let query = format!("{}/{}", input_dir.display(), file);
 
         if !std::path::Path::new(&query).exists() {
             log::warn!("WARN: {} does not exist, skipping...", query);
@@ -67,7 +62,7 @@ pub fn iso_fusion(
 
         args.extend(vec![String::from("--query"), query]);
 
-        let prefix = step_output_dir.join(format!("{}", category));
+        let prefix = step_output_dir.join(format!("{}", file.trim_end_matches(".bed")));
         args.extend(vec![String::from("--prefix"), prefix.display().to_string()]);
 
         std::fs::create_dir_all(&prefix).expect(&format!(
@@ -77,7 +72,7 @@ pub fn iso_fusion(
 
         args.extend(parts.clone());
 
-        if *category == "singletons" {
+        if *file == ALN_POLYA_SGN {
             args.extend(vec![
                 String::from("--suffix"),
                 SINGLETONS.to_string(),
@@ -162,7 +157,7 @@ fn __build_non_cannonical_fusions(
                 .path()
                 .file_name()
                 .and_then(|ext| ext.to_str())
-                .map(|name| name.ends_with(CORR_MINIMAP_GOOD_BED))
+                .map(|name| name.ends_with(BED))
                 .unwrap_or(false)
         })
         .enumerate()

@@ -161,8 +161,13 @@ pub fn merge(input_dir: &PathBuf) {
 /// let paths = vec!["file1","file2"];
 /// maybe_cat(paths, target);
 /// ```
-fn maybe_cat(paths: &Vec<PathBuf>, target: impl AsRef<std::path::Path>) {
+fn maybe_cat(paths: &Vec<PathBuf>, target: impl AsRef<std::path::Path> + std::fmt::Debug) {
     if !paths.is_empty() {
+        log::info!(
+            "INFO [MERGE]: Merging {} files into {:?}...",
+            paths.len(),
+            target
+        );
         cat!(paths, target);
     }
 }
