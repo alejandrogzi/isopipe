@@ -1,10 +1,11 @@
 use log::{error, info};
+use memmap2;
 use serde::Deserialize;
 
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::Read;
-use std::io::{self, BufReader, BufWriter, Write};
+use std::io::{self, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus};
 use std::thread;
@@ -1616,18 +1617,55 @@ pub fn shell(cmd: String, log_msg: &str, tool: &str) {
 }
 
 /// Concatenate all files in `files` into `output`.
-pub fn cat<P: AsRef<Path>>(files: &Vec<PathBuf>, output: P) -> io::Result<()> {
+pub fn cat<P: AsRef<Path>>(files: &[PathBuf], output: P) -> io::Result<()> {
     let outfile = File::create(output)?;
     let mut writer = BufWriter::new(outfile);
 
-    for file in files {
-        let infile = File::open(file)?;
-        let mut reader = BufReader::new(infile);
-        io::copy(&mut reader, &mut writer)?;
+    for path in files {
+        let file = File::open(path)?;
+        let mmap = unsafe { memmap2::Mmap::map(&file)? };
+
+        if mmap.is_empty() {
+            continue;
+        }
+
+        writer.write_all(&mmap)?;
+
+        // INFO: append newline if last byte isn't '\n'
+        if *mmap.last().unwrap() != b'\n' {
+            writer.write_all(b"\n")?;
+        }
     }
 
     writer.flush()?;
     Ok(())
+}
+
+/// Deletes a file or directory at the given path, if it exists.
+#[inline(always)]
+pub fn remove_any<P: AsRef<Path>>(path: P) {
+    let path = path.as_ref();
+    if !path.exists() {
+        return;
+    }
+
+    match std::fs::metadata(path) {
+        Ok(meta) if meta.is_dir() => {
+            let _ = std::fs::remove_dir_all(path);
+        }
+        Ok(_) => {
+            let _ = std::fs::remove_file(path);
+        }
+        Err(_) => {} // ignore unreadable metadata
+    }
+}
+
+/// Macro wrapper for remove_any to match ergonomic usage
+#[macro_export]
+macro_rules! rm {
+    ($path:expr) => {{
+        remove_any($path);
+    }};
 }
 
 /// Macro to convert a String with a

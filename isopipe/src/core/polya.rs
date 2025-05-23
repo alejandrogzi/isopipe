@@ -1,4 +1,4 @@
-use crate::{cat, config::*, consts::*, executor::job::Job, isotools};
+use crate::{cat, config::*, consts::*, executor::job::Job, isotools, rm};
 use std::{fs::create_dir_all, path::PathBuf};
 
 /// Run polya mod [3 steps]
@@ -39,6 +39,8 @@ pub fn polya(
     let parts = &step_output_dir.join(POLYA_PARTS);
     let _ = create_dir_all(parts);
 
+    rm!(input_dir.join(CHUNKS));
+
     let args = config.get_step_args(
         step,
         vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, TOGA, ASSEMBLY],
@@ -72,12 +74,14 @@ pub fn polya(
         }
 
         let cmd = format!(
-            "{} {} --bam {} {args} --prefix {} --outdir {}",
+            "{} {} --bam {} {args} --prefix {} --outdir {} && rm {} {}.bai",
             binary.display(),
             SEGMENT,
             bam.display(),
             prefix.to_string_lossy(),
-            &parts.display()
+            &parts.display(),
+            bam.display(),
+            bam.display()
         );
 
         jobs.push(Job::from(cmd));
@@ -145,6 +149,8 @@ pub fn merge(input_dir: &PathBuf) {
     {
         maybe_cat(group, file);
     }
+
+    rm!(input_dir.join(POLYA_PARTS));
 }
 
 /// Wrapper fn around cat!() to merge paths into a target
