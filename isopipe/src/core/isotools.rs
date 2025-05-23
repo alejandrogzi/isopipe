@@ -474,7 +474,16 @@ fn split_reads(
     let mut global_threads = 0;
 
     files.iter().for_each(|file| {
-        let threads = if file.ends_with(FASTQ_GZ) { 1 } else { 16 };
+        let threads = if file
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(|name| name.ends_with(FASTQ_GZ))
+            .unwrap_or(false)
+        {
+            1
+        } else {
+            16
+        };
 
         // WARN: if any of the entries is FASTQ_GZ we assume the whole run is non-cannonical
         // WARN: would not make any sense combining both -> user should make two different runs and merge
