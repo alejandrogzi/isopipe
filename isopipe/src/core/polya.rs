@@ -133,7 +133,7 @@ pub fn merge(input_dir: &PathBuf) {
     let (singletons, accepts, rejections): (Vec<_>, Vec<_>, Vec<_>) = files.into_iter().fold(
         (Vec::new(), Vec::new(), Vec::new()),
         |(mut s, mut g, mut b), path| {
-            match &path {
+            match &path.file_name().unwrap().to_string_lossy() {
                 p if p.ends_with(BED_SGN_ACCEPT) => s.push(path),
                 p if p.ends_with(BED_ACCEPT) => g.push(path),
                 p if p.ends_with(BED_REJECT) => b.push(path),
@@ -147,6 +147,11 @@ pub fn merge(input_dir: &PathBuf) {
         .iter()
         .zip([singletons, accepts, rejections].iter())
     {
+        log::info!(
+            "INFO [MERGE]: Trying to cat {} files to {}",
+            group.len(),
+            file
+        );
         maybe_cat(group, file);
     }
 
