@@ -1,4 +1,4 @@
-use crate::{cat, config::*, consts::*, executor::job::Job, isotools, rm};
+use crate::{config::*, consts::*, executor::job::Job, isotools, rm};
 use std::{fs::create_dir_all, path::PathBuf};
 
 /// Run polya mod [3 steps]
@@ -147,6 +147,11 @@ pub fn merge(input_dir: &PathBuf) {
         .iter()
         .zip([singletons, accepts, rejections].iter())
     {
+        // INFO: does not make any sense cat rejected files
+        if *file == ALN_POLYA_REJECT {
+            continue;
+        }
+
         log::info!(
             "INFO [MERGE]: Trying to cat {} files to {}",
             group.len(),
@@ -156,29 +161,4 @@ pub fn merge(input_dir: &PathBuf) {
     }
 
     rm!(input_dir.join(POLYA_PARTS));
-}
-
-/// Wrapper fn around cat!() to merge paths into a target
-///
-/// # Arguments
-///
-/// * `paths` - Collection of paths to write
-/// * `target` - Path to output
-///
-/// # Example
-///
-/// ```rust, no_run
-/// let target = PathBuf::from("/path/to/output");
-/// let paths = vec!["file1","file2"];
-/// maybe_cat(paths, target);
-/// ```
-fn maybe_cat(paths: &Vec<PathBuf>, target: impl AsRef<std::path::Path> + std::fmt::Debug) {
-    if !paths.is_empty() {
-        log::info!(
-            "INFO [MERGE]: Merging {} files into {:?}...",
-            paths.len(),
-            target
-        );
-        cat!(paths, target);
-    }
 }
