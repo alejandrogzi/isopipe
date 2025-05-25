@@ -53,6 +53,7 @@ pub const ISO_POLYA: &str = "iso-polya";
 pub const ISO_SPLIT: &str = "iso-split";
 pub const SEGMENT: &str = "segment";
 pub const POLYA_PARTS: &str = "parts";
+pub const SEQS: &str = "seqs";
 
 // filenames | suffixes
 pub const NF_RUNNER: &str = "execute_joblist.nf";

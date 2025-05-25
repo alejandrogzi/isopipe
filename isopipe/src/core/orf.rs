@@ -4,11 +4,13 @@ use crate::{
     executor::{job::Job, manager::__get_assets_dir},
 };
 
-use config::{write_objs, OverlapType, Sequence, Strand, SCALE};
-use dashmap::DashSet;
+use config::{OverlapType, Sequence, Strand, SCALE};
 use iso_polya::utils::get_sequences;
 use packbed::{record::Bed6, unpack};
 use rayon::prelude::*;
+
+use std::fs::File;
+use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
 /// Run ORF prediction on fusion files
@@ -113,48 +115,62 @@ pub fn extract(
         reads.display()
     );
 
-    let fasta = step_output_dir.join(format!("{}.{}", filename, TRANSCRIPTS_FA));
-    let accumulator: DashSet<String> = DashSet::new();
+    let tmp_dir = step_output_dir.join(SEQS);
+    std::fs::create_dir_all(&tmp_dir).unwrap_or_else(|e| {
+        panic!(
+            "ERROR: could not creat temporary directory in {} -> {e}",
+            &tmp_dir.display()
+        )
+    });
 
-    let bed = unpack::<Bed6, _>(vec![reads.clone()], OverlapType::Exon, false).expect(&format!(
-        "ERROR: could not unpack reads -> {}",
-        reads.display(),
-    ));
-    let (genome, _) = get_sequences(twobit.clone()).expect(&format!(
-        "ERROR: could not get sequences from .2bit -> {}",
-        twobit.display(),
-    ));
+    let fasta = step_output_dir.join(format!("{}.{}", filename, TRANSCRIPTS_FA));
+
+    let bed = unpack::<Bed6, _>(vec![reads.clone()], OverlapType::Exon, false)
+        .unwrap_or_else(|e| panic!("ERROR: could not unpack reads -> {}. {e}", reads.display()));
+    let (genome, _) = get_sequences(twobit.clone()).unwrap_or_else(|| {
+        panic!(
+            "ERROR: could not get sequences from .2bit -> {}",
+            twobit.display()
+        )
+    });
 
     bed.par_iter().for_each(|(chr, transcripts)| {
+        let chr_fa = tmp_dir.join(format!("tmp_chunk_{}.fa", chr));
+        let mut writer =
+            BufWriter::new(File::create(&chr_fa).expect("Could not create temp FASTA file"));
+
         for tx in transcripts {
             let seq = match tx.strand {
                 Strand::Forward => Sequence::new(
                     genome
                         .get(chr)
-                        .expect("ERROR: Could not chromosome from genome!")
+                        .unwrap_or_else(|| panic!("ERROR: Could not chromosome from genome!"))
                         [tx.coord.0 as usize..tx.coord.1 as usize]
                         .as_ref(),
                 ),
                 Strand::Reverse => Sequence::new(
                     genome
                         .get(chr)
-                        .expect("ERROR: Could not read donor context!")
+                        .unwrap_or_else(|| panic!("ERROR: Could not chromosome from genome!"))
                         [(SCALE - tx.coord.1) as usize..(SCALE - tx.coord.0) as usize]
                         .as_ref(),
                 )
                 .reverse_complement(),
             };
 
-            accumulator.insert(format!(">{}\n{}", tx.id, seq.to_string()));
+            writeln!(writer, ">{}\n{}", tx.id, seq)
+                .unwrap_or_else(|e| panic!("ERROR: could not write sequence {} -> {e}", seq));
         }
     });
 
-    write_objs(
-        &accumulator,
-        fasta
-            .to_str()
-            .expect("ERROR: could not convert path to str!"),
-    );
+    let seqs = std::fs::read_dir(&tmp_dir)
+        .unwrap_or_else(|e| panic!("ERROR: failed to read {:?} directory -> {e}", &tmp_dir))
+        .flatten()
+        .map(|entry| entry.path())
+        .collect::<Vec<_>>();
+
+    crate::cat!(&seqs, &fasta);
+    crate::rm!(tmp_dir);
 
     return fasta;
 }
