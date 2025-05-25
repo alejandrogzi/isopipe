@@ -75,6 +75,7 @@ impl Job {
             PipelineStep::Minimap => "minimap2",
             PipelineStep::Fusion => "isotools iso-fusion",
             PipelineStep::Orf => "",
+            PipelineStep::Nmd => "isotools iso-nmd",
             PipelineStep::Polish => "isotools run",
         };
 
