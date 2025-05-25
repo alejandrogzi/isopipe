@@ -152,7 +152,7 @@ pub fn merge(input_dir: &PathBuf) {
             group.len(),
             file
         );
-        maybe_cat(group, file);
+        maybe_cat(group, input_dir.join(file));
     }
 
     rm!(input_dir.join(POLYA_PARTS));
