@@ -6,7 +6,7 @@ use crate::{
 
 use config::{OverlapType, Sequence, Strand, SCALE};
 use iso_polya::utils::get_sequences;
-use packbed::{record::Bed6, unpack};
+use packbed::{unpack, GenePred};
 use rayon::prelude::*;
 
 use std::fs::File;
@@ -52,7 +52,7 @@ pub fn orf(
 
     let twobit = PathBuf::from(config.get_step_custom_fields(step, vec![GENOME])[0].clone());
 
-    // INFO: looping through all fusion outputs
+    // INFO: looping through all fusion outputs? -> free + fakes + review [other color + tag]; fusions
     for file in FUSION_FILES {
         let bed = input_dir.join(file);
 
@@ -61,28 +61,35 @@ pub fn orf(
             continue;
         }
 
-        let filename = file.replace(".bed", "");
-        let fasta = extract(&bed, &twobit, step_output_dir, filename);
+        let basename = file.replace(".bed", "");
+        let suffix = basename
+            .split(".")
+            .last()
+            .unwrap_or_else(|| panic!("ERROR: could not get suffix from file -> {}", file));
+        let paths = extract(&bed, &twobit, step_output_dir, ORF_CHUNKS, suffix);
 
-        let cmd = format!(
-            "source {} && {} --fasta {} --alignments {} --output_dir {} --suffix {} {}",
-            ORFPY_ENV,
-            executable.display(),
-            fasta.display(),
-            bed.display(),
-            step_output_dir.display(),
-            file.replace(".bed", ".orf"),
-            args
-        );
+        for (chunked_fa, chunked_bed) in paths {
+            let cmd = format!(
+                "source {} && {} --fasta {} --alignments {} --output_dir {} --suffix {} {}",
+                ORFPY_ENV,
+                executable.display(),
+                chunked_fa.display(),
+                chunked_bed.display(),
+                step_output_dir.display(),
+                chunked_bed.with_extension("orf").display(),
+                args
+            );
 
-        jobs.push(Job::from(cmd));
+            jobs.push(Job::from(cmd));
+        }
     }
 
     return jobs;
 }
 
 /// Extract sequences for fusion-free predicted
-/// transcripts from a .2bit file
+/// transcripts from a .2bit file into a .fa file
+/// chunked
 ///
 /// # Arguments
 ///
@@ -108,14 +115,15 @@ pub fn extract(
     reads: &PathBuf,
     twobit: &PathBuf,
     step_output_dir: &PathBuf,
-    filename: String,
-) -> PathBuf {
+    chunk_size: usize,
+    suffix: &str,
+) -> Vec<(PathBuf, PathBuf)> {
     log::info!(
         "INFO: Extracting mapped read sequences [{}] from .2bit file...",
         reads.display()
     );
 
-    let tmp_dir = step_output_dir.join(SEQS);
+    let tmp_dir = step_output_dir.join(format!("{}_{}", SEQS, suffix));
     std::fs::create_dir_all(&tmp_dir).unwrap_or_else(|e| {
         panic!(
             "ERROR: could not creat temporary directory in {} -> {e}",
@@ -123,9 +131,7 @@ pub fn extract(
         )
     });
 
-    let fasta = step_output_dir.join(format!("{}.{}", filename, TRANSCRIPTS_FA));
-
-    let bed = unpack::<Bed6, _>(vec![reads.clone()], OverlapType::Exon, false)
+    let bed = unpack::<GenePred, _>(vec![reads.clone()], OverlapType::Exon, false)
         .unwrap_or_else(|e| panic!("ERROR: could not unpack reads -> {}. {e}", reads.display()));
     let (genome, _) = get_sequences(twobit.clone()).unwrap_or_else(|| {
         panic!(
@@ -134,43 +140,50 @@ pub fn extract(
         )
     });
 
-    bed.par_iter().for_each(|(chr, transcripts)| {
-        let chr_fa = tmp_dir.join(format!("tmp_chunk_{}.fa", chr));
-        let mut writer =
-            BufWriter::new(File::create(&chr_fa).expect("Could not create temp FASTA file"));
+    // INFO: define the chunk size for parallel processing
+    // INFO: if chunk size > bed records -> symlink
+    let paths: Vec<(PathBuf, PathBuf)> = bed
+        .into_par_iter()
+        .flat_map(|(chrom, records)| {
+            records
+                .chunks(chunk_size)
+                .enumerate()
+                .map(move |(chunk_id, chunk)| (format!("{}:{}", chrom, chunk_id), chunk.to_vec()))
+                .collect::<Vec<_>>()
+        })
+        .map(|(chunk_id, transcripts)| {
+            let chunk_path = tmp_dir.join(&chunk_id);
+            std::fs::create_dir_all(&chunk_path).unwrap();
 
-        for tx in transcripts {
-            let seq = match tx.strand {
-                Strand::Forward => Sequence::new(
-                    genome
-                        .get(chr)
-                        .unwrap_or_else(|| panic!("ERROR: Could not chromosome from genome!"))
-                        [tx.coord.0 as usize..tx.coord.1 as usize]
-                        .as_ref(),
-                ),
-                Strand::Reverse => Sequence::new(
-                    genome
-                        .get(chr)
-                        .unwrap_or_else(|| panic!("ERROR: Could not chromosome from genome!"))
-                        [(SCALE - tx.coord.1) as usize..(SCALE - tx.coord.0) as usize]
-                        .as_ref(),
-                )
-                .reverse_complement(),
-            };
+            let chunk_fa = chunk_path.join(format!("tmp_chunk_{}.fa", &chunk_id));
+            let chunk_bed = chunk_path.join(format!("tmp_chunk_{}.bed", &chunk_id));
 
-            writeln!(writer, ">{}\n{}", tx.id, seq)
-                .unwrap_or_else(|e| panic!("ERROR: could not write sequence {} -> {e}", seq));
-        }
-    });
+            let mut writer_fa = BufWriter::new(File::create(&chunk_fa).unwrap());
+            let mut writer_bed = BufWriter::new(File::create(&chunk_bed).unwrap());
 
-    let seqs = std::fs::read_dir(&tmp_dir)
-        .unwrap_or_else(|e| panic!("ERROR: failed to read {:?} directory -> {e}", &tmp_dir))
-        .flatten()
-        .map(|entry| entry.path())
-        .collect::<Vec<_>>();
+            let chr = chunk_id.split(':').next().unwrap_or(&chunk_id);
+            for tx in transcripts {
+                let seq = match tx.strand {
+                    Strand::Forward => Sequence::new(
+                        genome.get(chr).expect("ERROR: missing chromosome")
+                            [tx.start as usize..tx.end as usize]
+                            .as_ref(),
+                    ),
+                    Strand::Reverse => Sequence::new(
+                        genome.get(chr).expect("ERROR: missing chromosome")
+                            [(SCALE - tx.end) as usize..(SCALE - tx.start) as usize]
+                            .as_ref(),
+                    )
+                    .reverse_complement(),
+                };
 
-    crate::cat!(&seqs, &fasta);
-    crate::rm!(tmp_dir);
+                writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap();
+                writeln!(writer_bed, "{}", tx.line).unwrap();
+            }
 
-    return fasta;
+            (chunk_fa, chunk_bed)
+        })
+        .collect();
+
+    return paths;
 }

@@ -76,7 +76,7 @@ pub const ORF_EXE: &str = "orf_tree_pipe.py";
 pub const ORF_OUTPUT: &str = "coding.fusions.free.orf.bed";
 pub const APARENT_CHUNKS: &str = "TMP_CHUNKS";
 pub const APARENT_OUTPUT: &str = "iso_polya_aparent.bed";
-pub const SINGLETONS: &str = "SGN";
+pub const SINGLETONS: &str = "SG"; // singleton tag
 pub const ALN_POLYA_ACCEPT: &str = "all.aligned.accept.bed";
 pub const ALN_POLYA_REJECT: &str = "all.aligned.reject.bed";
 pub const ALN_POLYA_SGN: &str = "all.aligned.singletons.bed";
@@ -96,6 +96,7 @@ pub const ISOTOOLS_RELEASE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../isotools/isotools/target/release"
 );
+pub const ORF_CHUNKS: usize = 50000; // 50k transcripts
 
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];
