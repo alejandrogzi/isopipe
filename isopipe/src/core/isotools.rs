@@ -111,14 +111,18 @@ fn __aggregate_fusions(step_output_dir: &PathBuf) -> Vec<Job> {
     FUSION_TYPES
         .iter()
         .map(|ty| {
-            let pattern = format!("{0}/*/*.{1}.bed", step_output_dir.display(), ty);
-
-            let output = if *ty == "fusions" {
-                format!("{0}/fusions.{1}.bed", step_output_dir.display(), ty)
+            let (output, pattern) = if *ty == "fusions" {
+                (
+                    format!("{0}/{1}.bed", step_output_dir.display(), ty),
+                    format!("{0}/*/{1}.bed", step_output_dir.display(), ty),
+                )
             } else {
                 // WARN: will aggregate free/fakes/review into fusions.free.bed!
                 // INFO: fakes have :FK tag, review has :RW tag
-                format!("{0}/fusions.free.bed", step_output_dir.display())
+                (
+                    format!("{0}/fusions.free.bed", step_output_dir.display()),
+                    format!("{0}/*/*.{1}.bed", step_output_dir.display(), ty),
+                )
             };
 
             Job::from(format!("cat {} >> {}", pattern, output))

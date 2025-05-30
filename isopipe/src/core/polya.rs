@@ -112,7 +112,7 @@ pub fn merge(input_dir: &PathBuf) {
     );
 
     let files = std::fs::read_dir(input_dir.join(POLYA_PARTS))
-        .expect("Failed to read assets directory")
+        .expect("ERROR: Failed to polya parts directory")
         .flatten()
         .map(|entry| entry.path())
         .filter(|entry| {
