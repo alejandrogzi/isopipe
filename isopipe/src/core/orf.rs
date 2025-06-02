@@ -47,10 +47,20 @@ pub fn orf(
 
     let args = config.get_step_args(
         step,
-        vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, GENOME, NUM_THREADS],
+        vec![
+            INPUT_DIR,
+            OUTPUT_DIR,
+            MEMORY,
+            TIME,
+            GENOME,
+            NUM_THREADS,
+            CHUNK,
+        ],
     );
 
     let twobit = PathBuf::from(config.get_step_custom_fields(step, vec![GENOME])[0].clone());
+    let chunk_size = crate::numerical!(config.get_step_custom_field(step, CHUNK) => usize)
+        .unwrap_or_else(|e| panic!("ERROR: could not convert chunk to num -> {e}!"));
 
     // INFO: looping through all fusion outputs? -> free + fakes + review [other color + tag]; fusions
     for file in FUSION_FILES {
@@ -66,7 +76,7 @@ pub fn orf(
             .split(".")
             .last()
             .unwrap_or_else(|| panic!("ERROR: could not get suffix from file -> {}", file));
-        let paths = extract(&bed, &twobit, step_output_dir, ORF_CHUNKS, suffix);
+        let paths = extract(&bed, &twobit, step_output_dir, chunk_size, suffix);
 
         for (chunked_fa, chunked_bed) in paths {
             let cmd = format!(
