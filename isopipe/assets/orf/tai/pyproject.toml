@@ -1,0 +1,45 @@
+[project]
+name = "translationai"
+version = "1.0"
+description = "TranslationAI: An advanced deep learning framework for precise identification of translation start and end sites within mature mRNA sequences"
+readme = "README.md"
+authors = [
+    { name = "Xiaojuan Fan", email = "xiaojuanfan05@gmail.com" },
+    { name = "Alejandro Gonzales-Irribarren", email = "alejandrxgzi@gmail.com" },
+]
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.8,<3.10"
+
+dependencies = [
+    "keras >=2.0.5",
+    "numpy >=1.14.0",
+    "pandas >=0.24.2",
+    "h5py",
+    "scikit-learn >=0.20.0",
+]
+
+optional-dependencies = { cpu = [
+    "tensorflow >=1.2.0",
+], gpu = [
+    "tensorflow-gpu >=1.2.0",
+] }
+
+[project.scripts]
+translationai = "translationai.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["translationai"]
+
+[tool.setuptools]
+package-data = { "translationai" = [
+    "models/translationAI_2000_l1.h5",
+    "models/translationAI_2000_l2.h5",
+    "models/translationAI_2000_l3.h5",
+    "models/translationAI_2000_l4.h5",
+    "models/translationAI_2000_l5.h5",
+] }
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
