@@ -64,14 +64,6 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf, alignments: &
 
     let accumulator = DashSet::new();
 
-    let records = bed_to_struct_collection::<GenePred>(
-        bed_reader(alignments)
-            .unwrap_or_else(|e| panic!("ERROR: failed to read BED file -> {e}"))
-            .into(),
-        config::BedColumn::Name,
-    )
-    .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}"));
-
     // INFO: inflate results!
     predictions
         .par_lines()
@@ -82,10 +74,25 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf, alignments: &
             // INFO: >chr16:91343975-91360783 +) R9834_chr16__FC37#TC0#PA0#PR0#IY887) 0, 0,)
             let name = parts[0].split("(").collect::<Vec<&str>>();
 
+            let coords = name[0]
+                .strip_prefix('>')
+                .and_then(|s| s.split(':').nth(1))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: failed to parse transcript start from header: {}",
+                        parts[0]
+                    );
+                })
+                .split('-')
+                .collect::<Vec<&str>>()
+                .iter()
+                .map(|s| s.parse::<u64>().unwrap())
+                .collect::<Vec<u64>>();
+
             let strand = name[1].trim_end_matches(')').to_string();
             let cannonical_id = name[2].trim_end_matches(')').to_string(); // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887
             let id = cannonical_id.split("__").collect::<Vec<&str>>()[0]; // INFO: R9834_chr16
-            let chr = id.split('_').collect::<Vec<&str>>()[1]; // INFO: chr16
+            // let chr = id.split('_').collect::<Vec<&str>>()[1]; // INFO: chr16
 
             // INFO: unpacking index reference -> queries
             // INFO: for each query all orfs in the current record!
@@ -122,32 +129,17 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf, alignments: &
                 // INFO: retrieving the reference gene prediction record
                 // INFO: since indexing groups exact similar records
                 // INFO: we safely assume ref gp record could be applied to all queries
-                let ref_gp = records
-                    .get_mut(chr)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "ERROR: chromosome from {} not found in sequences -> {}!",
-                            cannonical_id, chr
-                        );
-                    })
-                    .get_mut(&cannonical_id)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "ERROR: id not found in BED, this is a bug -> {}!",
-                            cannonical_id
-                        );
-                    })
-                    .map_absolute_cds(start, stop)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "ERROR: could not get absolute CDS coordinates for {} using {}-{}!",
-                            cannonical_id, start, stop
-                        );
-                    });
                 let ref_id = format!("{}.p{}", id, orf_idx + 1);
                 let ref_line = format!(
                     "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                    ref_id, start, stop, start_score, stop_score, strand, ref_gp.0, ref_gp.1
+                    ref_id,
+                    start,
+                    stop,
+                    start_score,
+                    stop_score,
+                    strand,
+                    coords[0] + start,
+                    coords[1] + stop
                 );
 
                 accumulator.insert(ref_line);
@@ -174,8 +166,8 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf, alignments: &
                             start_score,
                             stop_score,
                             strand,
-                            ref_gp.0,
-                            ref_gp.1
+                            coords[0] + start,
+                            coords[1] + stop
                         );
 
                         accumulator.insert(query_line);
