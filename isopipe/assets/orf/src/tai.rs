@@ -1,8 +1,11 @@
-use config::{BedColumn, BedColumnValue};
+use config::{BedColumn, BedColumnValue, bed_to_struct_collection};
 use dashmap::{DashMap, DashSet};
 use hashbrown::HashMap;
 use log::{error, warn};
-use packbed::{reader as bed_reader, record::Bed6};
+use packbed::{
+    reader as bed_reader,
+    record::{Bed6, GenePred},
+};
 use rayon::prelude::*;
 use smol_str::ToSmolStr;
 
@@ -45,10 +48,10 @@ pub fn run_tai(args: TaiArgs) {
         .unwrap_or_else(|e| panic!("ERROR: failed to execute orfipy command -> {e}"));
 
     let idx = read_tai_index(&index);
-    unroll_tai(idx, fasta);
+    unroll_tai(idx, fasta, &args.common.alignments);
 }
 
-fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf) {
+fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf, alignments: &PathBuf) {
     // INFO: predictions in fmt -> id st,sp,st_score,sp_score ...
     let predictions = bed_reader(fasta.with_extension(PREDICTIONS))
         .unwrap_or_else(|e| panic!("ERROR: failed to read predictions file -> {e}"));
@@ -61,6 +64,14 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf) {
 
     let accumulator = DashSet::new();
 
+    let records = bed_to_struct_collection::<GenePred>(
+        bed_reader(alignments)
+            .unwrap_or_else(|e| panic!("ERROR: failed to read BED file -> {e}"))
+            .into(),
+        config::BedColumn::Name,
+    )
+    .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}"));
+
     // INFO: inflate results!
     predictions
         .par_lines()
@@ -72,7 +83,9 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf) {
             let name = parts[0].split("(").collect::<Vec<&str>>();
 
             let strand = name[1].trim_end_matches(')').to_string();
-            let id = name[2].split("__").collect::<Vec<&str>>()[0];
+            let cannonical_id = name[2].trim_end_matches(')').to_string(); // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887
+            let id = cannonical_id.split("__").collect::<Vec<&str>>()[0]; // INFO: R9834_chr16
+            let chr = id.split('_').collect::<Vec<&str>>()[1]; // INFO: chr16
 
             // INFO: unpacking index reference -> queries
             // INFO: for each query all orfs in the current record!
@@ -86,10 +99,10 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf) {
                     panic!("ERROR: ORF does not have enough parts to parse: {}", orf);
                 }
 
-                let start = orf_parts[0].parse::<u32>().unwrap_or_else(|_| {
+                let start = orf_parts[0].parse::<u64>().unwrap_or_else(|_| {
                     panic!("ERROR: failed to parse start position from ORF: {}", orf);
                 });
-                let stop = orf_parts[1].parse::<u32>().unwrap_or_else(|_| {
+                let stop = orf_parts[1].parse::<u64>().unwrap_or_else(|_| {
                     panic!("ERROR: failed to parse stop position from ORF: {}", orf);
                 });
                 let start_score = orf_parts[2].parse::<f32>().unwrap_or_else(|_| {
@@ -106,10 +119,35 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf) {
                     );
                 }
 
+                // INFO: retrieving the reference gene prediction record
+                // INFO: since indexing groups exact similar records
+                // INFO: we safely assume ref gp record could be applied to all queries
+                let ref_gp = records
+                    .get_mut(chr)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "ERROR: chromosome from {} not found in sequences -> {}!",
+                            cannonical_id, chr
+                        );
+                    })
+                    .get_mut(&cannonical_id)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "ERROR: id not found in BED, this is a bug -> {}!",
+                            cannonical_id
+                        );
+                    })
+                    .map_absolute_cds(start, stop)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "ERROR: could not get absolute CDS coordinates for {} using {}-{}!",
+                            cannonical_id, start, stop
+                        );
+                    });
                 let ref_id = format!("{}.p{}", id, orf_idx + 1);
                 let ref_line = format!(
-                    "{}\t{}\t{}\t{}\t{}\t{}",
-                    ref_id, start, stop, start_score, stop_score, strand
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    ref_id, start, stop, start_score, stop_score, strand, ref_gp.0, ref_gp.1
                 );
 
                 accumulator.insert(ref_line);
@@ -129,8 +167,15 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf) {
                     for query in queries {
                         let query_id = format!("{}.p{}", query, orf_idx + 1);
                         let query_line = format!(
-                            "{}\t{}\t{}\t{}\t{}\t{}",
-                            query_id, start, stop, start_score, stop_score, strand
+                            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                            query_id,
+                            start,
+                            stop,
+                            start_score,
+                            stop_score,
+                            strand,
+                            ref_gp.0,
+                            ref_gp.1
                         );
 
                         accumulator.insert(query_line);
