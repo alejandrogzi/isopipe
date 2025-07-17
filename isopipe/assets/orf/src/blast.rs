@@ -1,7 +1,8 @@
+use config::bed_to_custom_struct_collection;
 use dashmap::DashMap;
 use hashbrown::HashMap;
 use log::{error, warn};
-use packbed::reader as bed_reader;
+use packbed::{reader as bed_reader, record::GenePred};
 use rayon::prelude::*;
 
 use std::fs::File;
@@ -28,7 +29,7 @@ pub fn run_blast(args: BlastArgs) {
         SeqType::AminoAcid,
     );
 
-    diamond(&dedup, &args.database, &index);
+    diamond(&dedup, &args.database, &index, &args.common.alignments);
 }
 
 fn orfipy(fasta: &PathBuf, outdir: &PathBuf, executable: &PathBuf) -> PathBuf {
@@ -55,7 +56,7 @@ fn orfipy(fasta: &PathBuf, outdir: &PathBuf, executable: &PathBuf) -> PathBuf {
     dir.join(ORF_PEP)
 }
 
-fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf) {
+fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf, alignments: &PathBuf) {
     let dmd = dedup.with_extension("diamond");
     let cmd = format!(
         "diamond blastp --query {} --db {} --out {} --outfmt 6 --threads 8 --sensitive -e 1e-10",
@@ -82,8 +83,16 @@ fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf) {
 
     let accumulator = DashMap::new();
 
+    let records = bed_to_custom_struct_collection::<GenePred>(
+        bed_reader(alignments)
+            .unwrap_or_else(|e| panic!("ERROR: failed to read BED file -> {e}"))
+            .into(),
+        config::BedColumn::Name,
+        config::BedOperation::SplitName("__", 0), // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887
+    )
+    .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}"));
+
     // INFO: filtering repeated blast hits by percent_identity -> preserving best
-    // WARN: using a transition collection to retain the best blast record based on % aligned
     predictions
         .par_lines()
         .filter(|line| !line.starts_with('#'))
@@ -97,7 +106,7 @@ fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf) {
 
             let data = BlastRecord::from_parts(&parts);
 
-            // INFO: using a transition collection to retain the best blast record based on % aligned
+            // WARN: using a transition collection to retain the best blast record based on % aligned
             accumulator
                 .entry(id)
                 .and_modify(|existing_data: &mut BlastRecord| {
@@ -123,13 +132,33 @@ fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf) {
         for query in queries.into_iter() {
             let (read_id, chr, orf, subseq_orf, seq_len, start, end) = query;
 
-            let query_id = format!(
-                "R{}_chr{}.p{}@{}",
-                read_id,
-                from_utf8(&chr).unwrap(),
-                orf,
-                subseq_orf
-            );
+            let chr = from_utf8(&chr).unwrap();
+            let cannonical_id = format!("R{}_chr{}", read_id, chr);
+            let query_id = format!("{}.p{}@{}", cannonical_id, orf, subseq_orf);
+
+            // INFO: retrieving the reference gene prediction record
+            let coords = records
+                .get_mut(chr)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: chromosome from {} not found in sequences -> {}!",
+                        cannonical_id, chr
+                    );
+                })
+                .get_mut(&cannonical_id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: id not found in BED, this is a bug -> {}!",
+                        cannonical_id
+                    );
+                })
+                .map_absolute_cds(*start as u64, *end as u64)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: could not get absolute CDS coordinates for {} using {}-{}!",
+                        cannonical_id, start, end
+                    );
+                });
 
             // INFO: updating blast data with % algined + id
             data.set_percent_aligned((data.blast_alignment_len as f32 / *seq_len as f32) * 100.0);
@@ -138,7 +167,7 @@ fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf) {
             writer
                 .write_all(
                     format!(
-                        "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\n",
+                        "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\t{}\t{}\n",
                         data.blast_id,
                         data.blast_idx_id,
                         data.blast_pid,
@@ -147,7 +176,9 @@ fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf) {
                         data.blast_alignment_len,
                         data.percent_aligned,
                         start,
-                        end
+                        end,
+                        coords.0,
+                        coords.1
                     )
                     .as_bytes(),
                 )
@@ -234,7 +265,7 @@ impl BlastRecord {
 
 /// Deduplicates a .fa by matching records with repeated sequences,
 /// allowing subsequence nesting by any aminoacid ['M' default]
-fn deduplicate(
+pub fn deduplicate(
     fasta: &PathBuf,
     do_nesting: bool,
     min_len: usize,
@@ -293,7 +324,7 @@ fn deduplicate(
 }
 
 #[derive(Debug, Clone, Copy)]
-enum SeqType {
+pub enum SeqType {
     Nucleotide, // search codons like ATG
     AminoAcid,  // search residues like M
 }
@@ -383,11 +414,7 @@ fn make_index(
         // INFO: id_len id seq_len n_headers read_chr [read_ids]
         // INFO: where each [read_id] follows the format: id orf subseq_orf start end
         for (seq, records) in mapper {
-            let id_bytes = count.to_be_bytes();
-            let id_len = id_bytes.len() as u8;
-
-            index_writer.write_all(&[id_len]).unwrap();
-            index_writer.write_all(&id_bytes).unwrap();
+            index_writer.write_all(&count.to_be_bytes()).unwrap();
 
             let seq_len = seq.len() as u32;
             index_writer.write_all(&seq_len.to_be_bytes()).unwrap();
@@ -484,15 +511,26 @@ fn get_read_encoding(header: &[u8]) -> Option<(u16, Vec<u8>, u16, u16, u32, u32)
             panic!("ERROR: failed to parse ORF from header: {}", header);
         });
 
+    // INFO: ORF.247 [44369-44519](+) type:complete length:147 frame:3 start:CTG stop:TAA
     let coords = parts
-        .get(2)
-        .and_then(|s| s.strip_prefix('['))
-        .and_then(|s| s.strip_suffix(']'))
+        .get(4)
+        .unwrap_or_else(|| {
+            panic!("ERROR: failed to parse coordinates from header: {}", header);
+        })
+        .split(' ')
+        .nth(1)
+        .and_then(|s| s.strip_prefix('[')) // 44369-44519](+)
+        .unwrap_or_else(|| {
+            panic!("ERROR: failed to parse coordinates from header: {}", header);
+        })
+        .split(']')
+        .next()
         .unwrap_or_else(|| {
             panic!("ERROR: failed to parse coordinates from header: {}", header);
         })
         .split('-')
         .collect::<Vec<&str>>();
+
     let start = coords
         .get(0)
         .and_then(|s| s.parse::<u32>().ok())
@@ -515,7 +553,6 @@ fn get_read_encoding(header: &[u8]) -> Option<(u16, Vec<u8>, u16, u16, u32, u32)
     return Some((id, chr, orf, subseq, start, end));
 }
 
-// [id_len: u8]
 // [id_bytes: [u8; id_len]]
 // [seq_len: u32]
 // [n_ids: u32]
@@ -534,48 +571,45 @@ pub fn read_index(index: &PathBuf) -> HashMap<u32, Vec<(u16, Vec<u8>, u16, u16, 
     let mut result = HashMap::new();
 
     loop {
-        let mut id_len_buf = [0u8; 1];
-        if reader.read_exact(&mut id_len_buf).is_err() {
-            break; // EOF reached cleanly
+        let mut group_id_buf = [0u8; 4];
+        if reader.read_exact(&mut group_id_buf).is_err() {
+            break;
         }
-        let id_len = id_len_buf[0] as usize;
+        let group_id = u32::from_be_bytes(group_id_buf);
 
-        let mut id_buf = vec![0u8; id_len];
-        reader.read_exact(&mut id_buf).unwrap();
-        let seq_id = u32::from_be_bytes({
-            let mut fixed = [0u8; 4];
-            fixed[(4 - id_len)..].copy_from_slice(&id_buf);
-            fixed
-        });
-
+        // 3. Read sequence length
         let mut seq_len_buf = [0u8; 4];
         reader.read_exact(&mut seq_len_buf).unwrap();
         let seq_len = u32::from_be_bytes(seq_len_buf) as usize;
 
-        let mut n_buf = [0u8; 4];
-        reader.read_exact(&mut n_buf).unwrap();
-        let n_headers = u32::from_be_bytes(n_buf);
+        // 4. Read n_headers
+        let mut n_headers_buf = [0u8; 4];
+        reader.read_exact(&mut n_headers_buf).unwrap();
+        let n_headers = u32::from_be_bytes(n_headers_buf);
 
+        // 5. Read chromosome
         let mut chr_len_buf = [0u8; 1];
         reader.read_exact(&mut chr_len_buf).unwrap();
         let chr_len = chr_len_buf[0] as usize;
 
         let mut chr_buf = vec![0u8; chr_len];
         reader.read_exact(&mut chr_buf).unwrap();
+        let chr = chr_buf;
 
+        // 6. Read n_headers records
         let mut records = Vec::with_capacity(n_headers as usize);
         for _ in 0..n_headers {
-            let mut id_buf = [0u8; 2];
-            reader.read_exact(&mut id_buf).unwrap();
-            let read_id = u16::from_be_bytes(id_buf);
+            let mut read_id_buf = [0u8; 2];
+            reader.read_exact(&mut read_id_buf).unwrap();
+            let read_id = u16::from_be_bytes(read_id_buf);
 
             let mut orf_buf = [0u8; 2];
             reader.read_exact(&mut orf_buf).unwrap();
             let orf = u16::from_be_bytes(orf_buf);
 
-            let mut sub_buf = [0u8; 2];
-            reader.read_exact(&mut sub_buf).unwrap();
-            let subseq_orf = u16::from_be_bytes(sub_buf);
+            let mut subseq_buf = [0u8; 2];
+            reader.read_exact(&mut subseq_buf).unwrap();
+            let subseq = u16::from_be_bytes(subseq_buf);
 
             let mut start_buf = [0u8; 4];
             reader.read_exact(&mut start_buf).unwrap();
@@ -585,18 +619,11 @@ pub fn read_index(index: &PathBuf) -> HashMap<u32, Vec<(u16, Vec<u8>, u16, u16, 
             reader.read_exact(&mut end_buf).unwrap();
             let end = u32::from_be_bytes(end_buf);
 
-            records.push((
-                read_id,
-                chr_buf.clone(),
-                orf,
-                subseq_orf,
-                seq_len,
-                start,
-                end,
-            ));
+            // You now have: group_id, seq_len, n_headers, chr, read_id, orf, subseq, start, end
+            records.push((read_id, chr.clone(), orf, subseq, seq_len, start, end));
         }
 
-        result.insert(seq_id, records);
+        result.insert(group_id, records);
     }
 
     result
