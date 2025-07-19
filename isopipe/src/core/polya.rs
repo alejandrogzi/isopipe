@@ -47,7 +47,7 @@ pub fn polya(
     );
 
     // WARN: input_dir needs to be suffixed by /bam
-    for entry in std::fs::read_dir(input_dir.join(BAM))
+    for (batch, entry) in std::fs::read_dir(input_dir.join(BAM))
         .expect("Failed to read assets directory")
         .flatten()
         .filter(|entry| {
@@ -58,6 +58,7 @@ pub fn polya(
                 .map(|name| name.ends_with(BAM))
                 .unwrap_or(false)
         })
+        .enumerate()
     {
         let bam = entry.path();
 
@@ -74,12 +75,13 @@ pub fn polya(
         }
 
         let cmd = format!(
-            "{} {} --bam {} {args} --prefix {} --outdir {} && rm {} {}.bai",
+            "{} {} --bam {} {args} --prefix {} --outdir {} --batch {} && rm {} {}.bai",
             binary.display(),
             SEGMENT,
             bam.display(),
             prefix.to_string_lossy(),
             &parts.display(),
+            batch,
             bam.display(),
             bam.display()
         );
