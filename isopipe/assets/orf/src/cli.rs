@@ -88,12 +88,14 @@ pub struct BlastArgs {
 
     #[arg(
         long = "orf-min-len",
+        short = 'l',
         default_value = "50",
         help = "Minimum ORF length"
     )]
     pub orf_min_len: usize,
 
     #[arg(
+        short = 'p',
         long = "orf-min-percent",
         default_value = "0.25",
         help = "Minimum ORF percent"

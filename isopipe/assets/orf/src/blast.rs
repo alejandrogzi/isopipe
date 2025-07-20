@@ -71,7 +71,7 @@ fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf, alignments: &Pa
         .status()
         .unwrap_or_else(|e| panic!("ERROR: failed to execute diamond command -> {e}"));
 
-    let index = read_index(&index);
+    let mut index = read_index(&index);
     let predictions = bed_reader(&dmd)
         .unwrap_or_else(|e| panic!("ERROR: failed to read blast predictions file -> {e}"));
 
@@ -132,13 +132,13 @@ fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf, alignments: &Pa
         for query in queries.into_iter() {
             let (read_id, chr, orf, subseq_orf, seq_len, start, end) = query;
 
-            let chr = from_utf8(&chr).unwrap();
-            let cannonical_id = format!("R{}_chr{}", read_id, chr);
+            let chr = format!("chr{}", from_utf8(&chr).unwrap());
+            let cannonical_id = format!("R{}_{}", read_id, chr);
             let query_id = format!("{}.p{}@{}", cannonical_id, orf, subseq_orf);
 
             // INFO: retrieving the reference gene prediction record
-            let coords = records
-                .get_mut(chr)
+            let (orf_start, orf_end) = records
+                .get_mut(&chr)
                 .unwrap_or_else(|| {
                     panic!(
                         "ERROR: chromosome from {} not found in sequences -> {}!",
@@ -153,12 +153,18 @@ fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf, alignments: &Pa
                     );
                 })
                 .map_absolute_cds(*start as u64, *end as u64)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "ERROR: could not get absolute CDS coordinates for {} using {}-{}!",
-                        cannonical_id, start, end
-                    );
-                });
+                .unwrap_or_default();
+
+            // WARN: skipping unreliable ORFs for the current alignment
+            // INFO: none of these will match any other prediction because
+            // INFO: the fall off any exonic boundary
+            if orf_start == 0 && orf_end == 0 {
+                warn!(
+                    "WARN: ORF start and end are zero for ID: {}, skipping!",
+                    query_id
+                );
+                continue;
+            }
 
             // INFO: updating blast data with % algined + id
             data.set_percent_aligned((data.blast_alignment_len as f32 / *seq_len as f32) * 100.0);
@@ -177,13 +183,70 @@ fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf, alignments: &Pa
                         data.percent_aligned,
                         start,
                         end,
-                        coords.0,
-                        coords.1
+                        orf_start,
+                        orf_end
                     )
                     .as_bytes(),
                 )
                 .unwrap_or_else(|e| {
                     panic!("ERROR: failed to write blast record to file -> {e}");
+                });
+        }
+
+        // INFO: removing the ID from the index to remain with unused IDs
+        index.remove(id);
+    });
+
+    // INFO: repeating the process for unused ids
+    // INFO: add tag DM to the ID -> identify unused ids
+    index.iter().for_each(|(id, queries)| {
+        for query in queries {
+            let (read_id, chr, orf, subseq_orf, _, start, end) = query;
+
+            let chr = format!("chr{}", from_utf8(&chr).unwrap());
+            let cannonical_id = format!("R{}_{}", read_id, chr);
+            let query_id = format!("{}.p{}@{}#DM", cannonical_id, orf, subseq_orf);
+
+            // INFO: retrieving the reference gene prediction record
+            let (orf_start, orf_end) = records
+                .get_mut(&chr)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: chromosome from {} not found in sequences -> {}!",
+                        cannonical_id, chr
+                    );
+                })
+                .get_mut(&cannonical_id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: id not found in BED, this is a bug -> {}!",
+                        cannonical_id
+                    );
+                })
+                .map_absolute_cds(*start as u64, *end as u64)
+                .unwrap_or_default();
+
+            // WARN: skipping unreliable ORFs for the current alignment
+            // INFO: none of these will match any other prediction because
+            // INFO: the fall off any exonic boundary
+            if orf_start == 0 && orf_end == 0 {
+                warn!(
+                    "WARN: ORF start and end are zero for ID: {}, skipping!",
+                    query_id
+                );
+                continue;
+            }
+
+            writer
+                .write_all(
+                    format!(
+                        "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\t{}\t{}\n",
+                        query_id, id, 0.0, 1.0, 0, 0, 0.0, start, end, orf_start, orf_end
+                    )
+                    .as_bytes(),
+                )
+                .unwrap_or_else(|e| {
+                    panic!("ERROR: failed to write unused blast record to file -> {e}");
                 });
         }
     });
