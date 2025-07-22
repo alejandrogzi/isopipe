@@ -25,6 +25,8 @@ config = { path = "../../../isotools/isotools/config" }
 hashbrown = { version = "0.15", features = ["rayon"] }
 rayon = "1.10.0"
 num_cpus = "1.16.0"
+regex = "1.11.1"
+flate2 = "1.0.20"
 
 
 [profile.release]

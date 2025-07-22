@@ -36,6 +36,9 @@ pub enum Commands {
 
     /// Merge diamond and translationAi results
     Merge(MergeArgs),
+
+    /// Read and merge TOGA results
+    Toga(TogaArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -144,12 +147,39 @@ pub struct MergeArgs {
     pub tai: PathBuf,
 
     #[arg(
+        short = 't',
+        long = "toga",
+        required = true,
+        help = "Path to TOGA merged file"
+    )]
+    pub toga: PathBuf,
+
+    #[arg(
         short = 'a',
         long = "alignments",
         required = true,
         help = "Path to .bed file"
     )]
     pub alignments: PathBuf,
+
+    #[arg(
+        short = 'o',
+        long = "outdir",
+        default_value = ".",
+        help = "Output directory"
+    )]
+    pub outdir: PathBuf,
+}
+
+#[derive(Debug, Parser)]
+pub struct TogaArgs {
+    #[arg(
+        short = 'p',
+        long = "path",
+        required = true,
+        help = "Path to TOGA results directory"
+    )]
+    pub path: PathBuf,
 
     #[arg(
         short = 'o',
