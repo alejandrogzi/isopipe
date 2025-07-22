@@ -19,6 +19,48 @@ const SELENOCYSTEINE_CODONS: &str = "meta/selenocysteine_codons.tsv";
 const TOGA: &str = "toga";
 const TOGA_MERGED: &str = "toga_merged.tsv";
 
+/// Runs the TOGA module of the ORF pipeline.
+///
+/// This function coordinates the processing of various input files to generate
+/// a single, merged output file containing complete TOGA predictions. The pipeline
+/// involves three main steps:
+/// 1. Reads transcript metadata and selenocysteine codon information from gzipped files.
+/// 2. Reads query annotation data from a BED file.
+/// 3. Merges the metadata and annotation data by matching records based on their ID.
+/// 4. Writes the complete `TogaPrediction` objects to a final merged output file.
+///
+/// # Arguments
+///
+/// * `args` - A `TogaArgs` struct containing paths to all necessary input files
+///            and the desired output directory.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - The output directory cannot be created.
+/// - Any of the input files (metadata, selenocysteine codons, or query annotations)
+///   cannot be read or parsed correctly.
+/// - A record ID from the query annotation BED file does not have a corresponding
+///   entry in the metadata map, indicating a data mismatch.
+/// - The final output file cannot be created or written to.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use std::path::PathBuf;
+///
+/// struct TogaArgs {
+///     path: PathBuf,
+///     outdir: PathBuf,
+/// }
+///
+/// let args = TogaArgs {
+///     path: PathBuf::from("/path/to/toga_data"),
+///     outdir: PathBuf::from("/path/to/output"),
+/// };
+///
+/// run_toga(args);
+/// ```
 pub fn run_toga(args: TogaArgs) {
     let dir = args.outdir.join(TOGA);
     std::fs::create_dir_all(&dir)
