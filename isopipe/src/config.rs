@@ -1667,6 +1667,43 @@ pub fn remove_any<P: AsRef<Path>>(path: P) {
     }
 }
 
+/// Removes all files from a directory except those with the given extension.
+///
+/// # Arguments
+/// * `dir` - Directory to clean.
+/// * `extension` - Extension to keep (e.g., `"txt"` or `".txt"`).
+///                 If `extension` starts with `.`, it will be stripped.
+pub fn depure<P: AsRef<Path>>(dir: P, extension: &str) {
+    let dir = dir.as_ref();
+    if !dir.exists() {
+        return;
+    }
+
+    if !dir.is_dir() {
+        panic!("ERROR: path is not a directory -> {dir:?}");
+    }
+
+    let extension = extension.trim_start_matches('.');
+    for entry in std::fs::read_dir(dir)
+        .unwrap_or_else(|e| panic!("ERROR: failed to read directory {dir:?} -> {e}"))
+        .filter_map(Result::ok)
+    {
+        let path = entry.path();
+        let should_delete = path.is_file()
+            && path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext != extension)
+                .unwrap_or(true); // Delete if no extension or wrong extension.
+
+        if should_delete {
+            if let Err(e) = std::fs::remove_file(&path) {
+                log::warn!("WARN: failed to remove file {:?} -> {e}", path);
+            }
+        }
+    }
+}
+
 /// Wrapper fn around cat!() to merge paths into a target
 ///
 /// # Arguments
@@ -1776,5 +1813,23 @@ macro_rules! isotools {
 macro_rules! cat {
     ($files:expr, $out:expr) => {
         let _ = cat($files, $out);
+    };
+}
+
+/// Macro to remove all files in a directory
+/// except those with a specific extension.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// let dir = "/path/to/dir";
+/// let ext = "txt";
+///
+/// depure!(dir, ext);
+/// ```
+#[macro_export]
+macro_rules! depure {
+    ($dir:expr, $ext:expr) => {
+        depure($dir, $ext);
     };
 }
