@@ -113,54 +113,69 @@ pub fn merge(input_dir: &PathBuf) {
         &input_dir.join(POLYA_PARTS).display()
     );
 
-    let files = std::fs::read_dir(input_dir.join(POLYA_PARTS))
-        .expect("ERROR: Failed to polya parts directory")
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|entry| {
-            entry
-                .file_name()
-                .and_then(|ext| ext.to_str())
-                .map(|name| name.ends_with(BED))
-                .unwrap_or(false)
-        })
-        .collect::<Vec<_>>();
+    if input_dir.join(POLYA_PARTS).exists() {
+        log::info!("INFO [MERGE]: chunked directory found, merging parts...");
 
-    if files.is_empty() {
-        log::error!("ERROR: could not find any .bed in {}!", input_dir.display());
-        std::process::exit(1);
-    }
+        let files = std::fs::read_dir(input_dir.join(POLYA_PARTS))
+            .unwrap_or_else(|_| {
+                log::error!("ERROR: could not read directory {}", input_dir.display());
+                std::process::exit(1);
+            })
+            .flatten()
+            .map(|entry| entry.path())
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .and_then(|ext| ext.to_str())
+                    .map(|name| name.ends_with(BED))
+                    .unwrap_or(false)
+            })
+            .collect::<Vec<_>>();
 
-    // INFO: partition paths into their respective categories
-    let (singletons, accepts, rejections): (Vec<_>, Vec<_>, Vec<_>) = files.into_iter().fold(
-        (Vec::new(), Vec::new(), Vec::new()),
-        |(mut s, mut g, mut b), path| {
-            match &path.file_name().unwrap().to_string_lossy() {
-                p if p.ends_with(BED_SGN_ACCEPT) => s.push(path),
-                p if p.ends_with(BED_ACCEPT) => g.push(path),
-                p if p.ends_with(BED_REJECT) => b.push(path),
-                _ => {}
-            }
-            (s, g, b)
-        },
-    );
-
-    for (file, group) in ALN_POLYA_FILES
-        .iter()
-        .zip([singletons, accepts, rejections].iter())
-    {
-        // INFO: does not make any sense cat rejected files
-        if *file == ALN_POLYA_REJECT {
-            continue;
+        if files.is_empty() {
+            log::error!(
+                "ERROR: could not find any .bed under parts/ in {}!",
+                input_dir.display()
+            );
+            std::process::exit(1);
         }
 
-        log::info!(
-            "INFO [MERGE]: Trying to cat {} files to {}",
-            group.len(),
-            file
+        // INFO: partition paths into their respective categories
+        let (singletons, accepts, rejections): (Vec<_>, Vec<_>, Vec<_>) = files.into_iter().fold(
+            (Vec::new(), Vec::new(), Vec::new()),
+            |(mut s, mut g, mut b), path| {
+                match &path.file_name().unwrap().to_string_lossy() {
+                    p if p.ends_with(BED_SGN_ACCEPT) => s.push(path),
+                    p if p.ends_with(BED_ACCEPT) => g.push(path),
+                    p if p.ends_with(BED_REJECT) => b.push(path),
+                    _ => {}
+                }
+                (s, g, b)
+            },
         );
-        maybe_cat(group, input_dir.join(file));
-    }
 
-    rm!(input_dir.join(POLYA_PARTS));
+        for (file, group) in ALN_POLYA_FILES
+            .iter()
+            .zip([singletons, accepts, rejections].iter())
+        {
+            // INFO: does not make any sense cat rejected files
+            if *file == ALN_POLYA_REJECT {
+                continue;
+            }
+
+            log::info!(
+                "INFO [MERGE]: Trying to cat {} files to {}",
+                group.len(),
+                file
+            );
+            maybe_cat(group, input_dir.join(file));
+        }
+
+        rm!(input_dir.join(POLYA_PARTS));
+    } else {
+        log::warn!(
+            "WARN [MERGE]: parts/ directory not found under {}, skipping merge step and grabbing .bed files directly from input directory!",
+            input_dir.display()
+        );
+    }
 }
