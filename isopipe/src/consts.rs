@@ -36,6 +36,9 @@ pub const ASSEMBLY: &str = "assembly";
 pub const NUM_THREADS: &str = "num-threads";
 pub const NUM_CORES: &str = "num-cores";
 pub const PER_ID: &str = "perID";
+pub const DATABASE: &str = "database";
+pub const ORF_MIN_LEN: &str = "orf_min_len";
+pub const ORFIPY: &str = "orfipy";
 
 // project-wide pub const | names
 pub const ISOPIPE: &str = "isopipe";
@@ -97,6 +100,7 @@ pub const ISOTOOLS_RELEASE: &str = concat!(
     "/../isotools/isotools/target/release"
 );
 pub const ORF_CHUNKS: usize = 50000; // 50k transcripts
+pub const ORF_RELEASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/orf/target/release");
 
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];
