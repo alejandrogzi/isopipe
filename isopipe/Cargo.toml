@@ -13,25 +13,41 @@ categories = ["command-line-utilities", "science"]
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
-log = "0.4.14"
-simple_logger = "4.0.0"
-rayon = "1.8.0"
-num_cpus = "1.16.0"
+simple_logger = { version = "4.0.0", optional = true }
+memmap2 = { version = "0.9.5", optional = true }
+serde = { version = "1.0.210", features = ["derive", "rc"], optional = true }
+log = { version = "0.4.14", optional = true }
+rayon = { version = "1.8.0", optional = true }
+num_cpus = { version = "1.16.0" }
 hashbrown = { version = "0.14", features = ["rayon"] }
-time = "0.3.36"
-serde = { version = "1.0.210", features = ["derive", "rc"] }
-toml = { version = "0.8.20", features = ["parse"] }
-memmap2 = "0.9.5"
-chrono = "0.4.40"
-twobit = "0.2.1"
-dashmap = { version = "6", features = ["rayon"] }
-iso-fusion = { path = "../isotools/isotools/iso-fusion" }
-iso-pack = { path = "../isotools/isotools/iso-pack" }
-config = { path = "../isotools/isotools/config" }
-iso-polya = { path = "../isotools/isotools/iso-polya" }
-isotools = { path = "../isotools/isotools/entry" }
-iso-split = { path = "../isotools/isotools/iso-split" }
+time = { version = "0.3.36", optional = true }
+toml = { version = "0.8.20", features = ["parse"], default-features = false }
+chrono = { version = "0.4.40", optional = true }
+twobit = { version = "0.2.1", optional = true }
+dashmap = { version = "6", features = ["rayon"], optional = true }
+iso-fusion = { path = "../isotools/isotools/iso-fusion", optional = true }
+iso-pack = { path = "../isotools/isotools/iso-pack", optional = true }
+config = { path = "../isotools/isotools/config", optional = true }
+iso-polya = { path = "../isotools/isotools/iso-polya", optional = true }
+isotools = { path = "../isotools/isotools/entry", optional = true }
+iso-split = { path = "../isotools/isotools/iso-split", optional = true }
 
 [profile.release]
 lto = true
 opt-level = 3
+
+[features]
+default = ["cfg", "core"]
+cfg = ["dep:memmap2", "dep:serde", "dep:log", "dep:chrono"]
+core = [
+    "dep:rayon",
+    "dep:dashmap",
+    "dep:iso-fusion",
+    "dep:iso-pack",
+    "dep:config",
+    "dep:iso-polya",
+    "dep:isotools",
+    "dep:iso-split",
+    "dep:twobit",
+    "dep:simple_logger",
+]
