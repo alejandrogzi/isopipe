@@ -178,14 +178,13 @@ def main():
     start_time = time.time()
 
     args = get_options()
-    if None in [args.I, args.t, args.O]:
+    if None in [args.input, args.threshold, args.output]:
         logging.error(
-            "Usage: spliceai [-h] [-I [input]] [-O [output]] -R reference -A annotation "
-            "[-D [distance]] [-M [mask]]"
+            "Usage: translationai [-h] [-I [input]] [-O [output]]"
         )
         exit()
-    fnIn = args.I
-    threshold_str = args.t
+    fnIn = args.input
+    threshold_str = args.threshold
 
     TIS_score_cutoff = float(threshold_str.split(",")[0])
     TTS_score_cutoff = float(threshold_str.split(",")[1])
@@ -214,11 +213,12 @@ def main():
         0,
         fnIn1,
         fnIn2,
+        args.verbose
     )
 
     # INFO: isopipe change to easily manage output
     # fnOut = fnIn[0:-3] + '_predORFs_' + '_'.join(threshold_str.split(',')) + '.txt' # .fa file with predicted ORFs
-    fnOut = args.O
+    fnOut = args.output
 
     fpr1 = open(fnIn1, "r")
     line = 1

@@ -1,8 +1,21 @@
-use config::bed_to_struct_collection;
+//! Core module for detecting open reading frames in a query set of reads
+//! Alejandro Gonzales-Irribarren, 2025
+//!
+//! This module contains the main functions for finding open reading frames (ORFs)
+//! in a set of aligned reads.
+//!
+//! In short, every possible open reading frame (ORF) is detected for every
+//! read in the query set. For every potential ORF, learning models and databases
+//! are used to determine whether the ORF is a true ORF, a false positive.
+//! All the data from each reliable ORF is collected and subjected to another
+//! learning model trained with true ORFs and false positives. The process is
+//! heavily parallelized to offer fast performance on large datasets.
+
+use config::{Strand, bed_to_struct_collection, get_progress_bar};
 use dashmap::DashMap;
 use flate2::read::MultiGzDecoder;
 use hashbrown::HashSet;
-use log::{error, warn};
+use log::{debug, error};
 use packbed::{reader, record::Bed6};
 use rayon::prelude::*;
 
@@ -14,7 +27,7 @@ use std::path::PathBuf;
 use crate::cli::TogaArgs;
 
 const QUERY_ANNOTATION: &str = "query_annotation.bed";
-const TRANSCRIPT_METADATA: &str = "meta/transcript_metadata.tsv.gz";
+const TRANSCRIPT_METADATA: &str = "meta/transcript_meta.tsv.gz";
 const SELENOCYSTEINE_CODONS: &str = "meta/selenocysteine_codons.tsv";
 const TOGA: &str = "toga";
 const TOGA_MERGED: &str = "toga_merged.tsv";
@@ -80,15 +93,21 @@ pub fn run_toga(args: TogaArgs) {
     .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}"));
 
     // INFO: process each chromosome in parallel
+    let pb = get_progress_bar(records.len() as u64, "Processing TOGA records...");
     records.into_par_iter().for_each(|(_, mut rows)| {
-        rows.iter_mut().for_each(|(id, data)| {
-            map.get_mut(id)
-                .unwrap_or_else(|| {
-                    panic!("ERROR: no metadata found for ID {id}!");
-                })
-                .update_rest(data);
-        });
+        for (id, data) in rows.iter_mut() {
+            pb.inc(1);
+
+            // INFO: check if the ID exists in the metadata map
+            if let Some(mut toga) = map.get_mut(id) {
+                toga.update_rest(data);
+            } else {
+                log::debug!("WARN: No metadata found for ID -> {id}!");
+            }
+        }
     });
+
+    pb.finish_and_clear();
 
     let file = dir.join(TOGA_MERGED);
     let mut writer = BufWriter::new(
@@ -96,7 +115,15 @@ pub fn run_toga(args: TogaArgs) {
             .unwrap_or_else(|e| panic!("ERROR: could not create file {} -> {e}!", file.display())),
     );
 
-    map.into_iter().for_each(|(id, toga)| {
+    let pb = get_progress_bar(map.len() as u64, "Merging transcript information...");
+    for (id, toga) in map.into_iter() {
+        pb.inc(1);
+
+        if toga.start == 0 && toga.end == 0 {
+            debug!("DEBUG: ID {} has no start or end coordinates!", id);
+            continue;
+        }
+
         if let Err(e) = writeln!(writer, "{}", toga) {
             error!("ERROR: could not write to file {} -> {e}!", file.display());
         } else {
@@ -106,7 +133,9 @@ pub fn run_toga(args: TogaArgs) {
                 file.display()
             );
         }
-    });
+    }
+
+    pb.finish_and_clear();
 }
 
 /// Reads a gzipped file line by line, parses the first four columns (id, label, pid, blosum),
@@ -208,11 +237,16 @@ impl TogaPrediction {
     ///
     /// * `data` - A reference to a `Bed6` record containing additional data to update.
     fn update_rest(&mut self, data: &Bed6) {
-        self.start = data.coord.0;
-        self.end = data.coord.1;
+        let (start, end) = match data.strand {
+            Strand::Forward => (data.coord.0, data.coord.1),
+            Strand::Reverse => (config::SCALE - data.coord.1, config::SCALE - data.coord.0),
+        };
+
+        self.start = start;
+        self.end = end;
         self.strand = data.strand.as_str().to_string();
         self.chrom = data.chrom.clone();
-        self.key = format!("{}:{}-{}", data.chrom, data.coord.0, data.coord.1);
+        self.key = format!("{}:{}-{}", data.chrom, start, end);
     }
 }
 

@@ -1,5 +1,123 @@
+//! Core module for detecting open reading frames in a query set of reads
+//! Alejandro Gonzales-Irribarren, 2025
+//!
+//! This module contains the main functions for finding open reading frames (ORFs)
+//! in a set of aligned reads.
+//!
+//! In short, every possible open reading frame (ORF) is detected for every
+//! read in the query set. For every potential ORF, learning models and databases
+//! are used to determine whether the ORF is a true ORF, a false positive.
+//! All the data from each reliable ORF is collected and subjected to another
+//! learning model trained with true ORFs and false positives. The process is
+//! heavily parallelized to offer fast performance on large datasets.
+//!
+//! # Usage
+//!
+//! The `orf` command-line utility provides several subcommands to orchestrate
+//! the ORF detection pipeline. The general invocation pattern is:
+//!
+//! ```bash
+//! orf [OPTIONS] <COMMAND>
+//! ```
+//!
+//! Global options applicable to all commands include:
+//!
+//! * `-t`, `--threads <THREADS>`: Specifies the number of threads to utilize for parallel processing.
+//!   Defaults to the number of logical CPUs available.
+//! * `-L`, `--level <LEVEL>`: Sets the logging level for output messages (e.g., `Info`, `Debug`, `Warn`, `Error`).
+//!   Defaults to `Info`.
+//!
+//! ## Commands
+//!
+//! ### `blast`
+//!
+//! Executes ORF detection using `orfipy` for candidate ORF identification and `diamond` for homology-based filtering.
+//!
+//! #### Arguments
+//!
+//! * `--fasta <PATH>`: Required. Path to the input FASTA file containing query sequences.
+//! * `--alignments <PATH>`: Required. Path to the input BED file containing alignment information for the query sequences.
+//! * `--outdir <DIR>`: Output directory for results. Defaults to the current directory (`.`).
+//! * `-e`, `--executable <PATH>`: Path to the `orfipy` executable. Defaults to `orfipy`.
+//! * `-d`, `--db <PATH>`: Required. Path to the DIAMOND BLAST database.
+//! * `-l`, `--orf-min-len <LENGTH>`: Minimum length for an ORF. Defaults to `50`.
+//! * `-p`, `--orf-min-percent <PERCENT>`: Minimum percentage of an ORF's length relative to the full sequence. Defaults to `0.25`.
+//! * `-P`, `--pattern <PATTERN>`: Pattern for subsequence (amino acid `aa` or nucleotide `nt`). Defaults to `M`.
+//!
+//! #### Example
+//!
+//! ```bash
+//! orf blast \
+//!   --fasta /path/to/reads.fasta \
+//!   --alignments /path/to/alignments.bed \
+//!   --outdir /path/to/blast_results \
+//!   --db /path/to/uniprot.dmnd \
+//!   --orf-min-len 100
+//! ```
+//!
+//! ### `tai`
+//!
+//! Performs ORF detection utilizing the Translation AI (TAI) model.
+//!
+//! #### Arguments
+//!
+//! * `--fasta <PATH>`: Required. Path to the input FASTA file.
+//! * `--alignments <PATH>`: Required. Path to the input BED file.
+//! * `--outdir <DIR>`: Output directory for results. Defaults to the current directory (`.`).
+//! * `-t`, `--threshold <THRESHOLD>`: Prediction threshold for TranslationAI. Defaults to `0.01`.
+//!
+//! #### Example
+//!
+//! ```bash
+//! orf tai \
+//!   --fasta /path/to/reads.fasta \
+//!   --alignments /path/to/alignments.bed \
+//!   --outdir /path/to/tai_results \
+//!   --threshold 0.05
+//! ```
+//!
+//! ### `merge`
+//!
+//! Consolidates the results obtained from the `blast` and `tai` commands, optionally incorporating TOGA results.
+//!
+//! #### Arguments
+//!
+//! * `-b`, `--blast <PATH>`: Required. Path to the BLAST results file.
+//! * `-T`, `--tai <PATH>`: Required. Path to the TranslationAI results file.
+//! * `-t`, `--toga <PATH>`: Required. Path to the TOGA merged results file.
+//! * `-a`, `--alignments <PATH>`: Required. Path to the original alignment BED file.
+//! * `-o`, `--outdir <DIR>`: Output directory for the merged results. Defaults to the current directory (`.`).
+//!
+//! #### Example
+//!
+//! ```bash
+//! orf merge \
+//!   --blast /path/to/blast_results/blast.out \
+//!   --tai /path/to/tai_results/tai.out \
+//!   --toga /path/to/toga_results/toga_merged.tsv \
+//!   --alignments /path/to/alignments.bed \
+//!   --outdir /path/to/final_results
+//! ```
+//!
+//! ### `toga`
+//!
+//! Processes and merges results from the TOGA (Tool to infer Orthologs from Genome Alignments) pipeline.
+//!
+//! #### Arguments
+//!
+//! * `-p`, `--path <PATH>`: Required. Path to the TOGA results directory.
+//! * `-o`, `--outdir <DIR>`: Output directory for the merged TOGA results. Defaults to the current directory (`.`).
+//!
+//! #### Example
+//!
+//! ```bash
+//! orf toga \
+//!   --path /path/to/toga_raw_output \
+//!   --outdir /path/to/processed_toga
+//! ```
+
 use clap::{self, Parser};
-use log::{Level, error, info};
+use log::info;
 use simple_logger::init_with_level;
 
 use orf::{
@@ -7,9 +125,8 @@ use orf::{
     cli::{Args, Commands},
     merge::merge,
     tai::run_tai,
+    toga::run_toga,
 };
-
-// /beegfs/home/agi/orf/target/release/orf blast -e /beegfs/projects/hillerlab/genome/src/ORFTree/.venv/bin/orfipy --fasta /beegfs/home/agi/tmp_chunk_chr16:2.fa -a /beegfs/home/agi/tmp_chunk_chr16:2.bed --db /projects/hillerlab/genome/data/uniref/TEMP_DMND/swissprot_vertebrates.dmnd --outdir results
 
 fn main() {
     let start = std::time::Instant::now();
@@ -25,107 +142,10 @@ fn main() {
     match args.command {
         Commands::Blast(args) => run_blast(args),
         Commands::Tai(args) => run_tai(args),
+        Commands::Toga(args) => run_toga(args),
         Commands::Merge(args) => merge(args),
     }
 
     let elapsed = start.elapsed();
     info!("Elapsed time: {:.3?}", elapsed);
 }
-
-// fn main() {
-//     use std::io::Write;
-
-//     let dmd = std::path::PathBuf::from(
-//         "/Users/alejandrogzi/Documents/projects/isopipe/isopipe/assets/orf/test/orfs.pep.dedup.diamond",
-//     );
-//     let index = std::path::PathBuf::from(
-//         "/Users/alejandrogzi/Documents/projects/isopipe/isopipe/assets/orf/test/orfs.pep.dedup.index",
-//     );
-
-//     let index = orf::blast::read_index(&index);
-//     let predictions = packbed::reader(&dmd)
-//         .unwrap_or_else(|e| panic!("ERROR: failed to read blast predictions file -> {e}"));
-
-//     let mut writer = std::io::BufWriter::new(
-//         std::fs::File::create(dmd.with_extension("dmd.result")).unwrap_or_else(|e| {
-//             panic!("ERROR: failed to create output file for blast results -> {e}");
-//         }),
-//     );
-
-//     let accumulator = DashMap::new();
-
-//     // INFO: filtering repeated blast hits by percent_identity -> preserving best
-//     // WARN: using a transition collection to retain the best blast record based on % aligned
-//     predictions
-//         .par_lines()
-//         .filter(|line| !line.starts_with('#'))
-//         .for_each(|line| {
-//             let parts: Vec<&str> = line.split('\t').collect();
-
-//             // INFO: 16 sp|Q9QX47|SON_MOUSE 100 497 0 0 42 538 1089 1585 1.20e-163 515
-//             let id = parts[0].parse::<u32>().unwrap_or_else(|_| {
-//                 panic!("ERROR: failed to parse ID from line: {}", line);
-//             });
-
-//             let data = BlastRecord::from_parts(&parts);
-
-//             // INFO: using a transition collection to retain the best blast record based on % aligned
-//             accumulator
-//                 .entry(id)
-//                 .and_modify(|existing_data: &mut BlastRecord| {
-//                     if data.blast_pid > existing_data.blast_pid {
-//                         *existing_data = data.clone();
-//                     }
-//                 })
-//                 .or_insert(data);
-//         });
-
-//     // INFO: inflate results!
-//     accumulator.iter_mut().for_each(|mut record| {
-//         let (id, data) = record.pair_mut();
-
-//         // INFO: unpacking index reference -> queries
-//         // INFO: for each query all blast records
-//         // INFO: { index_id : [(read_id: u16, chr_bytes: [u8; chr_len], orf: u16, subseq_orf: u16, seq_len: usize)] }
-//         // INFO: { 0 : [(read_id: 5903, chr_bytes: [16, 32], orf: 1, subseq_orf: 3, seq_len: 350)] }
-//         let queries = index.get(id).unwrap_or_else(|| {
-//             panic!("ERROR: no queries found for ID: {}", id);
-//         });
-
-//         for query in queries.into_iter() {
-//             let (read_id, chr, orf, subseq_orf, seq_len, start, end) = query;
-
-//             let query_id = format!(
-//                 "R{}_chr{}.p{}@{}",
-//                 read_id,
-//                 from_utf8(&chr).unwrap(),
-//                 orf,
-//                 subseq_orf
-//             );
-
-//             // INFO: updating blast data with % algined + id
-//             data.set_percent_aligned((data.blast_alignment_len as f32 / *seq_len as f32) * 100.0);
-//             data.set_id(query_id);
-
-//             writer
-//                 .write_all(
-//                     format!(
-//                         "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\n",
-//                         data.blast_id,
-//                         data.blast_idx_id,
-//                         data.blast_pid,
-//                         data.blast_e_value,
-//                         data.blast_offset,
-//                         data.blast_alignment_len,
-//                         data.percent_aligned,
-//                         start,
-//                         end
-//                     )
-//                     .as_bytes(),
-//                 )
-//                 .unwrap_or_else(|e| {
-//                     panic!("ERROR: failed to write blast record to file -> {e}");
-//                 });
-//         }
-//     });
-// }

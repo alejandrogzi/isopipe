@@ -1,6 +1,20 @@
+//! Core module for detecting open reading frames in a query set of reads
+//! Alejandro Gonzales-Irribarren, 2025
+//!
+//! This module contains the main functions for finding open reading frames (ORFs)
+//! in a set of aligned reads.
+//!
+//! In short, every possible open reading frame (ORF) is detected for every
+//! read in the query set. For every potential ORF, learning models and databases
+//! are used to determine whether the ORF is a true ORF, a false positive.
+//! All the data from each reliable ORF is collected and subjected to another
+//! learning model trained with true ORFs and false positives. The process is
+//! heavily parallelized to offer fast performance on large datasets.
+
 use config::bed_to_custom_struct_collection;
 use dashmap::DashMap;
 use hashbrown::HashMap;
+use isopipe::config::depure;
 use log::{error, warn};
 use packbed::{reader as bed_reader, record::GenePred};
 use rayon::prelude::*;
@@ -44,7 +58,11 @@ const HEADER_REGEX: &str = r"\[(\d+)-(\d+)\]\(([+-])\)";
 /// run_blast(args);
 /// ```
 pub fn run_blast(args: BlastArgs) {
-    let pep = orfipy(&args.common.fasta, &args.common.outdir, &args.orfipy);
+    let dir = &args.common.outdir.join("orf");
+    std::fs::create_dir_all(&dir)
+        .unwrap_or_else(|e| panic!("ERROR: could not create directory -> {e}!"));
+
+    let pep = orfipy(&args.common.fasta, &dir, &args.orfipy);
 
     let (dedup, index) = deduplicate(
         &pep,
@@ -56,6 +74,7 @@ pub fn run_blast(args: BlastArgs) {
     );
 
     diamond(&dedup, &args.database, &index, &args.common.alignments);
+    isopipe::depure!(dir, "result");
 }
 
 /// Predicts Open Reading Frames (ORFs) from a FASTA file using `orfipy`.
@@ -85,12 +104,7 @@ pub fn run_blast(args: BlastArgs) {
 /// ```rust, no_run
 /// let output = orfipy(&fasta_path, &output_dir, &orfipy_executable);
 /// ```
-fn orfipy(fasta: &PathBuf, outdir: &PathBuf, executable: &PathBuf) -> PathBuf {
-    let dir = outdir.join("orf");
-
-    std::fs::create_dir_all(&dir)
-        .unwrap_or_else(|e| panic!("ERROR: could not create directory -> {e}!"));
-
+fn orfipy(fasta: &PathBuf, dir: &PathBuf, executable: &PathBuf) -> PathBuf {
     let cmd = format!(
         "{} {} --pep {} --bed {} --partial-5 --partial-3 --include-stop --min 100 --ignore-case --outdir {}",
         executable.display(),
