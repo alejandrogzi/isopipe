@@ -188,7 +188,7 @@ fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf, alignments: &Pa
             .unwrap_or_else(|e| panic!("ERROR: failed to read BED file -> {e}"))
             .into(),
         config::BedColumn::Name,
-        config::BedOperation::SplitName("__", 0), // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887
+        config::BedOperation::SplitName(config::BIG_SEP, 0), // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887
     )
     .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}"));
 
