@@ -219,7 +219,7 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf, alignments: &
 
             let strand = name[1].trim_end_matches(')').to_string();
             let cannonical_id = name[2].trim_end_matches(')').to_string(); // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887
-            let id = cannonical_id.split("__").collect::<Vec<&str>>()[0]; // INFO: R9834_chr16
+            let id = cannonical_id.split(config::BIG_SEP).collect::<Vec<&str>>()[0]; // INFO: R9834_chr16
             let chr = id.split("_").collect::<Vec<&str>>()[1];
 
             // INFO: unpacking index reference -> queries
