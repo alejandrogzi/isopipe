@@ -1,8 +1,4 @@
-use crate::{
-    config::*,
-    consts::*,
-    executor::{job::Job, manager::__get_assets_dir},
-};
+use crate::{config::*, consts::*, executor::job::Job};
 
 use config::{OverlapType, Sequence, Strand, SCALE};
 use iso_polya::utils::get_sequences;
@@ -43,31 +39,24 @@ pub fn orf(
     step_output_dir: &PathBuf,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
-    let executable = __get_assets_dir().join(ORF).join(ORF_EXE);
+    let args = config.get_step_custom_fields(step, vec![GENOME, ORFIPY, ORF_MIN_LEN, DATABASE]);
 
-    let args = config.get_step_args(
-        step,
-        vec![
-            INPUT_DIR,
-            OUTPUT_DIR,
-            MEMORY,
-            TIME,
-            GENOME,
-            NUM_THREADS,
-            CHUNK,
-        ],
-    );
-
-    let twobit = PathBuf::from(config.get_step_custom_fields(step, vec![GENOME])[0].clone());
+    let twobit = PathBuf::from(args[0].clone());
     let chunk_size = crate::numerical!(config.get_step_custom_field(step, CHUNK) => usize)
         .unwrap_or_else(|e| panic!("ERROR: could not convert chunk to num -> {e}!"));
+
+    log::info!(
+        "INFO: Merging TOGA predictions in a single file here: {}...",
+        step_output_dir.display()
+    );
+    __merge_toga(step_output_dir, config, step);
 
     // INFO: looping through all fusion outputs? -> free + fakes + review [other color + tag]; fusions
     for file in FUSION_FILES {
         let bed = input_dir.join(file);
 
         if !bed.exists() || std::fs::metadata(&bed).unwrap().len() == 0 {
-            log::warn!("WARNING: {} does not exist or its empty!", bed.display());
+            log::warn!("WARN: {} does not exist or its empty!", bed.display());
             continue;
         }
 
@@ -76,21 +65,39 @@ pub fn orf(
             .split(".")
             .last()
             .unwrap_or_else(|| panic!("ERROR: could not get suffix from file -> {}", file));
+
+        // INFO: inflection point -> chunking fusion files [2nd chunking step in the pipeline]
         let paths = extract(&bed, &twobit, step_output_dir, chunk_size, suffix);
 
         for (chunked_fa, chunked_bed) in paths {
-            let cmd = format!(
-                "source {} && {} --fasta {} --alignments {} --output_dir {} --suffix {} {}",
-                ORFPY_ENV,
-                executable.display(),
-                chunked_fa.display(),
-                chunked_bed.display(),
-                step_output_dir.display(),
-                chunked_bed.with_extension("orf").display(),
-                args
+            let chunked_dir = &chunked_bed.parent().unwrap_or_else(|| {
+                panic!(
+                    "ERROR: could not get parent directory for chunked_bed -> {}",
+                    chunked_bed.display()
+                )
+            });
+
+            let blast = format!(
+                "{} blast -e {} --fasta {} --alignments {} --outdir {} --orf-min-len {} --db {}",
+                ORF_RELEASE,
+                args[1], // INFO: orfipy
+                &chunked_fa.display(),
+                &chunked_bed.display(),
+                chunked_dir.display(),
+                args[2], // INFO: orf_min_len,
+                args[3], // INFO: database
             );
 
-            jobs.push(Job::from(cmd));
+            let tai = format!(
+                "{} tai --fasta {} --alignments {} --outdir {}",
+                ORF_RELEASE,
+                chunked_fa.display(),
+                chunked_bed.display(),
+                chunked_dir.display(),
+            );
+
+            jobs.push(Job::from(blast));
+            jobs.push(Job::from(tai));
         }
     }
 
@@ -196,4 +203,72 @@ pub fn extract(
         .collect();
 
     return paths;
+}
+
+/// Merges TOGA predictions into a single file by invoking the `orf toga` command.
+///
+/// This function constructs and executes a shell command to run the `orf toga`
+/// subcommand. It retrieves the path to the TOGA results from the provided
+/// `Config` and specifies the output directory for the merged file.
+///
+/// # Arguments
+///
+/// * `step_output_dir` - A `PathBuf` representing the output directory for the current pipeline step.
+/// * `config` - A reference to a `Config` struct, used to retrieve the path to TOGA results.
+/// * `step` - A reference to a `PipelineStep` enum, used to identify the current step
+///            and retrieve its custom fields from the `config`.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - It fails to retrieve the TOGA path from the `config`.
+/// - The `shell` function (which executes the command) encounters an error.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use std::path::PathBuf;
+///
+/// struct Config;
+/// impl Config {
+///     fn get_step_custom_field(&self, step: &PipelineStep, field_name: &str) -> PathBuf {
+///         // In a real scenario, this would return a path based on config and step
+///         PathBuf::from("/path/to/toga_raw_results")
+///     }
+/// }
+///
+/// enum PipelineStep {
+///     MergeToga,
+/// }
+///
+/// fn shell(cmd: String, msg: &str, tool: &str) {
+///     println!("Executing: {}", cmd);
+///     println!("Message: {}", msg);
+///     println!("Tool: {}", tool);
+/// }
+///
+/// const TOGA: &str = "toga_field_name"; // Placeholder for the actual field name in Config
+/// const ORF_RELEASE: &str = "orf"; // Placeholder for the actual orf executable path
+///
+/// let output_dir = PathBuf::from("/tmp/pipeline_output/merge_toga_step");
+/// let app_config = Config;
+/// let current_step = PipelineStep::MergeToga;
+///
+/// // This would execute a command similar to:
+/// // orf --path /path/to/toga_raw_results --outdir /tmp/pipeline_output/merge_toga_step
+/// __merge_toga(&output_dir, &app_config, &current_step);
+/// ```
+fn __merge_toga(step_output_dir: &PathBuf, config: &Config, step: &PipelineStep) {
+    let toga = config.get_step_custom_field(step, TOGA);
+    let msg = "INFO: Merging TOGA predictions in a single file...";
+    let tool = "iso-orf";
+
+    let cmd = format!(
+        "{} --path {} --outdir {}",
+        ORF_RELEASE,
+        toga,
+        step_output_dir.display()
+    );
+
+    shell(cmd, msg, tool);
 }
