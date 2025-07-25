@@ -170,6 +170,7 @@ pub fn merge(input_dir: &PathBuf) {
             "WARN [MERGE]: forcing chunking on non-cannonical files or already merged files in {}!",
             input_dir.display()
         );
+
         for bed in files {
             let suffix = bed.with_extension("");
             let suffix = suffix
@@ -327,5 +328,15 @@ pub fn __split_by_chr(files: &[PathBuf], dir: &PathBuf, suffix: &str) -> std::io
         w.flush()?;
     }
 
-    Ok(())
+    if writers.is_empty() {
+        log::warn!("WARN [SPLIT]: No chromosomes found in input files, no output files created.");
+        panic!("ERROR: No chromosomes found in input files, no output files created.");
+    } else {
+        log::info!(
+            "INFO [SPLIT]: Successfully split input files into {} chromosome-specific files.",
+            writers.len()
+        );
+
+        return Ok(());
+    }
 }
