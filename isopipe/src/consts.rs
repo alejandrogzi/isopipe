@@ -39,6 +39,7 @@ pub const PER_ID: &str = "perID";
 pub const DATABASE: &str = "database";
 pub const ORF_MIN_LEN: &str = "orf_min_len";
 pub const ORFIPY: &str = "orfipy";
+pub const KEEP_REJECTED: &str = "keep_rejected";
 
 // project-wide pub const | names
 pub const ISOPIPE: &str = "isopipe";
@@ -54,6 +55,7 @@ pub const BAMTOBED: &str = "bamtobed";
 pub const POLYA_APARENT: &str = "aparent";
 pub const ISO_POLYA: &str = "iso-polya";
 pub const ISO_SPLIT: &str = "iso-split";
+pub const ISO_FUSION: &str = "iso-fusion";
 pub const SEGMENT: &str = "segment";
 pub const POLYA_PARTS: &str = "parts";
 pub const SEQS: &str = "seqs";
