@@ -78,7 +78,7 @@ pub fn iso_fusion(
 
         if file.path().ends_with(ALN_POLYA_SGN) {
             let cmd = format!(
-                "{} --ref {} --query {} --prefix {} --tag {} --colorize {}",
+                "{} --ref {} --query {} --prefix {} --tag {} --colorize {} --recover",
                 isotools!(ISO_FUSION).display(),
                 refs,
                 query.display(),
@@ -90,7 +90,7 @@ pub fn iso_fusion(
             jobs.push(Job::from(cmd));
         } else {
             let cmd = format!(
-                "{} --ref {} --query {} --prefix {}",
+                "{} --ref {} --query {} --prefix {} --recover",
                 isotools!(ISO_FUSION).display(),
                 refs,
                 query.display(),
