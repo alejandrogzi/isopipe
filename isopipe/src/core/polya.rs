@@ -172,9 +172,8 @@ pub fn merge(input_dir: &PathBuf) {
         );
 
         for bed in files {
-            let suffix = bed.with_extension("");
-            let suffix = suffix
-                .file_stem()
+            let suffix = bed
+                .file_name()
                 .unwrap_or_else(|| panic!("ERROR: could not build suffix for {:?}", bed))
                 .to_string_lossy();
 
