@@ -100,7 +100,7 @@ pub const ISOTOOLS_RELEASE: &str = concat!(
     "/../isotools/isotools/target/release"
 );
 pub const ORF_CHUNKS: usize = 50000; // 50k transcripts
-pub const ORF_RELEASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/orf/target/release");
+pub const ORF_RELEASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/orf/target/release/orf");
 
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];
