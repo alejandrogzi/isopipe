@@ -1033,7 +1033,7 @@ impl PipelineStep {
             Self::Minimap => vec!["minimap2".into(), "samtools".into()],
             Self::Polya => vec!["rust".into()],
             Self::Fusion => vec!["rust".into()],
-            Self::Orf => vec!["python3".into(), "diamond".into(), "nextflow".into()],
+            Self::Orf => vec!["python3".into(), "diamond".into()],
             Self::Nmd => vec!["rust".into()],
             Self::Polish => vec!["rust".into(), "python3".into()],
         }
