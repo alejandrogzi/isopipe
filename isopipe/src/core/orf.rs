@@ -264,7 +264,7 @@ fn __merge_toga(step_output_dir: &PathBuf, config: &Config, step: &PipelineStep)
     let tool = "iso-orf";
 
     let cmd = format!(
-        "{} --path {} --outdir {}",
+        "{} toga --path {} --outdir {}",
         ORF_RELEASE,
         toga,
         step_output_dir.display()
