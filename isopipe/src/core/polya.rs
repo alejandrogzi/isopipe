@@ -1,5 +1,12 @@
+use memchr::memchr;
+use std::{
+    collections::HashMap,
+    fs::{create_dir_all, File, OpenOptions},
+    io::{BufRead, BufReader, BufWriter, Write},
+    path::PathBuf,
+};
+
 use crate::{config::*, consts::*, executor::job::Job, isotools, rm};
-use std::{fs::create_dir_all, path::PathBuf};
 
 /// Run polya mod [3 steps]
 ///
@@ -164,11 +171,13 @@ pub fn merge(input_dir: &PathBuf) {
             }
 
             log::info!(
-                "INFO [MERGE]: Trying to cat {} files to {}",
+                "INFO [MERGE]: Trying to merge {} files to per chromsome {} file",
                 group.len(),
                 file
             );
-            maybe_cat(group, input_dir.join(file));
+
+            // maybe_cat(group, input_dir.join(file));
+            let _ = __split_by_chr(group, &input_dir, file);
         }
 
         rm!(input_dir.join(POLYA_PARTS));
@@ -178,4 +187,138 @@ pub fn merge(input_dir: &PathBuf) {
             input_dir.display()
         );
     }
+}
+
+/// Splits one or more input files into multiple output files, where each output
+/// file contains records pertaining to a specific chromosome.
+///
+/// This function reads lines from each input file. For each line, it identifies
+/// the chromosome name (assumed to be the first tab-separated field, or the
+/// entire line if no tab is present). It then writes the line to a dedicated
+/// output file named after the chromosome and a specified suffix, located within
+/// the given output directory. If an output file for a chromosome does not exist,
+/// it is created; otherwise, lines are appended to the existing file.
+///
+/// # Arguments
+///
+/// * `files` - A slice of `PathBuf` representing the paths to the input files to be split.
+/// * `dir` - A `PathBuf` representing the directory where the chromosome-specific
+///           output files will be created.
+/// * `suffix` - A string slice that will be appended to the chromosome name to form
+///              the output file names (e.g., `chr1_suffix`).
+///
+/// # Returns
+///
+/// A `std::io::Result<()>` which is:
+/// - `Ok(())`: If all files are successfully processed and written.
+/// - `Err(std::io::Error)`: If any I/O error occurs during file operations
+///   (e.g., opening, reading, writing, flushing).
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - It fails to convert the extracted chromosome bytes to a UTF-8 string,
+///   suggesting malformed input.
+/// - It fails to open or create an output file for a specific chromosome,
+///   likely due to permissions or an invalid path.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use std::fs::{self, File};
+/// use std::io::Write;
+///
+/// // Create a temporary directory for output
+/// let temp_output_dir = std::env::temp_dir().join("test_split_chr");
+/// let output_path = temp_output_dir.join("output");
+///
+/// std::fs::create_dir_all(&output_path).unwrap();
+///
+/// // Create dummy input files
+/// let mut file1 = File::create(output_path.join("input1.bed")).unwrap();
+/// file1
+///     .write_all(b"chrA\tdata1\nchrB\tdata2\nchrA\tdata3\n")
+///     .unwrap();
+///
+/// let mut file2 = File::create(output_path.join("input2.bed")).unwrap();
+/// file2.write_all(b"chrC\tdata4\nchrB\tdata5\n").unwrap();
+///
+/// let files_to_split = vec![
+///     output_path.join("input1.bed"),
+///     output_path.join("input2.bed"),
+/// ];
+///
+/// let suffix = "split.bed";
+///
+/// let result = __split_by_chr(&files_to_split, &output_path, suffix);
+/// assert!(result.is_ok());
+///
+/// // Verify output files
+/// let chr_a_file_content = fs::read_to_string(output_path.join("chrA_split.bed")).unwrap();
+/// assert_eq!(chr_a_file_content, "chrA\tdata1\nchrA\tdata3\n");
+///
+/// let chr_b_file_content = fs::read_to_string(output_path.join("chrB_split.bed")).unwrap();
+/// assert_eq!(chr_b_file_content, "chrB\tdata2\nchrB\tdata5\n");
+///
+/// let chr_c_file_content = fs::read_to_string(output_path.join("chrC_split.bed")).unwrap();
+/// assert_eq!(chr_c_file_content, "chrC\tdata4\n");
+///
+/// std::fs::remove_dir_all(temp_output_dir).unwrap();
+/// ```
+pub fn __split_by_chr(files: &[PathBuf], dir: &PathBuf, suffix: &str) -> std::io::Result<()> {
+    let mut writers: HashMap<String, BufWriter<File>> = HashMap::new();
+
+    for path in files {
+        let f = File::open(path)?;
+        let mut rdr = BufReader::new(f);
+        let mut line = Vec::with_capacity(1 << 16);
+
+        while rdr.read_until(b'\n', &mut line)? != 0 {
+            let chr = {
+                // INFO: find first TAB; fallback to the whole line (trim \n)
+                let end = memchr(b'\t', &line).unwrap_or_else(|| {
+                    line.iter()
+                        .rposition(|&b| b != b'\n')
+                        .map(|i| i + 1)
+                        .unwrap_or(0)
+                });
+
+                // SAFETY: chromosome ids are usually ASCII; if not panic
+                std::str::from_utf8(&line[..end])
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "ERROR: could not parse chromosome from line {:?} in {:?}",
+                            line, path
+                        )
+                    })
+                    .trim()
+                    .to_string()
+            };
+
+            let w = writers.entry(chr.clone()).or_insert_with(|| {
+                let outfile = dir.join(format!("{}_{}", &chr, suffix));
+                let file = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(outfile)
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "ERROR: could not open file for writing {}",
+                            dir.join(format!("{}_{}", &chr, suffix)).display()
+                        )
+                    });
+
+                BufWriter::new(file)
+            });
+
+            w.write_all(&line)?;
+            line.clear();
+        }
+    }
+
+    for w in writers.values_mut() {
+        w.flush()?;
+    }
+
+    Ok(())
 }
