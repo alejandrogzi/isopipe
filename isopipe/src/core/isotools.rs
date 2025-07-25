@@ -65,7 +65,12 @@ pub fn iso_fusion(
             continue;
         }
 
-        let prefix = step_output_dir.join(format!("{}", file.path().set_extension("")));
+        let prefix = step_output_dir.join(
+            file.path()
+                .file_stem()
+                .unwrap_or_else(|| panic!("ERROR: could not build prefix for {:?}", file.path())),
+        );
+
         std::fs::create_dir_all(&prefix).expect(&format!(
             "ERROR: Failed to create directory {}",
             prefix.display()
