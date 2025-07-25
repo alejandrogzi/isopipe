@@ -31,6 +31,7 @@ config = { path = "../isotools/isotools/config", optional = true }
 iso-polya = { path = "../isotools/isotools/iso-polya", optional = true }
 isotools = { path = "../isotools/isotools/entry", optional = true }
 iso-split = { path = "../isotools/isotools/iso-split", optional = true }
+memchr = { version = "2.7.5", optional = true }
 
 [profile.release]
 lto = true
@@ -50,4 +51,5 @@ core = [
     "dep:iso-split",
     "dep:twobit",
     "dep:simple_logger",
+    "dep:memchr",
 ]
