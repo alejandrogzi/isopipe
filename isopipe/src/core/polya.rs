@@ -123,29 +123,7 @@ pub fn merge(input_dir: &PathBuf) {
     if input_dir.join(POLYA_PARTS).exists() {
         log::info!("INFO [MERGE]: chunked directory found, merging parts...");
 
-        let files = std::fs::read_dir(input_dir.join(POLYA_PARTS))
-            .unwrap_or_else(|_| {
-                log::error!("ERROR: could not read directory {}", input_dir.display());
-                std::process::exit(1);
-            })
-            .flatten()
-            .map(|entry| entry.path())
-            .filter(|entry| {
-                entry
-                    .file_name()
-                    .and_then(|ext| ext.to_str())
-                    .map(|name| name.ends_with(BED))
-                    .unwrap_or(false)
-            })
-            .collect::<Vec<_>>();
-
-        if files.is_empty() {
-            log::error!(
-                "ERROR: could not find any .bed under parts/ in {}!",
-                input_dir.display()
-            );
-            std::process::exit(1);
-        }
+        let files = scan_dir(&input_dir.join(POLYA_PARTS), BED);
 
         // INFO: partition paths into their respective categories
         let (singletons, accepts, rejections): (Vec<_>, Vec<_>, Vec<_>) = files.into_iter().fold(
@@ -166,9 +144,9 @@ pub fn merge(input_dir: &PathBuf) {
             .zip([singletons, accepts, rejections].iter())
         {
             // INFO: does not make any sense cat rejected files
-            if *file == ALN_POLYA_REJECT {
-                continue;
-            }
+            // if *file == ALN_POLYA_REJECT {
+            //     continue;
+            // }
 
             log::info!(
                 "INFO [MERGE]: Trying to merge {} files to per chromsome {} file",
@@ -176,7 +154,6 @@ pub fn merge(input_dir: &PathBuf) {
                 file
             );
 
-            // maybe_cat(group, input_dir.join(file));
             let _ = __split_by_chr(group, &input_dir, file);
         }
 
@@ -186,6 +163,36 @@ pub fn merge(input_dir: &PathBuf) {
             "WARN [MERGE]: parts/ directory not found under {}, skipping merge step and grabbing .bed files directly from input directory!",
             input_dir.display()
         );
+
+        let files = scan_dir(input_dir, BED);
+
+        log::warn!(
+            "WARN [MERGE]: forcing chunking on non-cannonical files or already merged files in {}!",
+            input_dir.display()
+        );
+        for bed in files {
+            let suffix = bed.with_extension("");
+            let suffix = suffix
+                .file_stem()
+                .unwrap_or_else(|| panic!("ERROR: could not build suffix for {:?}", bed))
+                .to_string_lossy();
+
+            let sp = __split_by_chr(&vec![bed.clone()], &input_dir, &suffix);
+
+            if let Err(e) = sp {
+                log::error!(
+                    "ERROR [MERGE]: failed to split {} into chromosomes: {}",
+                    bed.display(),
+                    e
+                );
+            } else {
+                log::info!(
+                    "INFO [MERGE]: successfully split {} into chunked chromosomes!",
+                    bed.display()
+                );
+                rm!(bed);
+            }
+        }
     }
 }
 

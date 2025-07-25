@@ -1734,6 +1734,119 @@ pub fn maybe_cat(paths: &Vec<PathBuf>, target: impl AsRef<std::path::Path> + std
     }
 }
 
+/// Scans a specified directory for files ending with a given extension.
+///
+/// This function iterates through the entries in the provided directory and
+/// collects the paths of all files whose names end with the specified `extension`.
+/// It provides error handling and logging for cases where the directory does not
+/// exist, cannot be read, or contains no files with the target extension.
+///
+/// # Arguments
+///
+/// * `dir` - A `PathBuf` representing the directory to scan.
+/// * `extension` - A string slice representing the file extension to filter by
+///                 (e.g., ".bed", ".fasta", ".txt"). This should include the dot.
+///
+/// # Returns
+///
+/// A `Vec<PathBuf>` containing the paths of all files found that match the criteria.
+///
+/// # Panics
+///
+/// This function does not explicitly `panic!` but instead uses `std::process::exit(1)`
+/// to terminate the program if:
+/// - The `dir` does not exist.
+/// - The `dir` cannot be read (e.g., due to permissions).
+/// - No files with the specified `extension` are found within the `dir`.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use std::path::PathBuf;
+/// use std::fs::{self, File};
+/// use std::io::Write;
+/// use tempfile::tempdir;
+///
+/// // Create a temporary directory and some dummy files for testing
+/// let temp_dir = tempdir().unwrap();
+/// let dir_path = temp_dir.path().to_path_buf();
+///
+/// File::create(dir_path.join("file1.bed")).unwrap().write_all(b"content").unwrap();
+/// File::create(dir_path.join("file2.txt")).unwrap().write_all(b"content").unwrap();
+/// File::create(dir_path.join("another.bed")).unwrap().write_all(b"content").unwrap();
+///
+/// // Test case 1: Find .bed files
+/// let bed_files = scan_dir(&dir_path, ".bed");
+/// assert_eq!(bed_files.len(), 2);
+/// assert!(bed_files.iter().any(|p| p.file_name().unwrap() == "file1.bed"));
+/// assert!(bed_files.iter().any(|p| p.file_name().unwrap() == "another.bed"));
+///
+/// // Test case 2: Find .txt files
+/// let txt_files = scan_dir(&dir_path, ".txt");
+/// assert_eq!(txt_files.len(), 1);
+/// assert!(txt_files.iter().any(|p| p.file_name().unwrap() == "file2.txt"));
+///
+/// // Test case 3: No matching files (this would normally exit, so we wrap in a block for testing)
+/// {
+///     let result = std::panic::catch_unwind(|| {
+///         scan_dir(&dir_path, ".xyz");
+///     });
+///     // Expect an exit due to no files found
+///     assert!(result.is_err());
+/// }
+///
+/// // Test case 4: Non-existent directory (this would normally exit)
+/// {
+///     let non_existent_dir = PathBuf::from("/non_existent_path_123");
+///     let result = std::panic::catch_unwind(|| {
+///         scan_dir(&non_existent_dir, ".bed");
+///     });
+///     // Expect an exit due to directory not existing
+///     assert!(result.is_err());
+/// }
+///
+/// // Clean up the temporary directory
+/// temp_dir.close().unwrap();
+/// ```
+pub fn scan_dir(dir: &PathBuf, extension: &str) -> Vec<PathBuf> {
+    if !dir.exists() {
+        log::error!("ERROR: directory {} does not exist!", dir.display());
+        std::process::exit(1);
+    }
+
+    let files = std::fs::read_dir(dir)
+        .unwrap_or_else(|_| {
+            log::error!("ERROR: could not read directory {}", dir.display());
+            std::process::exit(1);
+        })
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|entry| {
+            entry
+                .file_name()
+                .and_then(|ext| ext.to_str())
+                .map(|name| name.ends_with(extension))
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+
+    if files.is_empty() {
+        log::error!(
+            "ERROR: could not find any .bed under parts/ in {}!",
+            dir.display()
+        );
+        std::process::exit(1);
+    } else {
+        log::info!(
+            "INFO: found {} .bed files in {}",
+            files.len(),
+            dir.display()
+        );
+    }
+
+    files
+}
+
 /// Macro wrapper for remove_any to match ergonomic usage
 #[macro_export]
 macro_rules! rm {
