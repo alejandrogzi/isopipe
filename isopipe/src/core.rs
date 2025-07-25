@@ -74,6 +74,7 @@ pub fn run_step(
         }
         PipelineStep::Orf => {
             log::info!("INFO [STEP 8]: Pre-processing for orf started...");
+            isotools::agg_fusions(&input_dir, executor, config);
             orf::orf(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Nmd => {
