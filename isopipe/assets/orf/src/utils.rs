@@ -11,7 +11,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{BedColumn, BedColumnValue, bed_to_nested_collection};
+use config::{bed_to_nested_collection, BedColumn, BedColumnValue};
 use dashmap::DashMap;
 use hashbrown::HashMap;
 use log::warn;
@@ -286,6 +286,14 @@ pub fn create_fasta(fasta: &PathBuf, extension: &str) -> Option<BufWriter<File>>
         Some(writer)
     } else {
         warn!("WARN: file already exists -> {:?}!", file.display());
-        None
+
+        // INFO: overwrite existing file
+        std::fs::remove_file(&file).unwrap_or_else(|e| {
+            panic!("ERROR: cannot remove existing file -> {e}");
+        });
+
+        Some(BufWriter::new(File::create(&file).unwrap_or_else(|e| {
+            panic!("ERROR: cannot create file -> {e}")
+        })))
     }
 }
