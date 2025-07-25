@@ -58,10 +58,10 @@ pub fn iso_fusion(
         }
 
         // WARN: will need to change for the corrected minimap step suffix!
-        let query = format!("{}/{}", input_dir.display(), file.path().display());
+        let query = file.path();
 
         if !std::path::Path::new(&query).exists() {
-            log::warn!("WARN: {} does not exist, skipping...", query);
+            log::warn!("WARN: {} does not exist, skipping...", query.display());
             continue;
         }
 
@@ -76,7 +76,7 @@ pub fn iso_fusion(
                 "{} --ref {} --query {} --prefix {} --tag {} --colorize {}",
                 isotools!(ISO_FUSION).display(),
                 refs,
-                query,
+                query.display(),
                 prefix.display(),
                 SINGLETONS,
                 SGN_COLOR
@@ -88,7 +88,7 @@ pub fn iso_fusion(
                 "{} --ref {} --query {} --prefix {}",
                 isotools!(ISO_FUSION).display(),
                 refs,
-                query,
+                query.display(),
                 prefix.display(),
             );
 
