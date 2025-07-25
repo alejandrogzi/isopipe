@@ -40,7 +40,12 @@ pub fn pbindex(
         jobs.push(job);
     });
 
-    executor
-        .add_jobs(jobs)
-        .and_send(config, PBINDEX, step_output_dir.clone(), 1, 8, package);
+    executor.add_jobs(jobs).and_send(
+        config,
+        PBINDEX,
+        step_output_dir.clone(),
+        1,
+        8,
+        Some(package),
+    );
 }

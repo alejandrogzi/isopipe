@@ -79,7 +79,7 @@ pub fn merge(
         input_dir.clone(),
         THREADS,
         MEMORY,
-        package,
+        Some(package),
     );
 
     pbindex::pbindex(pbi, config, executor, input_dir);
@@ -177,5 +177,5 @@ pub fn index(config: &Config, input_dir: &PathBuf, executor: &mut ParallelExecut
 
     executor
         .add_jobs(jobs)
-        .and_send(config, "index", input_dir.clone(), 1, 8, package);
+        .and_send(config, "index", input_dir.clone(), 1, 8, Some(package));
 }

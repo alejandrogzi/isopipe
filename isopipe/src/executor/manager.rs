@@ -165,7 +165,7 @@ impl ParallelExecutor {
                     &jobs,
                     threads as u32,
                     memory as u32,
-                    package,
+                    Some(package),
                 );
             }
             ParallelManager::Snakemake => {
@@ -299,7 +299,7 @@ impl ParallelExecutor {
         dir: PathBuf,
         threads: u32,
         memory: u32,
-        package: String,
+        package: Option<String>,
     ) {
         match self.manager {
             ParallelManager::Para => {
@@ -343,14 +343,13 @@ impl ParallelExecutor {
         jobs: &PathBuf,
         threads: u32,
         memory: u32,
-        package: String,
+        package: Option<String>,
     ) {
         let run_id = config.get_run_id();
         let step_code = format!("{}_{}", step, run_id);
 
-        let cmd = format!(
-            "module load {} && para make {} {} -q {} -memoryMb {} -numCores {}",
-            package,
+        let mut cmd = format!(
+            "para make {} {} -q {} -memoryMb {} -numCores {}",
             step_code,
             jobs.display(),
             config
@@ -360,6 +359,17 @@ impl ParallelExecutor {
             memory * 1024, // WARN: Memory is in MB
             threads,
         );
+
+        if package.is_some() {
+            let prefix = format!(
+                "module load {} && ",
+                package.as_ref().unwrap_or_else(|| {
+                    panic!("ERROR: No package found for step: {}", step);
+                })
+            );
+
+            cmd = format!("{}{}", prefix, cmd);
+        }
 
         log::info!("INFO: Executing command: {}", cmd);
 
