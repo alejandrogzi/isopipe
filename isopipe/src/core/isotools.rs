@@ -1,4 +1,4 @@
-use config::CHUNK_SIZE;
+use config::{CHUNK_SIZE, FUSION_FAKES, FUSION_FREE, FUSION_REVIEW};
 use iso_polya::{
     cli::AparentArgs,
     core::apa::{calculate_polya, create_joblist, write_bed, RAM_PER_SITE},
@@ -42,7 +42,7 @@ pub fn iso_fusion(
         .unwrap_or(false);
 
     for file in std::fs::read_dir(input_dir)
-        .expect("Failed to read assets directory")
+        .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
         .flatten()
         .filter(|entry| {
             entry
@@ -125,27 +125,92 @@ pub fn iso_fusion(
 /// ```
 /// let jobs = aggregate_fusions(&step_output_dir);
 /// ```
-pub fn agg_fusions(dir: &PathBuf, executor: &mut ParallelExecutor, config: &Config) {
-    let jobs = FUSION_TYPES
-        .iter()
-        .map(|ty| {
-            let (output, pattern) = if *ty == "fusions" {
-                (
-                    format!("{0}/{1}.bed", dir.display(), ty),
-                    format!("{0}/*/{1}.bed", dir.display(), ty),
-                )
-            } else {
-                // WARN: will aggregate free/fakes/review into fusions.free.bed!
-                // INFO: fakes have :FK tag, review has :RW tag
-                (
-                    format!("{0}/fusions.free.bed", dir.display()),
-                    format!("{0}/*/*.{1}.bed", dir.display(), ty),
-                )
-            };
+pub fn agg_fusions(
+    dir: &PathBuf,
+    executor: &mut ParallelExecutor,
+    config: &Config,
+    step: &PipelineStep,
+) {
+    let mode = ParallelMode::from_str(&config.get_step_custom_field(step, PARALLEL_MODE));
 
-            Job::from(format!("cat {} >> {}", pattern, output))
-        })
-        .collect();
+    let jobs: Vec<Job> = match mode {
+        ParallelMode::Chromosome => {
+            log::info!(
+                "INFO [STEP 8]: Aggregating fusions per-chr -> {}...",
+                dir.display()
+            );
+
+            let mut jobs = Vec::new();
+
+            // INFO: loop through all subdirectories in {dir}
+            for entry in std::fs::read_dir(dir)
+                .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", dir))
+                .flatten()
+                .filter(|e| e.path().is_dir())
+            {
+                let subdir = entry.path();
+
+                // INFO: expected: fusions.bed / fusions.free.bed; optional: fusions.review + fusions.fakes
+                for file in std::fs::read_dir(&subdir)
+                    .unwrap()
+                    .flatten()
+                    .filter(|e| e.path().is_file())
+                {
+                    let file = file.path();
+
+                    if file.ends_with(FUSION_FAKES) || file.ends_with(FUSION_REVIEW) {
+                        let target = file
+                            .parent()
+                            .unwrap_or_else(|| {
+                                panic!("ERROR: could not get parent from {:?}", file)
+                            })
+                            .join(FUSION_FREE);
+
+                        let cmd = format!(
+                            "cat {} >> {} && rm {}",
+                            file.display(),
+                            target.display(),
+                            file.display()
+                        );
+
+                        jobs.push(Job::from(cmd))
+                    }
+                }
+            }
+
+            jobs
+        }
+        ParallelMode::Genome => {
+            let jobs = FUSION_TYPES
+                .iter()
+                .map(|ty| {
+                    log::info!(
+                        "INFO [STEP 8]: Aggregating {} in single files -> {}...",
+                        ty,
+                        dir.display()
+                    );
+
+                    let (output, pattern) = if *ty == "fusions" {
+                        (
+                            format!("{0}/{1}.bed", dir.display(), ty),
+                            format!("{0}/*/{1}.bed", dir.display(), ty),
+                        )
+                    } else {
+                        // WARN: will aggregate free/fakes/review into fusions.free.bed!
+                        // INFO: fakes have :FK tag, review has :RW tag
+                        (
+                            format!("{0}/fusions.free.bed", dir.display()),
+                            format!("{0}/*/*.{1}.bed", dir.display(), ty),
+                        )
+                    };
+
+                    Job::from(format!("cat {} >> {}", pattern, output))
+                })
+                .collect();
+
+            jobs
+        }
+    };
 
     executor
         .add_jobs(jobs)

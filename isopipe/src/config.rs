@@ -1404,6 +1404,23 @@ impl std::fmt::Display for ParamValue {
     }
 }
 
+/// Enum to represent options to process fusion files
+/// either chunking them or merging them together
+pub enum ParallelMode {
+    Chromosome,
+    Genome,
+}
+
+impl ParallelMode {
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "chr" => ParallelMode::Chromosome,
+            "all" => ParallelMode::Genome,
+            _ => panic!("Invalid parallel mode: {}", s),
+        }
+    }
+}
+
 /// Deserialize a Vec of PipelineStep enums.
 ///
 /// # Arguments

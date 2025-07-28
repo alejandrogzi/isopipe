@@ -23,8 +23,8 @@ nextflow = ""
 [global]
 data_prefix = "foo"                   # FILL: raw data prefix
 global_output_dir = "/path/to/outdir" # FILL: output dir -> {outdir}/isopipe_run_{timestamp}
-long_queue = "long"                   # AWARE: long queue name
-short_queue = "day"                   # AWARE: short queue name
+long_queue = "long"                   # FILL [AWARE]: long queue name
+short_queue = "day"                   # FILL [AWARE]: short queue name
 default_memory = 16                   # default memory in GB
 default_threads = 8                   # default number of threads
 
@@ -33,7 +33,7 @@ input_dir = ""             # FILL: raw data dir [only one inmutable]
 output_dir = "step1_ccs"   # output dir
 chunk = 100                # --chunk
 num-threads = 1            # -j
-num-cores = 1              # FILL | WARN: HPC [per job]
+num-cores = 1              # FILL [WARN]: HPC [per job]
 min-rq = 0.95              # --min-rq
 report-file = "TMP_report" # --report-file
 memory = 50                # memory in GB
@@ -101,7 +101,7 @@ identity = 96               # --identity, 2nd pass will have number+2
 clip3 = 50                  # --clip3
 clip5 = 50                  # --clip5
 tail-suffix = 30            # --tail-suffix
-memory = 50                 # memory in GB
+memory = 60                 # memory in GB
 time = "24.h"               # time for each job
 toga = ""                   # FILL: toga query annotation
 assembly = ""               # FILL: assembly name [WILL CHANGE]
@@ -111,7 +111,7 @@ bed = ""                    # WARN: --bed leave emtpy, [convert to bed, erase if
 [params.fusion]
 input_dir = "step6_polya"   # previous step data dir [default]
 output_dir = "step7_fusion" # output dir
-memory = 50                 # memory in GB
+memory = 60                 # memory in GB
 time = "24.h"               # time for each job
 toga = ""                   # FILL: toga query annotation
 keep_rejected = "false"     # WARN: drop rejected reads, change to "true" to keep them
@@ -130,6 +130,7 @@ chunk = "30k"              # WARN: controls fusion .bed + .fa split sizes
 genome = ""                # FILL: genome in .fa format or .2bit
 orfipy = ""                # FILL: orfipy executable path
 orf_min_len = 30           # minimum ORF length in bp
+parallel_mode = "chr"      # WARN: controls parallelization, "chr" for chromosomes, "all" for all at once [recommended: "chr"]
 
 [params.polish]
 input_dir = "step8_orf"     # previous step data dir [default]
