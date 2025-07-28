@@ -40,6 +40,7 @@ pub const DATABASE: &str = "database";
 pub const ORF_MIN_LEN: &str = "orf_min_len";
 pub const ORFIPY: &str = "orfipy";
 pub const KEEP_REJECTED: &str = "keep_rejected";
+pub const PARALLEL_MODE: &str = "parallel_mode";
 
 // project-wide pub const | names
 pub const ISOPIPE: &str = "isopipe";
@@ -107,7 +108,7 @@ pub const ORF_RELEASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/orf/t
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];
 pub const CLUSTERING_CATEGORIES: &[&str] = &["hq", "lq", "singletons"];
-pub const FUSION_TYPES: &[&str] = &["free", "fusions", "review", "fakes"];
+pub const FUSION_TYPES: &[&str] = &["fusions", "free", "review", "fakes"];
 pub const FUSION_FILES: &[&str] = &[
     "fusions.free.bed",
     "fusions.fusions.bed",
