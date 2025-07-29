@@ -48,5 +48,11 @@
 //!   --outdir /path/to/output_dir \
 //! ```
 
+#[cfg(feature = "core")]
 pub mod cli;
+
+#[cfg(feature = "core")]
 pub mod ext;
+
+#[cfg(feature = "read")]
+pub mod read;
