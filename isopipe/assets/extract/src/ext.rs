@@ -311,6 +311,7 @@ fn index(
     mut writer_bed: BufWriter<File>,
 ) {
     let mut mapper = HashMap::new();
+    let mut helper = HashMap::new();
 
     let idx = path.join(format!("tmp_chunk_{}.index", chunk_id));
     let mut index = BufWriter::new(File::create(&idx).unwrap());
@@ -344,6 +345,9 @@ fn index(
                         tx
                     )
                 });
+
+                helper.insert(encoded, count);
+
                 count += 1;
             }
             Entry::Occupied(mut o) => {
@@ -356,8 +360,14 @@ fn index(
     }
 
     // INFO: for every element in mapper -> write encoded id and encoded group
-    let mut header: u32 = 0;
     for (_, group) in mapper {
+        let header = *helper.get(&group[0]).unwrap_or_else(|| {
+            panic!(
+                "ERROR: could not get first ocurrence from helper -> {:?}",
+                group
+            )
+        }) as u32;
+
         let n_ids = group.len() as u16;
         index.write_all(&n_ids.to_be_bytes()).unwrap();
 
@@ -366,8 +376,6 @@ fn index(
         for read in group {
             index.write_all(&read.to_be_bytes()).unwrap();
         }
-
-        header += 1;
     }
 }
 
