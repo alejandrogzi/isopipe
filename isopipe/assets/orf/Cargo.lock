@@ -322,6 +322,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "extract"
+version = "0.0.2"
+
+[[package]]
 name = "flate2"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -595,6 +599,7 @@ dependencies = [
  "clap",
  "config",
  "dashmap",
+ "extract",
  "flate2",
  "hashbrown 0.15.4",
  "iso-pack",

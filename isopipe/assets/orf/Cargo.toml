@@ -28,7 +28,7 @@ num_cpus = "1.16.0"
 regex = "1.11.1"
 flate2 = "1.0.20"
 isopipe = { path = "../..", features = ["cfg"], default-features = false }
-
+extract = { path = "../extract", features = ["read"], default-features = false }
 
 [profile.release]
 lto = true

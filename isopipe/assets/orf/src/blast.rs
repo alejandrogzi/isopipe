@@ -58,22 +58,40 @@ const HEADER_REGEX: &str = r"\[(\d+)-(\d+)\]\(([+-])\)";
 /// run_blast(args);
 /// ```
 pub fn run_blast(args: BlastArgs) {
+    let mode = Mode::from(&args.index);
     let dir = &args.common.outdir.join("orf");
     std::fs::create_dir_all(&dir)
         .unwrap_or_else(|e| panic!("ERROR: could not create directory -> {e}!"));
 
     let pep = orfipy(&args.common.fasta, &dir, &args.orfipy);
 
-    let (dedup, index) = deduplicate(
+    let (dedup, mut index) = deduplicate(
         &pep,
         true,
         args.orf_min_len,
         args.orf_min_percent,
         "M".as_bytes(),
         SeqType::AminoAcid,
+        &mode,
     );
 
-    diamond(&dedup, &args.database, &index, &args.common.alignments);
+    match mode {
+        Mode::Indexed => {
+            index = args
+                .index
+                .unwrap_or_else(|| panic!("ERROR: could not unwrap index path, this is a bug!"))
+        }
+        _ => {}
+    }
+
+    diamond(
+        &dedup,
+        &args.database,
+        &index,
+        &args.common.alignments,
+        mode,
+    );
+
     isopipe::depure!(dir, "result");
 }
 
@@ -156,13 +174,13 @@ fn orfipy(fasta: &PathBuf, dir: &PathBuf, executable: &PathBuf) -> PathBuf {
 /// ```rust, no_run
 /// diamond(&dedup_path, &database_path, &index_path, &alignments_path);
 /// ```
-fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf, alignments: &PathBuf) {
-    let dmd = dedup.with_extension("diamond");
+fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf, alignments: &PathBuf, mode: Mode) {
+    let diamond = dedup.with_extension("diamond");
     let cmd = format!(
         "diamond blastp --query {} --db {} --out {} --outfmt 6 qseqid pident qlen slen length qstart qend sstart send evalue --threads 8 --sensitive -e 1e-10",
         dedup.display(),
         database.display(),
-        dmd.display()
+        diamond.display()
     );
 
     std::process::Command::new("bash")
@@ -171,17 +189,7 @@ fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf, alignments: &Pa
         .status()
         .unwrap_or_else(|e| panic!("ERROR: failed to execute diamond command -> {e}"));
 
-    let mut index = read_index(&index);
-    let predictions = bed_reader(&dmd)
-        .unwrap_or_else(|e| panic!("ERROR: failed to read blast predictions file -> {e}"));
-
-    let mut writer = BufWriter::new(
-        File::create(dmd.with_extension(RESULT)).unwrap_or_else(|e| {
-            panic!("ERROR: failed to create output file for blast results -> {e}");
-        }),
-    );
-
-    let accumulator = DashMap::new();
+    let predictions = parse_predictions(&diamond);
 
     let records = bed_to_custom_struct_collection::<GenePred>(
         bed_reader(alignments)
@@ -192,162 +200,16 @@ fn diamond(dedup: &PathBuf, database: &PathBuf, index: &PathBuf, alignments: &Pa
     )
     .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}"));
 
-    // INFO: filtering repeated blast hits by percent_identity -> preserving best
-    predictions
-        .par_lines()
-        .filter(|line| !line.starts_with('#'))
-        .for_each(|line| {
-            let parts: Vec<&str> = line.split('\t').collect();
+    let writer = BufWriter::new(
+        File::create(diamond.with_extension(RESULT)).unwrap_or_else(|e| {
+            panic!("ERROR: failed to create output file for blast results -> {e}");
+        }),
+    );
 
-            // INFO: 16 sp|Q9QX47|SON_MOUSE 100 497 0 0 42 538 1089 1585 1.20e-163 515
-            let id = parts[0].parse::<u32>().unwrap_or_else(|_| {
-                panic!("ERROR: failed to parse ID from line: {}", line);
-            });
-
-            let data = BlastRecord::from_parts(&parts);
-
-            // WARN: using a transition collection to retain the best blast record based on % aligned
-            accumulator
-                .entry(id)
-                .and_modify(|existing_data: &mut BlastRecord| {
-                    if data.blast_pid > existing_data.blast_pid {
-                        *existing_data = data.clone();
-                    }
-                })
-                .or_insert(data);
-        });
-
-    // INFO: inflate results!
-    accumulator.iter_mut().for_each(|mut record| {
-        let (id, data) = record.pair_mut();
-
-        // INFO: unpacking index reference -> queries
-        // INFO: for each query all blast records
-        // INFO: { index_id : [(read_id: u16, chr_bytes: [u8; chr_len], orf: u16, subseq_orf: u16, seq_len: usize)] }
-        // INFO: { 0 : [(read_id: 5903, chr_bytes: [16, 32], orf: 1, subseq_orf: 3, seq_len: 350)] }
-        let queries = index.get(id).unwrap_or_else(|| {
-            panic!("ERROR: no queries found for ID: {}", id);
-        });
-
-        for query in queries.into_iter() {
-            let (read_id, chr, orf, subseq_orf, start, end) = query;
-
-            let chr = format!("chr{}", from_utf8(&chr).unwrap());
-            let cannonical_id = format!("R{}_{}", read_id, chr);
-            let query_id = format!("{}.p{}@{}", cannonical_id, orf, subseq_orf);
-
-            // INFO: retrieving the reference gene prediction record
-            let (orf_start, orf_end) = records
-                .get_mut(&chr)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "ERROR: chromosome from {} not found in sequences -> {}!",
-                        cannonical_id, chr
-                    );
-                })
-                .get_mut(&cannonical_id)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "ERROR: id not found in BED, this is a bug -> {}!",
-                        cannonical_id
-                    );
-                })
-                .map_absolute_cds(*start as u64, *end as u64)
-                .unwrap_or_default();
-
-            // WARN: skipping unreliable ORFs for the current alignment
-            // INFO: none of these will match any other prediction because
-            // INFO: the fall off any exonic boundary
-            if orf_start == 0 && orf_end == 0 {
-                // warn!(
-                //     "WARN: ORF start and end are zero for ID: {}, skipping!",
-                //     query_id
-                // );
-                continue;
-            }
-
-            data.set_id(query_id);
-
-            writer
-                .write_all(
-                    format!(
-                        "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\t{}\t{}\n",
-                        data.blast_id,
-                        data.blast_idx_id,
-                        data.blast_pid,
-                        data.blast_e_value,
-                        data.blast_offset,
-                        data.blast_alignment_len,
-                        data.percent_aligned,
-                        start,
-                        end,
-                        orf_start,
-                        orf_end
-                    )
-                    .as_bytes(),
-                )
-                .unwrap_or_else(|e| {
-                    panic!("ERROR: failed to write blast record to file -> {e}");
-                });
-        }
-
-        // INFO: removing the ID from the index to remain with unused IDs
-        index.remove(id);
-    });
-
-    // INFO: repeating the process for unused ids
-    // INFO: add tag DM to the ID -> identify unused ids
-    index.iter().for_each(|(id, queries)| {
-        for query in queries {
-            let (read_id, chr, orf, subseq_orf, start, end) = query;
-
-            let chr = format!("chr{}", from_utf8(&chr).unwrap());
-            let cannonical_id = format!("R{}_{}", read_id, chr);
-            let query_id = format!("{}.p{}@{}#DM", cannonical_id, orf, subseq_orf);
-
-            // INFO: retrieving the reference gene prediction record
-            let (orf_start, orf_end) = records
-                .get_mut(&chr)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "ERROR: chromosome from {} not found in sequences -> {}!",
-                        cannonical_id, chr
-                    );
-                })
-                .get_mut(&cannonical_id)
-                .unwrap_or_else(|| {
-                    panic!(
-                        "ERROR: id not found in BED, this is a bug -> {}!",
-                        cannonical_id
-                    );
-                })
-                .map_absolute_cds(*start as u64, *end as u64)
-                .unwrap_or_default();
-
-            // WARN: skipping unreliable ORFs for the current alignment
-            // INFO: none of these will match any other prediction because
-            // INFO: the fall off any exonic boundary
-            if orf_start == 0 && orf_end == 0 {
-                warn!(
-                    "WARN: ORF start and end are zero for ID: {}, skipping!",
-                    query_id
-                );
-                continue;
-            }
-
-            writer
-                .write_all(
-                    format!(
-                        "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\t{}\t{}\n",
-                        query_id, id, 0.0, 1.0, 0, 0, 0.0, start, end, orf_start, orf_end
-                    )
-                    .as_bytes(),
-                )
-                .unwrap_or_else(|e| {
-                    panic!("ERROR: failed to write unused blast record to file -> {e}");
-                });
-        }
-    });
+    match mode {
+        Mode::Raw => cannonical(index, predictions, records, writer),
+        Mode::Indexed => indexed(index, predictions, records, writer),
+    }
 }
 
 /// Represents a single BLAST alignment record.
@@ -458,7 +320,7 @@ impl BlastRecord {
             blast_e_value,
             blast_offset,
             blast_alignment_len,
-            percent_aligned: percent_aligned, // INFO: set on the fly
+            percent_aligned,
         }
     }
 
@@ -517,14 +379,12 @@ pub fn deduplicate(
     min_percent: f32,
     pattern: &[u8],
     seq_type: SeqType,
+    mode: &Mode,
 ) -> (PathBuf, PathBuf) {
     let seqs =
         parse_fa(fasta).unwrap_or_else(|e| panic!("ERROR: failed to parse FASTA file -> {e}"));
 
     let mut mapper = HashMap::new();
-    let mut index = create_index(fasta);
-    let mut dedup = create_fasta(fasta, "dedup.fa")
-        .unwrap_or_else(|| panic!("ERROR: could not create file {:?}", fasta));
 
     let regex = regex::Regex::new(HEADER_REGEX).unwrap_or_else(|e| {
         panic!("ERROR: failed to compile regex for header parsing -> {e}");
@@ -533,8 +393,17 @@ pub fn deduplicate(
     // INFO: loops through sequences and populates mapper
     for (header, seq) in seqs.iter() {
         let len = seq.len();
-        let mut key = Vec::new();
-        let header = header.to_string();
+        let mut key = Vec::with_capacity(len);
+
+        // INFO: >R10589_chr7__FC28#TC0#PA0#PR0#IY896_ORF.87 [4632-4770](-) [...]
+        // INFO: >0_ORF.87 [4632-4770](-) [...] -> [if indexed during extract]
+        // INFO: ends up being -> >0_ORF.87 [4632-4770](-)
+        let header = header
+            .to_string()
+            .split(' ')
+            .take(2)
+            .collect::<Vec<&str>>()
+            .join(" "); // INFO: orfipy headers!
 
         for &b in seq {
             if b != b'\n' {
@@ -556,11 +425,38 @@ pub fn deduplicate(
             )
         }
 
-        let record = Arc::<[u8]>::from(header.into_bytes());
+        let record = Arc::<[u8]>::from(header.replace(" ", "_").into_bytes());
         mapper.entry(key).or_insert(Vec::new()).push(record);
     }
 
-    let _ = make_index(mapper, &mut index, &mut dedup);
+    let mut dedup = create_fasta(fasta, "dedup.fa")
+        .unwrap_or_else(|| panic!("ERROR: could not create file {:?}", fasta));
+
+    match mode {
+        Mode::Indexed => {
+            let mut index = create_index(fasta);
+
+            let _ = make_index(mapper, &mut index, &mut dedup);
+        }
+        Mode::Raw => {
+            if !mapper.is_empty() {
+                for (seq, records) in mapper {
+                    // INFO: we expect to only have records of len 1
+                    for rc in records {
+                        let _ = writeln!(
+                            dedup,
+                            ">{}\n{}",
+                            from_utf8(&rc).unwrap(),
+                            from_utf8(&seq).unwrap()
+                        );
+                    }
+                }
+            } else {
+                error!("ERROR: mapper is empty -> no records were read!");
+                std::process::exit(1);
+            }
+        }
+    }
 
     // INFO: cleaning footprint on the fly
     // if !seqs.is_empty() {
@@ -581,6 +477,44 @@ pub fn deduplicate(
 pub enum SeqType {
     Nucleotide, // search codons like ATG
     AminoAcid,  // search residues like M
+}
+
+/// An enum representing the mode for sequence extraction.
+///
+/// This enum determines whether sequences are extracted directly ("Raw")
+/// or if an indexing approach is used (though `Indexed`)
+pub enum Mode {
+    Raw,
+    Indexed,
+}
+
+impl Mode {
+    /// Creates an `Mode` from a boolean value.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - A boolean value. `true` maps to `Mode::Indexed`,
+    ///            `false` maps to `Mode::Raw`.
+    ///
+    /// # Returns
+    ///
+    /// An `Mode` variant.
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// let raw_mode = Mode::from(false);
+    /// assert!(matches!(raw_mode, Mode::Raw));
+    ///
+    /// let indexed_mode = Mode::from(true);
+    /// assert!(matches!(indexed_mode, Mode::Indexed));
+    /// ```
+    fn from(mode: &Option<PathBuf>) -> Self {
+        match mode {
+            Some(_) => Self::Indexed,
+            None => Self::Raw,
+        }
+    }
 }
 
 /// Splits a FASTA record into potentially multiple sub-sequences based on a
@@ -686,6 +620,7 @@ fn split_record(
                         };
 
                         // INFO: >R10589_chr7__FC28#TC0#PA0#PR0#IY896_ORF.87 [4632-4770](-) [...]
+                        // INFO: >0_ORF.87 [4632-4770](-) [...] -> [if indexed during extract]
                         let cannonical_id = header.split(' ').next().unwrap_or_else(|| {
                             panic!(
                                 "ERROR: failed to parse cannonical ID from header: {}",
@@ -693,7 +628,7 @@ fn split_record(
                             );
                         });
                         let sub_id = format!(
-                            "{} [{}-{}]({})@{}",
+                            "{}_[{}-{}]({})@{}",
                             cannonical_id, nested_start, nested_end, strand, orf_count
                         );
 
@@ -1125,4 +1060,204 @@ pub fn read_index(index: &PathBuf) -> HashMap<u32, Vec<(u16, Vec<u8>, u16, u16, 
     }
 
     result
+}
+
+pub fn indexed(
+    index: &PathBuf,
+    predictions: DashMap<u32, BlastRecord>,
+    records: DashMap<String, HashMap<String, GenePred>>,
+    mut writer: BufWriter<File>,
+) {
+    let chr = get_chr_from_path(index);
+    let mut index = extract::read::read_index(index, &chr);
+}
+
+fn get_chr_from_path(path: &PathBuf) -> String {
+    // INFO: tmp_chunk_chr16:{n} [.bed]
+    let basename = path
+        .file_stem()
+        .unwrap_or_else(|| panic!("ERROR: could not get basename from {:?}", path))
+        .to_string_lossy();
+
+    let chr = basename.split('_').collect::<Vec<&str>>()[2]
+        .split(':')
+        .collect::<Vec<&str>>()[0]
+        .to_string();
+
+    chr
+}
+
+fn parse_predictions(diamond: &PathBuf) -> DashMap<u32, BlastRecord> {
+    let predictions = bed_reader(diamond)
+        .unwrap_or_else(|e| panic!("ERROR: failed to read blast predictions file -> {e}"));
+
+    let accumulator = DashMap::new();
+
+    // INFO: filtering repeated blast hits by percent_identity -> preserving best
+    predictions
+        .par_lines()
+        .filter(|line| !line.starts_with('#'))
+        .for_each(|line| {
+            let parts: Vec<&str> = line.split('\t').collect();
+
+            // INFO: 16 sp|Q9QX47|SON_MOUSE 100 497 0 0 42 538 1089 1585 1.20e-163 515
+            let id = parts[0].parse::<u32>().unwrap_or_else(|_| {
+                panic!("ERROR: failed to parse ID from line: {}", line);
+            });
+
+            let data = BlastRecord::from_parts(&parts);
+
+            // WARN: using a transition collection to retain the best blast record based on % aligned
+            accumulator
+                .entry(id)
+                .and_modify(|existing_data: &mut BlastRecord| {
+                    if data.blast_pid > existing_data.blast_pid {
+                        *existing_data = data.clone();
+                    }
+                })
+                .or_insert(data);
+        });
+
+    accumulator
+}
+
+pub fn cannonical(
+    index: &PathBuf,
+    predictions: DashMap<u32, BlastRecord>,
+    records: DashMap<String, HashMap<String, GenePred>>,
+    mut writer: BufWriter<File>,
+) {
+    let mut index = read_index(index);
+
+    // INFO: inflate results!
+    predictions.iter_mut().for_each(|mut record| {
+        let (id, data) = record.pair_mut();
+
+        // INFO: unpacking index reference -> queries
+        // INFO: for each query all blast records
+        // INFO: { index_id : [(read_id: u16, chr_bytes: [u8; chr_len], orf: u16, subseq_orf: u16, seq_len: usize)] }
+        // INFO: { 0 : [(read_id: 5903, chr_bytes: [16, 32], orf: 1, subseq_orf: 3, seq_len: 350)] }
+        let queries = index.get(id).unwrap_or_else(|| {
+            panic!("ERROR: no queries found for ID: {}", id);
+        });
+
+        for query in queries.into_iter() {
+            let (read_id, chr, orf, subseq_orf, start, end) = query;
+
+            let chr = format!("chr{}", from_utf8(&chr).unwrap());
+            let cannonical_id = format!("R{}_{}", read_id, chr);
+            let query_id = format!("{}.p{}@{}", cannonical_id, orf, subseq_orf);
+
+            // INFO: retrieving the reference gene prediction record
+            let (orf_start, orf_end) = records
+                .get_mut(&chr)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: chromosome from {} not found in sequences -> {}!",
+                        cannonical_id, chr
+                    );
+                })
+                .get_mut(&cannonical_id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: id not found in BED, this is a bug -> {}!",
+                        cannonical_id
+                    );
+                })
+                .map_absolute_cds(*start as u64, *end as u64)
+                .unwrap_or_default();
+
+            // WARN: skipping unreliable ORFs for the current alignment
+            // INFO: none of these will match any other prediction because
+            // INFO: the fall off any exonic boundary
+            if orf_start == 0 && orf_end == 0 {
+                // warn!(
+                //     "WARN: ORF start and end are zero for ID: {}, skipping!",
+                //     query_id
+                // );
+                continue;
+            }
+
+            data.set_id(query_id);
+
+            writer
+                .write_all(
+                    format!(
+                        "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\t{}\t{}\n",
+                        data.blast_id,
+                        data.blast_idx_id,
+                        data.blast_pid,
+                        data.blast_e_value,
+                        data.blast_offset,
+                        data.blast_alignment_len,
+                        data.percent_aligned,
+                        start,
+                        end,
+                        orf_start,
+                        orf_end
+                    )
+                    .as_bytes(),
+                )
+                .unwrap_or_else(|e| {
+                    panic!("ERROR: failed to write blast record to file -> {e}");
+                });
+        }
+
+        // INFO: removing the ID from the index to remain with unused IDs
+        index.remove(id);
+    });
+
+    // INFO: repeating the process for unused ids
+    // INFO: add tag DM to the ID -> identify unused ids
+    index.iter().for_each(|(id, queries)| {
+        for query in queries {
+            let (read_id, chr, orf, subseq_orf, start, end) = query;
+
+            let chr = format!("chr{}", from_utf8(&chr).unwrap());
+            let cannonical_id = format!("R{}_{}", read_id, chr);
+            let query_id = format!("{}.p{}@{}#DM", cannonical_id, orf, subseq_orf);
+
+            // INFO: retrieving the reference gene prediction record
+            let (orf_start, orf_end) = records
+                .get_mut(&chr)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: chromosome from {} not found in sequences -> {}!",
+                        cannonical_id, chr
+                    );
+                })
+                .get_mut(&cannonical_id)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: id not found in BED, this is a bug -> {}!",
+                        cannonical_id
+                    );
+                })
+                .map_absolute_cds(*start as u64, *end as u64)
+                .unwrap_or_default();
+
+            // WARN: skipping unreliable ORFs for the current alignment
+            // INFO: none of these will match any other prediction because
+            // INFO: the fall off any exonic boundary
+            if orf_start == 0 && orf_end == 0 {
+                warn!(
+                    "WARN: ORF start and end are zero for ID: {}, skipping!",
+                    query_id
+                );
+                continue;
+            }
+
+            writer
+                .write_all(
+                    format!(
+                        "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\t{}\t{}\n",
+                        query_id, id, 0.0, 1.0, 0, 0, 0.0, start, end, orf_start, orf_end
+                    )
+                    .as_bytes(),
+                )
+                .unwrap_or_else(|e| {
+                    panic!("ERROR: failed to write unused blast record to file -> {e}");
+                });
+        }
+    });
 }

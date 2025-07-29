@@ -11,7 +11,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use clap::{Parser, Subcommand};
+use clap::{ArgAction, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -125,6 +125,14 @@ pub struct BlastArgs {
         help = "Pattern to subsequence [aa/nt]"
     )]
     pub pattern: String,
+
+    #[arg(
+        short = 'i',
+        long = "index",
+        required = false,
+        help = "Path to .index file produced by extract step"
+    )]
+    pub index: Option<PathBuf>,
 }
 
 #[derive(Debug, Parser)]
