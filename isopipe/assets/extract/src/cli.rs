@@ -17,7 +17,7 @@ use clap::{ArgAction, Parser};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
-#[command(name = "orf", about = "Extract sequences from a .2bit using .bed", version = env!("CARGO_PKG_VERSION"))]
+#[command(name = "extract", about = "Extract sequences from a .2bit using .bed [and index them]", version = env!("CARGO_PKG_VERSION"))]
 pub struct Args {
     #[arg(
         short = 't',
