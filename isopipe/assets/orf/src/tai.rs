@@ -93,11 +93,19 @@ const COLUMNS: &[BedColumn] = &[
 /// run_tai(args);
 /// ```
 pub fn run_tai(args: TaiArgs) {
+    let mode = Mode::from(&args.common.index);
+
     let dir = args.common.outdir.join("tai");
     std::fs::create_dir_all(&dir)
         .unwrap_or_else(|e| panic!("ERROR: could not create directory -> {e}!"));
 
-    let (fasta, index) = refmt(&args.common.fasta, &args.common.alignments, &dir);
+    let (fasta, index) = refmt(
+        &args.common.fasta,
+        &args.common.alignments,
+        &dir,
+        &mode,
+        &args.common.index,
+    );
 
     let cmd = format!(
         "source {} && translationai -I {} -t {},{} -O {}",
@@ -114,8 +122,7 @@ pub fn run_tai(args: TaiArgs) {
         .status()
         .unwrap_or_else(|e| panic!("ERROR: failed to execute orfipy command -> {e}"));
 
-    let idx = read_tai_index(&index);
-    unroll_tai(idx, fasta, &args.common.alignments);
+    unroll_tai(index, fasta, &args.common.alignments, &mode);
 
     isopipe::depure!(dir, "result");
 }
@@ -186,13 +193,13 @@ pub fn run_tai(args: TaiArgs) {
 /// std::fs::remove_file(&final_predictions_path.with_extension(RESULT)).unwrap();
 /// std::fs::remove_file(&alignments_path).unwrap();
 /// ```
-fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf, alignments: &PathBuf) {
+fn unroll_tai(index: PathBuf, fasta: PathBuf, alignments: &PathBuf, mode: &Mode) {
     // INFO: predictions in fmt -> id st,sp,st_score,sp_score ...
     let predictions = bed_reader(fasta.with_extension(PREDICTIONS))
         .unwrap_or_else(|e| panic!("ERROR: failed to read predictions file -> {e}"));
 
     let output = fasta.with_extension(RESULT);
-    let mut writer = BufWriter::new(
+    let writer = BufWriter::new(
         File::create(&output)
             .unwrap_or_else(|e| panic!("ERROR: cannot create index from sequences -> {e}")),
     );
@@ -207,6 +214,21 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf, alignments: &
     )
     .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}"));
 
+    match mode {
+        Mode::Raw => cannonical(predictions, records, index, accumulator, writer),
+        Mode::Indexed => indexed(predictions, records, index, accumulator, writer),
+    }
+}
+
+fn cannonical(
+    predictions: String,
+    records: DashMap<String, HashMap<String, GenePred>>,
+    index: PathBuf,
+    accumulator: DashSet<String>,
+    mut writer: BufWriter<File>,
+) {
+    let index = read_tai_index(&index);
+
     // INFO: inflate results!
     predictions
         .par_lines()
@@ -215,14 +237,18 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf, alignments: &
             let parts: Vec<&str> = line.split('\t').collect();
 
             // INFO: >chr16:91343975-91360783 +) R9834_chr16__FC37#TC0#PA0#PR0#IY887) 0, 0,)
+            // INFO: >chr16:91343975-91360783 +) 0) 0, 0,) -> if extract mode on!
             let name = parts[0].split("(").collect::<Vec<&str>>();
 
             let strand = name[1].trim_end_matches(')').to_string();
-            let cannonical_id = name[2].trim_end_matches(')').to_string(); // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887
+
+            // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887
+            // INFO: 0 -> if extract mode on!
+            let cannonical_id = name[2].trim_end_matches(')').to_string();
+
             let id = cannonical_id.split(config::BIG_SEP).collect::<Vec<&str>>()[0]; // INFO: R9834_chr16
             let chr = id.split("_").collect::<Vec<&str>>()[1];
 
-            // INFO: unpacking index reference -> queries
             // INFO: for each query all orfs in the current record!
             // WARN: leaving option because unique ids are not mapped to an index!
             let queries = index.get(id);
@@ -295,16 +321,6 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf, alignments: &
 
                 if let Some(queries) = queries {
                     // INFO: queries are the orfs in the current record
-                    // process_queries(
-                    //     queries,
-                    //     orf_idx,
-                    //     start,
-                    //     stop,
-                    //     start_score,
-                    //     stop_score,
-                    //     strand,
-                    //     &mut accumulator,
-                    // );
                     for query in queries {
                         let query_id = format!("{}.p{}", query, orf_idx + 1);
                         let query_line = format!(
@@ -325,6 +341,114 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf, alignments: &
                     // here we should do: if log level is debug -> warn
                     warn!("WARN: no queries found for ID: {}", id);
                     continue;
+                }
+            }
+        });
+
+    accumulator.into_iter().for_each(|line| {
+        writeln!(writer, "{}", line).unwrap();
+    });
+}
+
+fn indexed(
+    predictions: String,
+    records: DashMap<String, HashMap<String, GenePred>>,
+    index: PathBuf,
+    accumulator: DashSet<String>,
+    mut writer: BufWriter<File>,
+) {
+    let chr = get_chr_from_path(&index);
+    let index = extract::read::read_index(&index, &chr);
+
+    // INFO: inflate results!
+    predictions
+        .par_lines()
+        .filter(|line| !line.starts_with('#'))
+        .for_each(|line| {
+            let parts: Vec<&str> = line.split('\t').collect();
+
+            // INFO: >chr16:91343975-91360783 +) R9834_chr16__FC37#TC0#PA0#PR0#IY887) 0, 0,)
+            // INFO: >chr16:91343975-91360783 +) 0) 0, 0,) -> if extract mode on!
+            let name = parts[0].split("(").collect::<Vec<&str>>();
+
+            let strand = name[1].trim_end_matches(')').to_string();
+
+            // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887
+            // INFO: 0 -> if extract mode on!
+            let cannonical_id = name[2].trim_end_matches(')').to_string();
+            let _id = cannonical_id
+                .parse::<u32>()
+                .unwrap_or_else(|e| panic!("ERROR: could parse ID to u32 -> {cannonical_id}. {e}"));
+
+            // INFO: unpacking index reference -> queries
+            let queries = index.get(&_id).unwrap_or_else(|| {
+                panic!("ERROR: could not find index match for id {cannonical_id}")
+            });
+
+            for (orf_idx, orf) in parts.iter().skip(1).enumerate() {
+                // INFO: 13190,13667,0.6413461491465569,0.921319767832756
+                let orf_parts: Vec<&str> = orf.split(',').collect();
+                if orf_parts.len() < 2 {
+                    panic!("ERROR: ORF does not have enough parts to parse: {}", orf);
+                }
+
+                let start = orf_parts[0].parse::<u64>().unwrap_or_else(|_| {
+                    panic!("ERROR: failed to parse start position from ORF: {}", orf);
+                });
+                let stop = orf_parts[1].parse::<u64>().unwrap_or_else(|_| {
+                    panic!("ERROR: failed to parse stop position from ORF: {}", orf);
+                }) + 3; // INFO: stop is inclusive, so we add 3 to include the stop codon
+                let start_score = orf_parts[2].parse::<f32>().unwrap_or_else(|_| {
+                    panic!("ERROR: failed to parse start position from ORF: {}", orf);
+                });
+                let stop_score = orf_parts[3].parse::<f32>().unwrap_or_else(|_| {
+                    panic!("ERROR: failed to parse stop position from ORF: {}", orf);
+                });
+
+                if start > stop {
+                    panic!(
+                        "ERROR: start position is greater than stop position in ORF: {}",
+                        orf
+                    );
+                }
+
+                // INFO: retrieving the reference gene prediction record
+                let (orf_start, orf_end) = records
+                    .get_mut(&chr)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "ERROR: chromosome from {} not found in sequences -> {}!",
+                            cannonical_id, chr
+                        );
+                    })
+                    .get_mut(&cannonical_id)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "ERROR: id not found in BED, this is a bug -> {}!",
+                            cannonical_id
+                        );
+                    })
+                    .map_absolute_cds(start as u64, stop as u64)
+                    .unwrap_or_default();
+
+                // WARN: skipping unreliable ORFs for the current alignment
+                if orf_start == 0 && orf_end == 0 {
+                    // warn!(
+                    //     "WARN: ORF start and end are zero for ID: {}.p{}, skipping!",
+                    //     _id, orf_idx
+                    // );
+                    continue;
+                }
+
+                // INFO: queries are the orfs in the current record
+                for query in queries {
+                    let query_id = format!("{}.p{}", query, orf_idx + 1);
+                    let query_line = format!(
+                        "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        query_id, start, stop, start_score, stop_score, strand, orf_start, orf_end
+                    );
+
+                    accumulator.insert(query_line);
                 }
             }
         });
@@ -407,7 +531,13 @@ fn unroll_tai(index: HashMap<String, Vec<String>>, fasta: PathBuf, alignments: &
 /// std::fs::remove_file(&tai_index).unwrap();
 /// std::fs::remove_dir_all(&outdir).unwrap();
 /// ```
-fn refmt(fasta: &PathBuf, bed: &PathBuf, outdir: &PathBuf) -> (PathBuf, PathBuf) {
+fn refmt(
+    fasta: &PathBuf,
+    bed: &PathBuf,
+    outdir: &PathBuf,
+    mode: &Mode,
+    index_path: &Option<PathBuf>,
+) -> (PathBuf, PathBuf) {
     let records = parse_bed::<Bed6>(bed, COLUMNS.to_vec());
     let seqs =
         parse_fa(fasta).unwrap_or_else(|e| panic!("ERROR: failed to parse FASTA file -> {e}"));
@@ -442,33 +572,42 @@ fn refmt(fasta: &PathBuf, bed: &PathBuf, outdir: &PathBuf) -> (PathBuf, PathBuf)
         writer.write_all(seq).unwrap();
         writeln!(writer).unwrap();
 
-        if headers.len() > 1 {
-            let mut count = 0;
-            for header in &headers {
-                let (id, chr) = if let Some((read, chr)) = encode_for_tai(header) {
-                    (read, chr)
-                } else {
-                    panic!("ERROR: failed to encode header: {}", header);
-                };
+        match mode {
+            // INFO: nothing bc we already have an index!
+            Mode::Indexed => {}
+            Mode::Raw => {
+                if headers.len() > 1 {
+                    let mut count = 0;
+                    for header in &headers {
+                        let (id, chr) = if let Some((read, chr)) = encode_for_tai(header) {
+                            (read, chr)
+                        } else {
+                            panic!("ERROR: failed to encode header: {}", header);
+                        };
 
-                // INFO: first record -> chr byte len + chr bytes
-                // INFO: chr-len chr n_ids id[ref] id1 id2
-                if count < 1 {
-                    index.write_all(&[chr.len() as u8]).unwrap();
-                    index.write_all(chr.as_bytes()).unwrap();
+                        // INFO: first record -> chr byte len + chr bytes
+                        // INFO: chr-len chr n_ids id[ref] id1 id2
+                        if count < 1 {
+                            index.write_all(&[chr.len() as u8]).unwrap();
+                            index.write_all(chr.as_bytes()).unwrap();
 
-                    let n_ids = headers.len() as u16;
-                    index.write_all(&n_ids.to_be_bytes()).unwrap();
+                            let n_ids = headers.len() as u16;
+                            index.write_all(&n_ids.to_be_bytes()).unwrap();
+                        }
+
+                        index.write_all(&id.to_be_bytes()).unwrap();
+
+                        count += 1;
+                    }
                 }
-
-                index.write_all(&id.to_be_bytes()).unwrap();
-
-                count += 1;
             }
         }
     });
 
-    (fmt.clone(), fmt.with_extension("dedup.index"))
+    match mode {
+        Mode::Raw => (fmt.clone(), fmt.with_extension("dedup.index")),
+        Mode::Indexed => (fmt.clone(), index_path.as_ref().unwrap().clone()),
+    }
 }
 
 /// Reads a TAI index file into a `HashMap` that maps reference IDs to a list of query IDs.
