@@ -70,8 +70,8 @@ pub struct Args {
     pub dir_prefix: String,
 
     #[arg(
-        short = 'P',
-        long = "preffix",
+        short = 'S',
+        long = "suffix",
         required = false,
         help = "Outdir suffix",
         value_name = "VALUE",
