@@ -102,7 +102,8 @@ pub fn polya(
 }
 
 /// Merges polya .bed results into a single .bed per category.
-/// Where categories are: singletons, accepts and rejections
+/// Where categories are: singletons, accepts and rejections.
+/// After, it chunks each category into per-chromosome files.
 ///
 /// # Arguments
 ///

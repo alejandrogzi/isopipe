@@ -17,6 +17,8 @@ pub const SGN_FASTA_GZ: &str = "singletons.fasta.gz";
 pub const BED_ACCEPT: &str = "good.bed";
 pub const BED_REJECT: &str = "bad.bed";
 pub const BED_SGN_ACCEPT: &str = "singletons.good.bed";
+pub const INDEX: &str = "index";
+pub const REDUCED_BED: &str = "reduced.bed";
 
 // config pub const keys
 pub const OUTPUT_DIR: &str = "output_dir";
@@ -60,6 +62,9 @@ pub const ISO_FUSION: &str = "iso-fusion";
 pub const SEGMENT: &str = "segment";
 pub const POLYA_PARTS: &str = "parts";
 pub const SEQS: &str = "seqs";
+pub const FREE: &str = "free";
+pub const FUSIONS: &str = "fusions";
+pub const EXTRACT: &str = "extract";
 
 // filenames | suffixes
 pub const NF_RUNNER: &str = "execute_joblist.nf";
@@ -104,6 +109,10 @@ pub const ISOTOOLS_RELEASE: &str = concat!(
 );
 pub const ORF_CHUNKS: usize = 50000; // 50k transcripts
 pub const ORF_RELEASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/orf/target/release/orf");
+pub const EXTRACT_RELEASE: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/extract/target/release/extract"
+);
 
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];

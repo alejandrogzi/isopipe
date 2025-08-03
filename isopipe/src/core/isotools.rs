@@ -41,6 +41,7 @@ pub fn iso_fusion(
         .parse::<bool>()
         .unwrap_or(false);
 
+    // INFO: input_dir would have per-chr .bed files with polya suffixes
     for file in std::fs::read_dir(input_dir)
         .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
         .flatten()
@@ -65,6 +66,7 @@ pub fn iso_fusion(
             continue;
         }
 
+        // INFO: file stem should be 'chrX_all.aligned.accept' -> dir name
         let prefix = step_output_dir.join(
             file.path()
                 .file_stem()
@@ -150,6 +152,7 @@ pub fn agg_fusions(
             {
                 let subdir = entry.path();
 
+                // INFO: structure should be {step_fusion}/chr{chr}_all.aligned.accept/fusions*
                 // INFO: expected: fusions.bed / fusions.free.bed; optional: fusions.review + fusions.fakes
                 for file in std::fs::read_dir(&subdir)
                     .unwrap()

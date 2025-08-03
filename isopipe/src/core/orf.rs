@@ -1,3 +1,4 @@
+use crate::executor::manager::ParallelExecutor;
 use crate::{config::*, consts::*, executor::job::Job};
 
 use config::{OverlapType, Sequence, Strand, SCALE};
@@ -35,6 +36,7 @@ use std::path::PathBuf;
 pub fn orf(
     step: &PipelineStep,
     config: &Config,
+    executor: &mut ParallelExecutor,
     input_dir: &PathBuf,
     step_output_dir: &PathBuf,
 ) -> Vec<Job> {
@@ -57,39 +59,132 @@ pub fn orf(
     // INFO: each [subdir/main] should have -> free + fakes + review [other color + tag] and fusions
     match mode {
         ParallelMode::Chromosome => {
-            for entry in std::fs::read_dir(input_dir)
-                .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
-                .flatten()
-                .filter(|e| e.path().is_dir())
-            {
-                let subdir = entry.path();
+            unbounded_extract(
+                config,
+                executor,
+                input_dir,
+                &twobit,
+                step_output_dir,
+                chunk_size,
+            );
 
-                // INFO: expected: fusions.bed / fusions.free.bed
-                for bed in std::fs::read_dir(&subdir)
-                    .unwrap()
-                    .flatten()
-                    .filter(|e| e.path().is_file())
-                {
-                    process_bed(
-                        bed.path(),
-                        &twobit,
-                        step_output_dir,
-                        chunk_size,
-                        &args,
-                        &mut jobs,
-                    );
-                }
-            }
+            process_bed(
+                None,
+                &twobit,
+                step_output_dir,
+                chunk_size,
+                &args,
+                &mut jobs,
+                &mode,
+            );
         }
         ParallelMode::Genome => {
             for file in FUSION_FILES.iter().take(2) {
                 let bed = input_dir.join(file);
-                process_bed(bed, &twobit, step_output_dir, chunk_size, &args, &mut jobs);
+                process_bed(
+                    Some(bed),
+                    &twobit,
+                    step_output_dir,
+                    chunk_size,
+                    &args,
+                    &mut jobs,
+                    &mode,
+                );
             }
         }
     }
 
     return jobs;
+}
+
+/// Orchestrates the "unbounded" extraction process for a set of BED files,
+/// generating jobs for parallel execution.
+///
+/// This function is designed to handle multiple BED files organized in a specific directory
+/// structure. It iterates through subdirectories of `input_dir` (expected to be named `accept`
+/// or `reject`), and for each subdirectory, it finds BED files to be processed. For each
+/// found BED file, it constructs a command-line job to run a sequence extraction tool.
+/// The constructed jobs are then added to a `ParallelExecutor` for parallel processing.
+///
+/// The extraction tool (`EXTRACT_RELEASE`) is configured with the following options:
+/// - Path to the 2bit genome file.
+/// - Path to the input BED file.
+/// - An output directory for the results.
+/// - `--index` flag to enable indexed extraction mode.
+/// - `--suffix` to label the output files based on the subdirectory (`FREE` for `accept`,
+///   `FUSIONS` for `reject`).
+/// - `--chunk-size` to specify the number of records per chunk.
+///
+/// # Arguments
+///
+/// * `config` - A reference to the `Config` struct.
+/// * `executor` - A mutable reference to a `ParallelExecutor` which manages the execution of jobs.
+/// * `input_dir` - A `PathBuf` pointing to the directory containing `accept` and `reject` subdirectories.
+/// * `twobit` - A `PathBuf` pointing to the 2bit genome file.
+/// * `step_output_dir` - A `PathBuf` for the output directory of the extraction step.
+/// * `chunk_size` - An integer specifying the desired chunk size for the extraction.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - It fails to read the `input_dir` directory.
+/// - A subdirectory name does not end with `accept` or `reject`.
+/// - It fails to read a subdirectory.
+/// - It fails to create a `Job` from the command string.
+fn unbounded_extract(
+    config: &Config,
+    executor: &mut ParallelExecutor,
+    input_dir: &PathBuf,
+    twobit: &PathBuf,
+    step_output_dir: &PathBuf,
+    chunk_size: usize,
+) {
+    let mut jobs = Vec::new();
+
+    // INFO: structure should be {step_fusion}/chr{chr}_all.aligned.{accept/reject}
+    for entry in std::fs::read_dir(input_dir)
+        .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
+        .flatten()
+        .filter(|e| e.path().is_dir())
+    {
+        let subdir = entry.path();
+
+        let suffix = if subdir.ends_with("accept") {
+            FREE
+        } else if subdir.ends_with("reject") {
+            FUSIONS
+        } else {
+            log::error!("ERROR: subdir {subdir:?} suffix could not be recognized -> should end it 'accept' or 'reject'!");
+            std::process::exit(1);
+        };
+
+        // INFO: structure should be {step_fusion}/chr{chr}_all.aligned.accept/fusions*
+        // INFO: expected: fusions.bed / fusions.free.bed
+        for bed in std::fs::read_dir(&subdir)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.path().is_file())
+        {
+            // INFO: collect paths and collect extract cmds
+            // INFO: end path would look like: {step_orf}/seqs_{suffix}/{chr}:{chunk}/{name}{fa/bed}
+            let cmd = format!(
+                "{} --twobit {} --bed {} -o {} --index --suffix {} --chunk-size {}",
+                EXTRACT_RELEASE,
+                &twobit.display(),
+                bed.path().display(),
+                step_output_dir.display(),
+                suffix,
+                chunk_size
+            );
+
+            jobs.push(Job::from(cmd));
+        }
+    }
+
+    // INFO: running inner_jobs
+    executor
+        .add_jobs(jobs)
+        .and_send(config, EXTRACT, step_output_dir.clone(), 8, 32, None);
 }
 
 /// Processes a BED file by extracting sequences, chunking them, and generating
@@ -138,6 +233,158 @@ pub fn orf(
 /// );
 /// ```
 fn process_bed(
+    bed: Option<PathBuf>,
+    twobit: &PathBuf,
+    step_output_dir: &PathBuf,
+    chunk_size: usize,
+    args: &Vec<String>,
+    jobs: &mut Vec<Job>,
+    mode: &ParallelMode,
+) {
+    match mode {
+        ParallelMode::Chromosome => parallel_processing(step_output_dir, args, jobs),
+        ParallelMode::Genome => cannonical_processing(
+            bed.unwrap(),
+            twobit,
+            step_output_dir,
+            chunk_size,
+            args,
+            jobs,
+        ),
+    }
+}
+
+/// Prepares parallel jobs for BLAST and Translation AI (TAI) analysis on a set of
+/// previously indexed and chunked files.
+///
+/// This function is designed to be run after an indexing and chunking step has been
+/// completed. It iterates through a directory structure (e.g., `{step_orf}/seqs_{suffix}/{chr}:{chunk}`)
+/// to find the necessary files for each chunk: a FASTA file, a reduced BED file, and an
+/// index file.
+///
+/// For each chunk directory, it constructs two command-line jobs: one for the `blast`
+/// subcommand and one for the `tai` subcommand of the `ORF_RELEASE` tool. It dynamically
+/// builds the command strings by appending the paths to the FASTA, reduced BED, and index
+/// files found within each chunk directory.
+///
+/// The `blast` command includes arguments for e-value, output directory, minimum ORF length,
+/// and the protein database. The `tai` command similarly specifies the output directory.
+/// Both commands are then enriched with the paths to the FASTA, reduced BED, and index files.
+///
+/// The resulting jobs are added to a `jobs` vector for parallel execution.
+///
+/// # Arguments
+///
+/// * `step_output_dir` - A `PathBuf` pointing to the root directory containing the chunked
+///                       output from a previous step (e.g., `extract`).
+/// * `args` - A reference to a `Vec<String>` containing command-line arguments,
+///            specifically for `orfipy`'s e-value, minimum ORF length, and database path.
+/// * `jobs` - A mutable reference to a `Vec<Job>` where the generated BLAST and TAI jobs are stored.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - It fails to read the `step_output_dir` or any of its subdirectories.
+/// - It fails to construct a `Job` from the command string.
+fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut Vec<Job>) {
+    // INFO: need to loop again to run blast and tai
+    // INFO: end path would look like: {step_orf}/seqs_{suffix}/{chr}:{chunk}/{name}{fa/bed/reduced/index}
+    for entry in std::fs::read_dir(step_output_dir)
+        .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", step_output_dir))
+        .flatten()
+        .filter(|e| e.path().is_dir())
+    {
+        let subdir = entry.path(); // INFO: seqs_{suffix}
+
+        // INFO: structure should be {step_orf}/seqs_{suffix}/{chr}:{chunk}/{fa/bed/reduced/index}
+        // INFO: expected: reduced_bed/fa/index triplet
+        for chunk in std::fs::read_dir(&subdir)
+            .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", subdir))
+            .flatten()
+            .filter(|e| e.path().is_dir())
+        {
+            let chunked_dir = chunk.path(); // INFO: {chr}:{chunk}
+
+            let mut blast = format!(
+                "{} blast -e {} --outdir {} --orf-min-len {} --db {} ",
+                ORF_RELEASE,
+                args[1], // INFO: orfipy
+                chunked_dir.display(),
+                args[2], // INFO: orf_min_len,
+                args[3], // INFO: database
+            );
+
+            let mut tai = format!("{} tai --outdir {} ", ORF_RELEASE, chunked_dir.display(),);
+
+            for file in std::fs::read_dir(&chunked_dir)
+                .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", chunked_dir))
+                .flatten()
+                .filter(|e| e.path().is_file())
+            {
+                let file = file.path();
+
+                if file.ends_with(REDUCED_BED) {
+                    let part = format!("--alignments {} ", file.display());
+                    tai += &part;
+                    blast += &part;
+                } else if file.ends_with(FA) {
+                    let part = format!("--fasta {} ", file.display());
+                    tai += &part;
+                    blast += &part;
+                } else if file.ends_with(INDEX) {
+                    let part = format!("--index {} ", file.display());
+                    tai += &part;
+                    blast += &part;
+                } else {
+                    continue;
+                };
+            }
+
+            jobs.push(Job::from(blast));
+            jobs.push(Job::from(tai));
+        }
+    }
+}
+
+/// Processes a single BED file in "canonical" mode by chunking it and creating
+/// parallel jobs for BLAST and TAI (Translation AI) analysis.
+///
+/// This function is a core part of the canonical processing pipeline. It first validates
+/// the input BED file to ensure it exists and is not empty. It then extracts a suffix
+/// from the filename, which is used for organizing output files.
+///
+/// The function's main task is to call `bounded_extract` to split the large BED file
+/// into smaller, more manageable chunks. This is the second chunking step in the
+/// pipeline, specifically designed for handling fusion-related files. For each
+/// resulting chunk (a pair of FASTA and BED files), it generates two command-line
+/// jobs:
+/// 1. A **BLAST job**: Executes the `ORF_RELEASE` tool with the `blast` subcommand.
+///    This job searches for open reading frames (ORFs) and aligns them against a
+///    specified protein database.
+/// 2. A **TAI job**: Executes the `ORF_RELEASE` tool with the `tai` subcommand.
+///    This job performs a Translation AI analysis on the ORFs.
+///
+/// Both of these jobs are added to a `jobs` vector to be executed in parallel
+/// by a `ParallelExecutor`.
+///
+/// # Arguments
+///
+/// * `bed` - A `PathBuf` to the input BED file to be processed.
+/// * `twobit` - A reference to a `PathBuf` pointing to the `.2bit` genome file.
+/// * `step_output_dir` - A reference to a `PathBuf` representing the base output directory for this step.
+/// * `chunk_size` - The maximum number of records to include in each chunk.
+/// * `args` - A reference to a `Vec<String>` containing command-line arguments for the child processes,
+///            specifically `orfipy`'s e-value, minimum ORF length, and the path to the protein database.
+/// * `jobs` - A mutable reference to a `Vec<Job>` where the generated BLAST and TAI jobs are stored.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - It cannot get the file stem from the `bed` path.
+/// - It cannot extract the file suffix from the basename.
+/// - It cannot determine the parent directory for a chunked BED file.
+/// - The `bounded_extract` or `Job::from` functions fail.
+fn cannonical_processing(
     bed: PathBuf,
     twobit: &PathBuf,
     step_output_dir: &PathBuf,
@@ -160,7 +407,7 @@ fn process_bed(
         .unwrap_or_else(|| panic!("ERROR: could not get suffix from file -> {:?}", bed));
 
     // INFO: inflection point -> chunking fusion files [2nd chunking step in the pipeline]
-    let paths = extract(&bed, &twobit, step_output_dir, chunk_size, suffix);
+    let paths = bounded_extract(&bed, &twobit, step_output_dir, chunk_size, suffix);
 
     for (chunked_fa, chunked_bed) in paths {
         let chunked_dir = &chunked_bed.parent().unwrap_or_else(|| {
@@ -218,8 +465,7 @@ fn process_bed(
 ///     &step_output_dir,
 /// );
 /// ```
-#[deprecated = "See ../../assets/extract for binary version!"]
-pub fn extract(
+pub fn bounded_extract(
     reads: &PathBuf,
     twobit: &PathBuf,
     step_output_dir: &PathBuf,
