@@ -1,7 +1,7 @@
 use crate::executor::manager::ParallelExecutor;
 use crate::{config::*, consts::*, executor::job::Job};
 
-use config::{OverlapType, Sequence, Strand, SCALE};
+use config::{OverlapType, Sequence, Strand, FUSION_FREE, SCALE};
 use iso_polya::utils::get_sequences;
 use packbed::{unpack, GenePred};
 use rayon::prelude::*;
@@ -141,6 +141,9 @@ fn unbounded_extract(
 ) {
     let mut jobs = Vec::new();
 
+    let suffixes = vec![config::FUSIONS, FUSION_FREE];
+    let matched_suffixes = vec![crate::consts::FUSIONS, FREE];
+
     // INFO: structure should be {step_fusion}/chr{chr}_all.aligned.{accept/reject}
     for entry in std::fs::read_dir(input_dir)
         .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
@@ -148,7 +151,6 @@ fn unbounded_extract(
         .filter(|e| e.path().is_dir())
     {
         let subdir = entry.path();
-        let suffix = get_suffix_from_path(&subdir);
 
         // INFO: structure should be {step_fusion}/chr{chr}_all.aligned.accept/fusions*
         // INFO: expected: fusions.bed / fusions.free.bed
@@ -157,13 +159,16 @@ fn unbounded_extract(
             .flatten()
             .filter(|e| e.path().is_file())
         {
+            let bed = bed.path();
+            let suffix = get_suffix_from_path(&bed, &suffixes, &matched_suffixes);
+
             // INFO: collect paths and collect extract cmds
             // INFO: end path would look like: {step_orf}/seqs_{suffix}/{chr}:{chunk}/{name}{fa/bed}
             let cmd = format!(
                 "{} --twobit {} --bed {} -o {} --index --suffix {} --chunk-size {}",
                 EXTRACT_RELEASE,
                 &twobit.display(),
-                bed.path().display(),
+                bed.display(),
                 step_output_dir.display(),
                 suffix,
                 chunk_size
@@ -279,6 +284,8 @@ fn process_bed(
 /// - It fails to read the `step_output_dir` or any of its subdirectories.
 /// - It fails to construct a `Job` from the command string.
 fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut Vec<Job>) {
+    let suffixes = vec![REDUCED_BED, FA, INDEX];
+
     // INFO: need to loop again to run blast and tai
     // INFO: end path would look like: {step_orf}/seqs_{suffix}/{chr}:{chunk}/{name}{fa/bed/reduced/index}
     for entry in std::fs::read_dir(step_output_dir)
@@ -314,16 +321,17 @@ fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut
                 .filter(|e| e.path().is_file())
             {
                 let file = file.path();
+                let ext = get_suffix_from_path(&file, &suffixes, &suffixes);
 
-                if file.ends_with(REDUCED_BED) {
+                if ext == REDUCED_BED {
                     let part = format!("--alignments {} ", file.display());
                     tai += &part;
                     blast += &part;
-                } else if file.ends_with(FA) {
+                } else if ext == FA {
                     let part = format!("--fasta {} ", file.display());
                     tai += &part;
                     blast += &part;
-                } else if file.ends_with(INDEX) {
+                } else if ext == INDEX {
                     let part = format!("--index {} ", file.display());
                     tai += &part;
                     blast += &part;
@@ -602,87 +610,93 @@ fn __merge_toga(step_output_dir: &PathBuf, config: &Config, step: &PipelineStep)
     shell(cmd, msg, tool);
 }
 
-/// Classifies a file path based on its final directory or filename suffix.
+/// Retrieves a return value by matching the file's suffix against a predefined list.
 ///
-/// This function is a utility for pipeline steps that process files organized
-/// into directories ending with either "accept" or "reject". It determines
-/// the type of file by checking its suffix and returns a corresponding
-/// static string (`FREE` or `FUSIONS`). This helps in dynamically naming
-/// output files or directing logic based on the input type.
-///
-/// The function operates on the final component of the path. If the name
-/// ends with "accept", it returns the string associated with free reads (`FREE`).
-/// If it ends with "reject", it returns the string for fusions (`FUSIONS`).
-/// If the suffix is not recognized, the program will panic.
+/// This function provides a flexible way to classify a file path based on its name's
+/// suffix. It takes a vector of possible suffixes to match and a corresponding vector
+/// of return values. It iterates through these pairs and returns the value associated
+/// with the first matching suffix found at the end of the file name. This is a robust
+/// alternative to hard-coded checks, allowing for easy expansion of supported suffixes.
 ///
 /// # Arguments
 ///
-/// * `path` - A reference to a `PathBuf` pointing to a file or directory.
+/// * `path` - A reference to a `PathBuf` representing the file or directory.
+/// * `match_suffixes` - A vector of string slices (`&[&str]`) containing the suffixes to check against.
+/// * `return_values` - A vector of string slices (`&[&'a str]`) containing the values to return for each corresponding suffix.
 ///
 /// # Returns
 ///
-/// A `&'static str` which will be either `FREE` or `FUSIONS`.
+/// A `&'a str` which is the value associated with the matched suffix.
 ///
 /// # Panics
 ///
 /// This function will panic if:
-/// - The path has no file name component.
-/// - The file name cannot be converted to a UTF-8 string.
-/// - The file name's suffix does not end with "accept" or "reject".
+/// - The lengths of `match_suffixes` and `return_values` are not equal.
+/// - The path has no file name component or the file name is not valid UTF-8.
+/// - No matching suffix is found in the `match_suffixes` vector. The program
+///   will exit with a non-zero status code in this case.
 ///
 /// # Example
 ///
-/// ```rust
-/// use std::path::{Path, PathBuf};
+/// ```rust, no_run
+/// use std::path::PathBuf;
 /// use std::process;
 ///
-/// // Assume FREE and FUSIONS are defined constants somewhere in the module.
+/// // Define suffixes and return values
 /// const FREE: &str = "free";
 /// const FUSIONS: &str = "fusions";
+/// let match_suffixes = vec!["accept", "reject"];
+/// let return_values = vec![FREE, FUSIONS];
 ///
-/// // Dummy function to demonstrate how `get_suffix_from_path` would be used.
-/// fn get_suffix_from_path(path: &Path) -> &'static str {
-///     path.file_name()
-///         .and_then(|name| name.to_str())
-///         .map(|name_str| {
-///             if name_str.ends_with("accept") {
-///                 FREE
-///             } else if name_str.ends_with("reject") {
-///                 FUSIONS
-///             } else {
-///                 eprintln!("ERROR: directory suffix not recognized: {:?}", path);
-///                 std::process::exit(1);
-///             }
-///         }).unwrap_or_else(|| panic!("ERROR: could recognize suffix!"))
-/// }
-///
-/// let path = Path::new("/foo/bar/chrX_all.aligned.reject");
-///
-/// match get_suffix_from_path(path) {
-///     "free" => println!("This is a path for free reads."),
-///     "fusions" => println!("This is a path for fusion reads."),
-///     _ => unreachable!(), // This case is handled by the panic in the function
-/// }
-///
-/// let accept_path = Path::new("some/directory/accept");
-/// let result = get_suffix_from_path(accept_path);
+/// // Example with a matching suffix
+/// let path_accept = PathBuf::from("/foo/bar/chrX_all.aligned.accept");
+/// let result = get_suffix_from_path(&path_accept, &match_suffixes, &return_values);
 /// assert_eq!(result, FREE);
 ///
-/// let reject_path = Path::new("another/dir/reject");
-/// let result = get_suffix_from_path(reject_path);
-/// assert_eq!(result, FUSIONS);
+/// // Example with another matching suffix
+/// let path_reject = PathBuf::from("another/dir/chrX_all.aligned.reject");
+/// let result_reject = get_suffix_from_path(&path_reject, &match_suffixes, &return_values);
+/// assert_eq!(result_reject, FUSIONS);
+///
+/// // Example that would cause a panic (mismatched lengths)
+/// // let bad_return_values = vec![FREE];
+/// // let _ = get_suffix_from_path(&path_accept, &match_suffixes, &bad_return_values);
+///
+/// // Example that would exit the program (no matching suffix)
+/// // let path_unknown = PathBuf::from("some/file.txt");
+/// // let _ = get_suffix_from_path(&path_unknown, &match_suffixes, &return_values);
 /// ```
-pub fn get_suffix_from_path(path: &PathBuf) -> &'static str {
-    path.file_name()
+pub fn get_suffix_from_path<'a>(
+    path: &PathBuf,
+    match_suffixes: &Vec<&str>,
+    return_values: &Vec<&'a str>,
+) -> &'a str {
+    assert_eq!(
+        match_suffixes.len(),
+        return_values.len(),
+        "match_suffixes and return_values must have the same length"
+    );
+
+    let name_str = path
+        .file_name()
         .and_then(|name| name.to_str())
-        .map(|name_str| {
-            if name_str.ends_with("accept") {
-                FREE
-            } else if name_str.ends_with("reject") {
-                FUSIONS
-            } else {
-                log::error!("ERROR: subdir {path:?} suffix could not be recognized -> should end it 'accept' or 'reject'!");
-                std::process::exit(1);
-            }
-        }).unwrap_or_else(|| panic!("ERROR: could recognize suffix!"))
+        .unwrap_or_else(|| {
+            panic!(
+                "Could not extract valid UTF-8 file name from path: {:?}",
+                path
+            )
+        });
+
+    for (suffix, value) in match_suffixes.iter().zip(return_values.iter()) {
+        if name_str.ends_with(suffix) {
+            return value;
+        }
+    }
+
+    log::error!(
+        "ERROR: path {:?} does not end with any recognized suffix: {:?}",
+        path,
+        match_suffixes
+    );
+    std::process::exit(1);
 }
