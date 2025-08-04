@@ -160,7 +160,13 @@ fn unbounded_extract(
             .filter(|e| e.path().is_file())
         {
             let bed = bed.path();
-            let suffix = get_suffix_from_path(&bed, &suffixes, &matched_suffixes);
+            let suffix =
+                get_suffix_from_path(&bed, &suffixes, &matched_suffixes).unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: path {:?} does not end with any recognized suffix: {:?}",
+                        bed, matched_suffixes
+                    )
+                }); // INFO: safe to unwrap and error because we always expect matches only!
 
             // INFO: collect paths and collect extract cmds
             // INFO: end path would look like: {step_orf}/seqs_{suffix}/{chr}:{chunk}/{name}{fa/bed}
@@ -323,15 +329,15 @@ fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut
                 let file = file.path();
                 let ext = get_suffix_from_path(&file, &suffixes, &suffixes);
 
-                if ext == REDUCED_BED {
+                if ext == Some(REDUCED_BED) {
                     let part = format!("--alignments {} ", file.display());
                     tai += &part;
                     blast += &part;
-                } else if ext == FA {
+                } else if ext == Some(FA) {
                     let part = format!("--fasta {} ", file.display());
                     tai += &part;
                     blast += &part;
-                } else if ext == INDEX {
+                } else if ext == Some(INDEX) {
                     let part = format!("--index {} ", file.display());
                     tai += &part;
                     blast += &part;
@@ -670,7 +676,7 @@ pub fn get_suffix_from_path<'a>(
     path: &PathBuf,
     match_suffixes: &Vec<&str>,
     return_values: &Vec<&'a str>,
-) -> &'a str {
+) -> Option<&'a str> {
     assert_eq!(
         match_suffixes.len(),
         return_values.len(),
@@ -689,14 +695,9 @@ pub fn get_suffix_from_path<'a>(
 
     for (suffix, value) in match_suffixes.iter().zip(return_values.iter()) {
         if name_str.ends_with(suffix) {
-            return value;
+            return Some(value);
         }
     }
 
-    log::error!(
-        "ERROR: path {:?} does not end with any recognized suffix: {:?}",
-        path,
-        match_suffixes
-    );
-    std::process::exit(1);
+    return None;
 }
