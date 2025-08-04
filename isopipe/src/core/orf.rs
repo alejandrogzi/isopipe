@@ -148,15 +148,7 @@ fn unbounded_extract(
         .filter(|e| e.path().is_dir())
     {
         let subdir = entry.path();
-
-        let suffix = if subdir.ends_with("accept") {
-            FREE
-        } else if subdir.ends_with("reject") {
-            FUSIONS
-        } else {
-            log::error!("ERROR: subdir {subdir:?} suffix could not be recognized -> should end it 'accept' or 'reject'!");
-            std::process::exit(1);
-        };
+        let suffix = get_suffix_from_path(&subdir);
 
         // INFO: structure should be {step_fusion}/chr{chr}_all.aligned.accept/fusions*
         // INFO: expected: fusions.bed / fusions.free.bed
@@ -608,4 +600,89 @@ fn __merge_toga(step_output_dir: &PathBuf, config: &Config, step: &PipelineStep)
     );
 
     shell(cmd, msg, tool);
+}
+
+/// Classifies a file path based on its final directory or filename suffix.
+///
+/// This function is a utility for pipeline steps that process files organized
+/// into directories ending with either "accept" or "reject". It determines
+/// the type of file by checking its suffix and returns a corresponding
+/// static string (`FREE` or `FUSIONS`). This helps in dynamically naming
+/// output files or directing logic based on the input type.
+///
+/// The function operates on the final component of the path. If the name
+/// ends with "accept", it returns the string associated with free reads (`FREE`).
+/// If it ends with "reject", it returns the string for fusions (`FUSIONS`).
+/// If the suffix is not recognized, the program will panic.
+///
+/// # Arguments
+///
+/// * `path` - A reference to a `PathBuf` pointing to a file or directory.
+///
+/// # Returns
+///
+/// A `&'static str` which will be either `FREE` or `FUSIONS`.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - The path has no file name component.
+/// - The file name cannot be converted to a UTF-8 string.
+/// - The file name's suffix does not end with "accept" or "reject".
+///
+/// # Example
+///
+/// ```rust
+/// use std::path::{Path, PathBuf};
+/// use std::process;
+///
+/// // Assume FREE and FUSIONS are defined constants somewhere in the module.
+/// const FREE: &str = "free";
+/// const FUSIONS: &str = "fusions";
+///
+/// // Dummy function to demonstrate how `get_suffix_from_path` would be used.
+/// fn get_suffix_from_path(path: &Path) -> &'static str {
+///     path.file_name()
+///         .and_then(|name| name.to_str())
+///         .map(|name_str| {
+///             if name_str.ends_with("accept") {
+///                 FREE
+///             } else if name_str.ends_with("reject") {
+///                 FUSIONS
+///             } else {
+///                 eprintln!("ERROR: directory suffix not recognized: {:?}", path);
+///                 std::process::exit(1);
+///             }
+///         }).unwrap_or_else(|| panic!("ERROR: could recognize suffix!"))
+/// }
+///
+/// let path = Path::new("/foo/bar/chrX_all.aligned.reject");
+///
+/// match get_suffix_from_path(path) {
+///     "free" => println!("This is a path for free reads."),
+///     "fusions" => println!("This is a path for fusion reads."),
+///     _ => unreachable!(), // This case is handled by the panic in the function
+/// }
+///
+/// let accept_path = Path::new("some/directory/accept");
+/// let result = get_suffix_from_path(accept_path);
+/// assert_eq!(result, FREE);
+///
+/// let reject_path = Path::new("another/dir/reject");
+/// let result = get_suffix_from_path(reject_path);
+/// assert_eq!(result, FUSIONS);
+/// ```
+pub fn get_suffix_from_path(path: &PathBuf) -> &'static str {
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(|name_str| {
+            if name_str.ends_with("accept") {
+                FREE
+            } else if name_str.ends_with("reject") {
+                FUSIONS
+            } else {
+                log::error!("ERROR: subdir {path:?} suffix could not be recognized -> should end it 'accept' or 'reject'!");
+                std::process::exit(1);
+            }
+        }).unwrap_or_else(|| panic!("ERROR: could recognize suffix!"))
 }
