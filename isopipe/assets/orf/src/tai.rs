@@ -220,6 +220,55 @@ fn unroll_tai(index: PathBuf, fasta: PathBuf, alignments: &PathBuf, mode: &Mode)
     }
 }
 
+/// Processes TAI (Translation AI) predictions in a "canonical" mode, which is used
+/// when input sequences were not indexed during a preceding extraction step.
+///
+/// This function reads a TAI-specific index to map canonical IDs to their
+/// original queries. It then parses the prediction file in parallel, translates
+/// ORF coordinates to absolute CDS coordinates using a `GenePred` reference, and
+/// "inflates" each prediction by generating output records for both the canonical ID
+/// and all associated original queries. The results are collected in a thread-safe
+/// accumulator and written to a file.
+///
+/// # Arguments
+///
+/// * `predictions` - A `String` containing the full content of the TAI prediction output.
+/// * `records` - A `DashMap<String, HashMap<String, GenePred>>` holding the reference
+///   gene prediction records, keyed by chromosome and then by ID.
+/// * `index` - A `PathBuf` representing the path to the TAI index file.
+/// * `accumulator` - A `DashSet<String>` used as a thread-safe set to collect the
+///   output lines before writing to the final file.
+/// * `writer` - A `BufWriter<File>` used for writing the final output to a file.
+///
+/// # Returns
+///
+/// This function does not return a value. It writes its output directly to the provided `writer`.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use std::path::PathBuf;
+/// use std::collections::HashMap;
+/// use std::io::BufWriter;
+/// use std::fs::File;
+/// use dashmap::DashMap;
+/// use dashset::DashSet;
+///
+/// // Dummy types for the example
+/// struct GenePred;
+///
+/// // Assume a function `cannonical` exists with the correct signature.
+/// // cannonical(predictions: String, records: DashMap<String, HashMap<String, GenePred>>, ...);
+///
+/// let predictions = "example predictions...".to_string();
+/// let records = DashMap::new();
+/// let index_path = PathBuf::from("path/to/index.txt");
+/// let accumulator = DashSet::new();
+/// let writer = BufWriter::new(File::create("output.txt").unwrap());
+///
+/// // Calling the function would look like this:
+/// // cannonical(predictions, records, index_path, accumulator, writer);
+/// ```
 fn cannonical(
     predictions: String,
     records: DashMap<String, HashMap<String, GenePred>>,
@@ -350,6 +399,55 @@ fn cannonical(
     });
 }
 
+/// Processes TAI (Translation AI) predictions when input sequences **were indexed**
+/// during a prior extraction step. This function leverages a pre-computed binary
+/// index to efficiently map numeric IDs back to their original genomic queries.
+///
+/// It operates in parallel, parsing the prediction file and using the numeric ID
+/// from each line to retrieve the original `GenePred` record and its associated queries.
+/// It then performs coordinate translation and inflates the results, generating
+/// a record for each original query. These records are then collected in a
+/// thread-safe accumulator and written to the output file.
+///
+/// # Arguments
+///
+/// * `predictions` - A `String` containing the full content of the TAI prediction output.
+/// * `records` - A `DashMap<String, HashMap<String, GenePred>>` holding the reference
+///   gene prediction records, keyed by chromosome and then by ID.
+/// * `index` - A `PathBuf` representing the path to the binary index file from the extraction step.
+/// * `accumulator` - A `DashSet<String>` used as a thread-safe set to collect the
+///   output lines before writing to the final file.
+/// * `writer` - A `BufWriter<File>` used for writing the final output to a file.
+///
+/// # Returns
+///
+/// This function does not return a value. It writes its output directly to the provided `writer`.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use std::path::PathBuf;
+/// use std::collections::HashMap;
+/// use std::io::BufWriter;
+/// use std::fs::File;
+/// use dashmap::DashMap;
+/// use dashset::DashSet;
+///
+/// // Dummy types for the example
+/// struct GenePred;
+///
+/// // Assume a function `indexed` exists with the correct signature.
+/// // indexed(predictions: String, records: DashMap<String, HashMap<String, GenePred>>, ...);
+///
+/// let predictions = "example predictions...".to_string();
+/// let records = DashMap::new();
+/// let index_path = PathBuf::from("path/to/extract.index");
+/// let accumulator = DashSet::new();
+/// let writer = BufWriter::new(File::create("output.txt").unwrap());
+///
+/// // Calling the function would look like this:
+/// // indexed(predictions, records, index_path, accumulator, writer);
+/// ```
 fn indexed(
     predictions: String,
     records: DashMap<String, HashMap<String, GenePred>>,
