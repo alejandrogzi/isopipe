@@ -17,7 +17,7 @@ use hashbrown::HashMap;
 use log::warn;
 use memchr::memchr;
 use memmap2::Mmap;
-use packbed::reader as bed_reader;
+use packbed::{reader as bed_reader, record::GenePred};
 use smol_str::SmolStr;
 
 use std::fs::File;
@@ -385,4 +385,242 @@ pub fn get_chr_from_path(path: &PathBuf) -> String {
         .to_string();
 
     chr
+}
+
+/// Retrieves the absolute CDS (Coding Sequence) coordinates for a given transcript.
+///
+/// This function looks up the `GenePred` record corresponding to the provided
+/// chromosome and ID within the `records` map. It then uses the `map_absolute_cds`
+/// method of the `GenePred` struct to convert the alignment start and end coordinates
+/// into absolute CDS coordinates.
+///
+/// # Arguments
+///
+/// * `records` - A reference to a `DashMap` containing `GenePred` records,
+///               keyed by chromosome and then by transcript ID.
+/// * `chr` - A string slice representing the chromosome name.
+/// * `id` - A string slice representing the transcript ID (e.g., "R1_chr1").
+/// * `start` - The start coordinate of the alignment.
+/// * `end` - The end coordinate of the alignment.
+///
+/// # Returns
+///
+/// A tuple `(u64, u64)` representing the absolute start and end coordinates of the CDS.
+/// If the mapping fails or results in default values, it returns `(0, 0)`.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - The specified `chr` is not found as a key in the `records` map.
+/// - The specified `id` is not found as a key within the chromosome's `HashMap` in `records`.
+///
+pub fn get_cds_coords(
+    records: &DashMap<String, HashMap<String, GenePred>>,
+    chr: &str,
+    id: &str,
+    start: u64,
+    end: u64,
+) -> (u64, u64) {
+    // INFO: retrieving the reference gene prediction record
+    let (orf_start, orf_end) = records
+        .get_mut(chr)
+        .unwrap_or_else(|| {
+            panic!(
+                "ERROR: chromosome from {} not found in sequences -> {}!",
+                id, chr
+            );
+        })
+        .get_mut(id)
+        .unwrap_or_else(|| {
+            panic!("ERROR: id not found in BED, this is a bug -> {}!", id);
+        })
+        .map_absolute_cds(start, end);
+
+    (orf_start, orf_end)
+}
+
+/// Represents a single BLAST alignment record.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BlastRecord {
+    pub blast_id: String,                     // ID of the blast record
+    pub blast_idx_id: u32,                    // Indexed ID of the blast record
+    pub blast_pid: f32,                       // Percentage of identical matches
+    pub blast_e_value: f64,                   // E-value of the match
+    pub blast_offset: i32,                    // Offset in the query sequence where the match starts
+    pub blast_alignment_len: u32,             // Length of the alignment
+    pub percent_aligned: f32,                 // Percentage of the query sequence that is aligned
+    pub coords: Option<(usize, usize, char)>, // Optional CDS relative coords + strand
+    pub orf: u32,                             // Optional ORF nested number [defaults to 0]
+}
+
+impl BlastRecord {
+    /// Creates a new `BlastRecord` from a slice of string parts, typically
+    /// obtained by splitting a line from a DIAMOND BLAST output.
+    ///
+    /// The expected format of `parts` corresponds to `diamond blastp --outfmt 6`
+    /// output: `qseqid pident qlen slen length qstart qend sstart send evalue`.
+    ///
+    /// # Arguments
+    ///
+    /// * `parts` - A slice of string slices, where each element represents
+    ///             a column from the BLAST output.
+    ///
+    /// # Returns
+    ///
+    /// A `BlastRecord` instance populated with the parsed data. The `blast_id`
+    /// field is initially empty and is expected to be set later.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if:
+    /// - `parts` does not contain at least 10 elements.
+    /// - Any of the numeric fields (`blast_idx_id`, `blast_pid`, `blast_e_value`,
+    ///   `blast_offset` components, `blast_alignment_len`, query length for `percent_aligned`)
+    ///   cannot be successfully parsed into their respective types.
+    ///
+    /// # Example
+    ///
+    /// Follows this format:
+    ///
+    /// qseqid pident  qlen    slen   length qstart    qend   sstart   send     evalue
+    ///  17      97.2    142     357     141     1       141     217     357     5.09e-93
+    ///
+    /// ```rust
+    /// let parts = ["1", "99.0", "500", "0", "100", "1", "100", "1", "100", "1e-10"];
+    /// let record = BlastRecord::from_parts(&parts);
+    /// ```
+    pub fn from_parts(parts: &[&str], mode: &Mode, regex: &regex::Regex) -> Self {
+        if parts.len() < 10 {
+            panic!("ERROR: not enough parts to create BlastRecord -> {parts:?}");
+        }
+
+        let blast_idx_id = match mode {
+            // WARN: with extract indexing qseqid -> 0_ORF.1_[1-10](+)
+            Mode::Indexed => parts[0].split('_').collect::<Vec<&str>>()[0]
+                .parse::<u32>()
+                .unwrap_or_else(|_| {
+                    panic!("ERROR: failed to parse ID from line: {:?}", parts);
+                }),
+            Mode::Raw => parts[0].parse::<u32>().unwrap_or_else(|_| {
+                panic!("ERROR: failed to parse ID from line: {:?}", parts);
+            }),
+        };
+
+        let coords = match mode {
+            // WARN: with extract indexing qseqid -> 0_ORF.1_[1-10](+)
+            Mode::Indexed => split_header(parts[0], regex),
+            Mode::Raw => None,
+        };
+
+        let orf = match mode {
+            // WARN: with extract indexing qseqid -> 0_ORF.1_[1-10](+)
+            Mode::Indexed => parts[0].split('_').collect::<Vec<&str>>()[1]
+                .strip_prefix("ORF.")
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: failed to strip prefix from ID from line: {:?}",
+                        parts
+                    );
+                })
+                .parse::<u32>()
+                .unwrap_or(0),
+            Mode::Raw => 0,
+        };
+
+        let blast_pid = parts[1].parse::<f32>().unwrap_or_else(|_| {
+            panic!("ERROR: failed to parse blast PID from parts: {:?}", parts);
+        });
+
+        let blast_e_value = parts[9].parse::<f64>().unwrap_or_else(|_| {
+            panic!(
+                "ERROR: failed to parse blast E-value from parts: {:?}",
+                parts
+            );
+        });
+        // INFO: if parsed to zero, but string was not "0.0", it's subnormal
+        let blast_e_value = if blast_e_value == 0.0 && parts[9] != "0.0" {
+            // INFO: represent it with the minimum positive value
+            f64::MIN_POSITIVE // INFO: ~2.225074e-308
+        } else {
+            blast_e_value
+        };
+
+        let blast_offset = parts[7].parse::<i32>().unwrap_or_else(|_| {
+            panic!(
+                "ERROR: failed to parse blast offset from parts: {:?}",
+                parts
+            )
+        }) - parts[5].parse::<i32>().unwrap_or_else(|_| {
+            panic!(
+                "ERROR: failed to parse blast offset from parts: {:?}",
+                parts
+            );
+        });
+        let blast_alignment_len = parts[4].parse::<u32>().unwrap_or_else(|_| {
+            panic!(
+                "ERROR: failed to parse blast offset from parts: {:?}",
+                parts
+            )
+        });
+
+        let percent_aligned = blast_alignment_len as f32
+            / parts[2].parse::<u32>().unwrap_or_else(|_| {
+                panic!(
+                    "ERROR: failed to parse blast length from parts: {:?}",
+                    parts
+                );
+            }) as f32
+            * 100.0;
+
+        Self {
+            blast_id: String::new(), // INFO: set on the fly
+            blast_idx_id,
+            blast_pid,
+            blast_e_value,
+            blast_offset,
+            blast_alignment_len,
+            percent_aligned,
+            coords,
+            orf,
+        }
+    }
+
+    /// Sets the `blast_id` for the `BlastRecord`.
+    ///
+    /// This method is used to assign a specific identifier to the record after
+    /// its initial creation, typically combining information from the original
+    /// sequence and its genomic location.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - A `String` representing the ID to be set for the record.
+    pub fn set_id(&mut self, id: String) {
+        self.blast_id = id;
+    }
+}
+
+/// Parses a FASTA header string to extract start, end coordinates, and strand information.
+///
+/// This function uses a provided regular expression to capture specific groups
+/// from the header string, typically in the format `[start-end](strand)`.
+///
+/// # Arguments
+///
+/// * `header` - A string slice representing the FASTA header.
+/// * `capture` - A reference to a compiled `regex::Regex` with capture groups
+///               for start, end, and strand.
+///
+/// # Returns
+///
+/// An `Option` containing a tuple `(usize, usize, char)` representing
+/// (start coordinate, end coordinate, strand character) if parsing is successful.
+/// Returns `None` if the header does not match the regex or if parsing of
+/// coordinates or strand fails.
+pub fn split_header<'a>(header: &'a str, capture: &regex::Regex) -> Option<(usize, usize, char)> {
+    let caps = capture.captures(header)?;
+
+    let start = caps[1].parse().ok()?;
+    let end = caps[2].parse().ok()?;
+    let strand = caps[3].chars().next()?;
+    Some((start, end, strand))
 }
