@@ -24,7 +24,7 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-use crate::cli::Args;
+use crate::cli::{Args, SeqMode};
 
 /// Extracts sequences from a 2bit genome file based on BED records,
 /// chunks them, and writes them to temporary FASTA and BED files.
@@ -123,7 +123,14 @@ pub fn extract(args: Args) -> Vec<(PathBuf, PathBuf)> {
 
             match mode {
                 ExtractMode::Raw => {
-                    raw(transcripts, &genome, chr, writer_fa, writer_bed);
+                    raw(
+                        transcripts,
+                        &genome,
+                        chr,
+                        writer_fa,
+                        writer_bed,
+                        &args.seq_mode,
+                    );
                 }
                 ExtractMode::Indexed => {
                     index(
@@ -134,6 +141,7 @@ pub fn extract(args: Args) -> Vec<(PathBuf, PathBuf)> {
                         &chunk_id,
                         writer_fa,
                         writer_bed,
+                        &args.seq_mode,
                     );
                 }
             }
@@ -210,23 +218,79 @@ fn get_sequence(
     genome: &DashMap<String, Vec<u8>>,
     chr: &str,
     transcript: &GenePred,
+    seq_mode: &SeqMode,
 ) -> config::Sequence {
-    let seq = match transcript.strand {
-        Strand::Forward => Sequence::new(
-            genome
-                .get(chr)
-                .unwrap_or_else(|| panic!("ERROR: missing chromosome in .2bit -> {chr}"))
-                [transcript.start as usize..transcript.end as usize]
-                .as_ref(),
-        ),
-        Strand::Reverse => Sequence::new(
-            genome
-                .get(chr)
-                .unwrap_or_else(|| panic!("ERROR: missing chromosome in .2bit -> {chr}"))
-                [(SCALE - transcript.end) as usize..(SCALE - transcript.start) as usize]
-                .as_ref(),
-        )
-        .reverse_complement(),
+    let mut chr_seq = genome
+        .get_mut(chr)
+        .unwrap_or_else(|| panic!("ERROR: missing chromosome in .2bit -> {chr}"));
+
+    let seq = match seq_mode {
+        SeqMode::Genome => match transcript.strand {
+            Strand::Forward => {
+                Sequence::new(&chr_seq[transcript.start as usize..transcript.end as usize])
+            }
+            Strand::Reverse => Sequence::new(
+                &chr_seq[(SCALE - transcript.end) as usize..(SCALE - transcript.start) as usize],
+            )
+            .reverse_complement(),
+        },
+
+        SeqMode::Exon => {
+            // INFO: extract and concatenate exon sequences
+            let mut exonic_seq: Vec<u8> = Vec::with_capacity(transcript.exon_len as usize);
+            for (exon_start, exon_end) in &transcript.exons {
+                match transcript.strand {
+                    Strand::Forward => {
+                        let start = *exon_start as usize;
+                        let end = *exon_end as usize;
+                        exonic_seq.extend_from_slice(&chr_seq[start..end]);
+                    }
+                    Strand::Reverse => {
+                        let start = (SCALE - *exon_end) as usize;
+                        let end = (SCALE - *exon_start) as usize;
+                        let target = &mut chr_seq[start..end];
+
+                        target.reverse();
+
+                        exonic_seq.extend_from_slice(target);
+                    }
+                }
+            }
+
+            let exonic = Sequence::new(&exonic_seq);
+            match transcript.strand {
+                Strand::Forward => exonic,
+                Strand::Reverse => exonic.complement(), // INFO: seq is already reversed in exons!
+            }
+        }
+
+        SeqMode::Intron => {
+            // optional: for completeness, handle introns similarly
+            let mut intronic_seq: Vec<u8> = Vec::new();
+            for (intron_start, intron_end) in &transcript.introns {
+                match transcript.strand {
+                    Strand::Forward => {
+                        let start = *intron_start as usize;
+                        let end = *intron_end as usize;
+                        intronic_seq.extend_from_slice(&chr_seq[start..end]);
+                    }
+                    Strand::Reverse => {
+                        let start = (SCALE - *intron_end) as usize;
+                        let end = (SCALE - *intron_start) as usize;
+                        let target = &mut chr_seq[start..end];
+                        target.reverse();
+
+                        intronic_seq.extend_from_slice(target);
+                    }
+                }
+            }
+
+            let intronic = Sequence::new(&intronic_seq);
+            match transcript.strand {
+                Strand::Forward => intronic,
+                Strand::Reverse => intronic.complement(),
+            }
+        }
     };
 
     seq
@@ -258,9 +322,10 @@ fn raw(
     chr: &str,
     mut writer_fa: BufWriter<File>,
     mut writer_bed: BufWriter<File>,
+    seq_mode: &SeqMode,
 ) {
     for tx in transcripts {
-        let seq = get_sequence(genome, chr, &tx);
+        let seq = get_sequence(genome, chr, &tx, seq_mode);
 
         writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap();
         writeln!(writer_bed, "{}", tx.line).unwrap();
@@ -309,6 +374,7 @@ fn index(
     chunk_id: &String,
     mut writer_fa: BufWriter<File>,
     mut writer_bed: BufWriter<File>,
+    seq_mode: &SeqMode,
 ) {
     let mut mapper = HashMap::new();
     let mut helper = HashMap::new();
@@ -321,7 +387,7 @@ fn index(
 
     let mut count = 0usize;
     for tx in transcripts.iter_mut() {
-        let seq = get_sequence(genome, chr, &tx);
+        let seq = get_sequence(genome, chr, &tx, seq_mode);
         let key = seq.seq.as_bytes().to_vec();
         let encoded = encode_id(&tx.name);
 

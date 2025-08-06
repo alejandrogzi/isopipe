@@ -13,7 +13,7 @@
 //! simple integers map to read identifiers [all of them as plain bytes].
 //! The process is heavily parallelized to offer fast performance on large datasets.
 
-use clap::{ArgAction, Parser};
+use clap::{ArgAction, Parser, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -80,6 +80,16 @@ pub struct Args {
     pub suffix: String,
 
     #[arg(
+        short = 's',
+        long = "sequence-mode",
+        required = false,
+        help = "Sequence extraction mode [whole sequence, exon, intron]",
+        value_name = "MODE",
+        default_value("exon")
+    )]
+    pub seq_mode: SeqMode,
+
+    #[arg(
         short = 'c',
         long = "chunk-size",
         required = false,
@@ -106,4 +116,14 @@ pub struct Args {
         default_value_t = log::Level::Info,
     )]
     pub level: log::Level,
+}
+
+#[derive(ValueEnum, Clone, Debug)]
+pub enum SeqMode {
+    #[value(name = "genome", alias = "g")]
+    Genome,
+    #[value(name = "exon", alias = "e")]
+    Exon,
+    #[value(name = "intron", alias = "i")]
+    Intron,
 }
