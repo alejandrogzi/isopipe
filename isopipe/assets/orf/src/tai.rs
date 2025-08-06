@@ -345,8 +345,7 @@ fn cannonical(
                             cannonical_id
                         );
                     })
-                    .map_absolute_cds(start as u64, stop as u64)
-                    .unwrap_or_default();
+                    .map_absolute_cds(start as u64, stop as u64);
 
                 // WARN: skipping unreliable ORFs for the current alignment
                 if orf_start == 0 && orf_end == 0 {
@@ -526,8 +525,7 @@ fn indexed(
                             cannonical_id
                         );
                     })
-                    .map_absolute_cds(start as u64, stop as u64)
-                    .unwrap_or_default();
+                    .map_absolute_cds(start as u64, stop as u64);
 
                 // WARN: skipping unreliable ORFs for the current alignment
                 if orf_start == 0 && orf_end == 0 {
