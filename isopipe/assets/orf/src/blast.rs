@@ -59,6 +59,7 @@ const HEADER_REGEX: &str = r"\[(\d+)-(\d+)\]\(([+-])\)";
 /// ```
 pub fn run_blast(args: BlastArgs) {
     let mode = Mode::from(&args.common.index);
+
     let dir = &args.common.outdir.join("orf");
     std::fs::create_dir_all(&dir)
         .unwrap_or_else(|e| panic!("ERROR: could not create directory -> {e}!"));
@@ -68,6 +69,15 @@ pub fn run_blast(args: BlastArgs) {
     let regex = regex::Regex::new(HEADER_REGEX).unwrap_or_else(|e| {
         panic!("ERROR: failed to compile regex for header parsing -> {e}");
     });
+
+    let records = bed_to_custom_struct_collection::<GenePred>(
+        bed_reader(&args.common.alignments)
+            .unwrap_or_else(|e| panic!("ERROR: failed to read BED file -> {e}"))
+            .into(),
+        config::BedColumn::Name,
+        config::BedOperation::SplitName(config::BIG_SEP, 0), // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887 or 0
+    )
+    .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}"));
 
     let (dedup, mut index, _helper) = deduplicate(
         &pep,
@@ -94,7 +104,7 @@ pub fn run_blast(args: BlastArgs) {
         &dedup,
         &args.database,
         &index,
-        &args.common.alignments,
+        records,
         mode,
         &regex,
         _helper,
@@ -186,7 +196,7 @@ fn diamond(
     dedup: &PathBuf,
     database: &PathBuf,
     index: &PathBuf,
-    alignments: &PathBuf,
+    records: DashMap<String, HashMap<String, GenePred>>,
     mode: Mode,
     regex: &regex::Regex,
     helper: HashMap<usize, Vec<String>>,
@@ -206,15 +216,6 @@ fn diamond(
         .unwrap_or_else(|e| panic!("ERROR: failed to execute diamond command -> {e}"));
 
     let predictions = parse_predictions(&diamond, &mode, regex);
-
-    let records = bed_to_custom_struct_collection::<GenePred>(
-        bed_reader(alignments)
-            .unwrap_or_else(|e| panic!("ERROR: failed to read BED file -> {e}"))
-            .into(),
-        config::BedColumn::Name,
-        config::BedOperation::SplitName(config::BIG_SEP, 0), // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887
-    )
-    .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}"));
 
     let writer = BufWriter::new(
         File::create(diamond.with_extension(RESULT)).unwrap_or_else(|e| {
@@ -450,30 +451,38 @@ pub fn deduplicate(
         let parts = hdr.split(' ').take(2).collect::<Vec<&str>>();
         let header = parts.join(" "); // INFO: orfipy headers!
 
-        let _idx = parts[0]
-            .split('_')
-            .take(1)
-            .next()
-            .unwrap_or_else(|| {
-                panic!(
-                    "ERROR: could not get index number from name -> {:?}",
-                    header
-                )
-            })
-            .parse::<usize>()
-            .unwrap_or_else(|e| {
-                panic!(
-                    "ERROR: could not parse number from name -> {:?}. {e}",
-                    header
-                )
-            });
+        // INFO: getting id and strand from header!
+        let _idx = parts[0].split('_').take(1).next().unwrap_or_else(|| {
+            panic!(
+                "ERROR: could not get index number from name -> {:?}",
+                header
+            )
+        });
+
+        let strand = parts[1]
+            .split('(')
+            .nth(1)
+            .unwrap_or_else(|| panic!("ERROR: could not get strand from parts -> {:?}", parts))
+            .strip_suffix(')')
+            .unwrap();
+
+        // WARN: skipping on reverse stranded preditions
+        // WARN: orfipy will take the reference strand as '+'!
+        if strand != "+" {
+            continue;
+        };
 
         // INFO: 0_ORF.87 [4632-4770](-) -> { 0 : [ 0_ORF.87_[4632-4770](-) ] }
         // INFO: 0_ORF.95 [4632-4770](-) -> { 0 : [ 0_ORF.87_[4632-4770](-), 0_ORF.95_[4632-4770](-) ] }
         match mode {
             Mode::Indexed => {
                 helper
-                    .entry(_idx)
+                    .entry(_idx.parse::<usize>().unwrap_or_else(|e| {
+                        panic!(
+                            "ERROR: could not parse number from name -> {:?}. {e}",
+                            header
+                        )
+                    }))
                     .or_insert_with(Vec::new)
                     .push(header.clone().replace(" ", "_"));
             }
@@ -533,11 +542,6 @@ pub fn deduplicate(
             let _ = make_index(mapper, &mut index, &mut dedup);
         }
     }
-
-    // INFO: cleaning footprint on the fly
-    // if !seqs.is_empty() {
-    //     std::fs::remove_file(fasta).expect("ERROR: failed to remove original FASTA file");
-    // }
 
     return (
         fasta.with_extension("dedup.fa"),
