@@ -132,7 +132,7 @@ pub fn read_index(index: &PathBuf, chr: &str) -> HashMap<u32, Vec<String>> {
             let id = u32::from_be_bytes(id_buf);
 
             // WARN: id fmt -> R{int}_chr{chr}, skipping tags!
-            let name = format!("R{}_chr{}", id, chr);
+            let name = format!("R{}_{}", id, chr);
             group.push(name);
         }
 
