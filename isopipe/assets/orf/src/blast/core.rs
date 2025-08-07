@@ -413,6 +413,7 @@ pub fn parse_predictions<'a>(
         let parts: Vec<&str> = line.split('\t').collect();
         let header = parts[0];
 
+        // INFO: only storing first row -> sorted by default
         if accumulator.contains_key(header) {
             continue;
         }
@@ -427,6 +428,11 @@ pub fn parse_predictions<'a>(
             // INFO: 0_ORF.87 [4632-4770](-)
             for record in handle {
                 let rc = from_utf8(record).unwrap().to_owned(); // INFO: safe to unwrap
+
+                if accumulator.contains_key(&rc) {
+                    continue;
+                }
+
                 let mut local_parts: Vec<&str> = vec![&rc];
                 local_parts.extend(parts.iter().skip(1));
 

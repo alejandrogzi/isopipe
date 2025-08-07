@@ -76,7 +76,7 @@ pub fn indexed(
         let n_orf = parts[1]
             .strip_prefix("ORF.")
             .unwrap_or_else(|| panic!("ERROR: could not get ORF number from {parts:?}"));
-        let n_nested = parts[2].split("@").last().unwrap_or("");
+        let n_nested = parts[2].split('@').nth(1).unwrap_or("");
 
         let (start, end, _) = if let Some(coords) = data.coords {
             coords
@@ -87,7 +87,10 @@ pub fn indexed(
         // INFO: unpacking index reference -> queries
         // INFO: for each query all blast records [ mapping 0 -> R12,R15,R20]
         let queries = index.get(&seq_id).unwrap_or_else(|| {
-            panic!("ERROR: no queries found for ID: {}", id);
+            panic!(
+                "ERROR: no queries found for ID: {} -> {data:?}; {parts:?}",
+                seq_id
+            );
         });
 
         for query in queries.into_iter() {
@@ -108,7 +111,7 @@ pub fn indexed(
             }
 
             // WARN: query -> R{}_chr{} but
-            let mut cannonical_id = format!("R{}_{}__OR{}", query, chr, n_orf);
+            let mut cannonical_id = format!("{}__OR{}", query, n_orf);
             if !n_nested.is_empty() {
                 cannonical_id += "#NE";
                 cannonical_id += n_nested;
@@ -218,7 +221,7 @@ fn map_target(
     let n_orf = parts[1]
         .strip_prefix("ORF.")
         .unwrap_or_else(|| panic!("ERROR: could not get ORF number from {parts:?}"));
-    let n_nested = parts[2].split("@").last().unwrap_or("");
+    let n_nested = parts[2].split('@').nth(1).unwrap_or("");
 
     let coords = parts[2]
         .strip_prefix('[')
@@ -242,7 +245,7 @@ fn map_target(
 
     let (orf_start, orf_end) = get_cds_coords(records, chr, id, start, end);
 
-    let mut cannonical_id = format!("R{}_{}__OR{}", original, chr, n_orf);
+    let mut cannonical_id = format!("{}__OR{}", original, n_orf);
     if !n_nested.is_empty() {
         cannonical_id += "#NE";
         cannonical_id += n_nested;
