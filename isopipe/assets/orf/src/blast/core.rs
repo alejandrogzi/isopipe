@@ -390,7 +390,7 @@ pub fn split_record(
 ///
 /// # Returns
 ///
-/// A `DashMap<u32, BlastRecord>` containing the best Blast hit for each unique query ID.
+/// A `DashMap<String, BlastRecord>` containing the best Blast hit for each unique query ID.
 ///
 /// # Panics
 ///
@@ -402,7 +402,7 @@ pub fn parse_predictions<'a>(
     mode: &Mode,
     regex: &regex::Regex,
     inner_idx_to_idxs: &HashMap<u32, Vec<Arc<[u8]>>>,
-) -> DashMap<String, Arc<BlastRecord>> {
+) -> DashMap<String, BlastRecord> {
     let predictions = bed_reader(diamond)
         .unwrap_or_else(|e| panic!("ERROR: failed to read blast predictions file -> {e}"));
 
@@ -417,10 +417,6 @@ pub fn parse_predictions<'a>(
             continue;
         }
 
-        // qseqid pident  qlen    slen   length qstart    qend   sstart   send     evalue
-        //  17      97.2    142     357     141     1       141     217     357     5.09e-93
-        let data = Arc::from(BlastRecord::from_parts(&parts, mode, regex));
-
         // INFO: checking if the current id was a secondary idx -> if can be parsed as u32
         let u_header = header.parse::<u32>();
         if let Ok(u_header) = u_header {
@@ -428,11 +424,20 @@ pub fn parse_predictions<'a>(
                 panic!("ERROR: could not find {u_header} in secondary index -> {parts:?}!")
             });
 
+            // INFO: 0_ORF.87 [4632-4770](-)
             for record in handle {
                 let rc = from_utf8(record).unwrap().to_owned(); // INFO: safe to unwrap
-                accumulator.entry(rc).or_insert(data.clone());
+                let mut local_parts: Vec<&str> = vec![&rc];
+                local_parts.extend(parts.iter().skip(1));
+
+                let data = BlastRecord::from_parts(&local_parts, mode, regex);
+                accumulator.entry(rc).or_insert(data);
             }
         } else {
+            // qseqid pident  qlen    slen   length qstart    qend   sstart   send     evalue
+            //  17      97.2    142     357     141     1       141     217     357     5.09e-93
+            let data = BlastRecord::from_parts(&parts, mode, regex);
+
             accumulator
                 .entry(header.to_string())
                 .or_insert(data.clone());

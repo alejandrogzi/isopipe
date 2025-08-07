@@ -507,13 +507,13 @@ impl BlastRecord {
         };
 
         let coords = match mode {
-            // WARN: with extract indexing qseqid -> 0_ORF.1_[1-10](+)
+            // WARN: with extract indexing qseqid -> 0_ORF.1_[1-10](+) or number!
             Mode::Indexed => split_header(parts[0], regex),
             Mode::Raw => None,
         };
 
         let orf = match mode {
-            // WARN: with extract indexing qseqid -> 0_ORF.1_[1-10](+)
+            // WARN: with extract indexing qseqid -> 0_ORF.1_[1-10](+) OR number!
             Mode::Indexed => parts[0].split('_').collect::<Vec<&str>>()[1]
                 .strip_prefix("ORF.")
                 .unwrap_or_else(|| {

@@ -62,7 +62,7 @@ use crate::utils::*;
 /// - `get_cds_coords` or any parsing of coordinates fails.
 pub fn cannonical(
     index: &PathBuf,
-    predictions: DashMap<String, Arc<BlastRecord>>,
+    predictions: DashMap<String, BlastRecord>,
     records: DashMap<String, HashMap<String, GenePred>>,
     mut writer: BufWriter<File>,
 ) {

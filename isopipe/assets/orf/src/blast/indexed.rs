@@ -56,7 +56,7 @@ use crate::utils::*;
 /// - `get_cds_coords` or any parsing of TAI prediction strings fails.
 pub fn indexed(
     index: &PathBuf,
-    predictions: DashMap<String, Arc<BlastRecord>>,
+    predictions: DashMap<String, BlastRecord>,
     records: DashMap<String, HashMap<String, GenePred>>,
     mut writer: BufWriter<File>,
     idx_to_name: HashMap<usize, Vec<String>>,
