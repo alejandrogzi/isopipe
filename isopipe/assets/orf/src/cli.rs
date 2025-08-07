@@ -95,14 +95,6 @@ pub struct BlastArgs {
     pub common: CommonArgs,
 
     #[arg(
-        short = 'e',
-        long = "executable",
-        default_value = "orfipy",
-        help = "Path to orfipy executable"
-    )]
-    pub orfipy: PathBuf,
-
-    #[arg(
         short = 'd',
         long = "db",
         required = true,

@@ -62,7 +62,7 @@ use crate::utils::*;
 /// - `get_cds_coords` or any parsing of coordinates fails.
 pub fn cannonical(
     index: &PathBuf,
-    predictions: DashMap<u32, BlastRecord>,
+    predictions: DashMap<String, Arc<BlastRecord>>,
     records: DashMap<String, HashMap<String, GenePred>>,
     mut writer: BufWriter<File>,
 ) {
@@ -70,13 +70,18 @@ pub fn cannonical(
 
     // INFO: inflate results!
     predictions.iter_mut().for_each(|mut record| {
-        let (id, data) = record.pair_mut();
+        let (r_id, data) = record.pair_mut();
+
+        let parts = r_id.split('_').collect::<Vec<&str>>();
+        let id = parts[0]
+            .parse::<u32>()
+            .unwrap_or_else(|e| panic!("ERROR: {e}; could not parse id to u32 -> {r_id:?}"));
 
         // INFO: unpacking index reference -> queries
         // INFO: for each query all blast records
         // INFO: { index_id : [(read_id: u16, chr_bytes: [u8; chr_len], orf: u16, subseq_orf: u16, seq_len: usize)] }
         // INFO: { 0 : [(read_id: 5903, chr_bytes: [16, 32], orf: 1, subseq_orf: 3, seq_len: 350)] }
-        let queries = index.get(id).unwrap_or_else(|| {
+        let queries = index.get(&id).unwrap_or_else(|| {
             panic!("ERROR: no queries found for ID: {}", id);
         });
 
@@ -101,13 +106,11 @@ pub fn cannonical(
                 continue;
             }
 
-            data.set_id(query_id);
-
             writer
                 .write_all(
                     format!(
                         "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\t{}\t{}\n",
-                        data.blast_id,
+                        query_id,
                         data.blast_idx_id,
                         data.blast_pid,
                         data.blast_e_value,
@@ -127,7 +130,7 @@ pub fn cannonical(
         }
 
         // INFO: removing the ID from the index to remain with unused IDs
-        index.remove(id);
+        index.remove(&id);
     });
 
     // INFO: repeating the process for unused ids

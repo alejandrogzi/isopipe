@@ -15,7 +15,6 @@ use dashmap::DashMap;
 use hashbrown::HashMap;
 use log::error;
 use packbed::reader as bed_reader;
-use rayon::prelude::*;
 
 use std::io::Write;
 use std::path::PathBuf;
@@ -67,12 +66,17 @@ pub fn deduplicate(
     seq_type: SeqType,
     mode: &Mode,
     regex: &regex::Regex,
-) -> (PathBuf, PathBuf, HashMap<usize, Vec<String>>) {
+) -> (
+    PathBuf,
+    PathBuf,
+    HashMap<usize, Vec<String>>,
+    HashMap<u32, Vec<Arc<[u8]>>>,
+) {
     let seqs =
         parse_fa(fasta).unwrap_or_else(|e| panic!("ERROR: failed to parse FASTA file -> {e}"));
 
-    let mut mapper = HashMap::new();
-    let mut helper = HashMap::new(); // INFO: idx -> name
+    let mut mapper = HashMap::new(); // INFO: seq -> name
+    let mut idx_to_name = HashMap::new(); // INFO: idx -> name
 
     // INFO: loops through sequences and populates mapper
     for (header, seq) in seqs.iter() {
@@ -87,7 +91,7 @@ pub fn deduplicate(
         let header = parts.join(" "); // INFO: orfipy headers!
 
         // INFO: getting id and strand from header!
-        let _idx = parts[0].split('_').take(1).next().unwrap_or_else(|| {
+        let _idx = parts[0].split('_').next().unwrap_or_else(|| {
             panic!(
                 "ERROR: could not get index number from name -> {:?}",
                 header
@@ -109,9 +113,10 @@ pub fn deduplicate(
 
         // INFO: 0_ORF.87 [4632-4770](-) -> { 0 : [ 0_ORF.87_[4632-4770](-) ] }
         // INFO: 0_ORF.95 [4632-4770](-) -> { 0 : [ 0_ORF.87_[4632-4770](-), 0_ORF.95_[4632-4770](-) ] }
+        // WARN: 0 -> { 0 : [ 0_ORF.87_[4632-4770](-), 0_ORF.95_[4632-4770](-), 0 ] } -> from double index!
         match mode {
             Mode::Indexed => {
-                helper
+                idx_to_name
                     .entry(_idx.parse::<usize>().unwrap_or_else(|e| {
                         panic!(
                             "ERROR: could not parse number from name -> {:?}. {e}",
@@ -141,7 +146,7 @@ pub fn deduplicate(
                 pattern,
                 seq_type,
                 &regex,
-                &mut helper,
+                &mut idx_to_name,
                 mode,
             )
         }
@@ -150,19 +155,34 @@ pub fn deduplicate(
         mapper.entry(key).or_insert(Vec::new()).push(record);
     }
 
+    let mut inner_idx_to_idxs = HashMap::with_capacity(mapper.len());
     let mut dedup = create_fasta(fasta, "dedup.fa")
         .unwrap_or_else(|| panic!("ERROR: could not create file {:?}", fasta));
 
     match mode {
         Mode::Indexed => {
             if !mapper.is_empty() {
+                // INFO: inner collection to index nested ORF sequences and reduce blast footprint
+                let mut inner_count = 0;
+
+                // INFO: record -> 1518_ORF.10_[1217-1325](+)
                 for (seq, records) in mapper {
-                    // INFO: we expect to only have records of len 1
-                    for rc in records {
+                    if records.len() > 1 {
+                        for rc in records {
+                            inner_idx_to_idxs
+                                .entry(inner_count)
+                                .or_insert_with(Vec::new)
+                                .push(rc);
+                        }
+
+                        let _ = writeln!(dedup, ">{}\n{}", inner_count, from_utf8(&seq).unwrap());
+                        inner_count += 1;
+                    } else {
+                        // INFO: we expect to only have records of len 1
                         let _ = writeln!(
                             dedup,
                             ">{}\n{}",
-                            from_utf8(&rc).unwrap(),
+                            from_utf8(&records[0]).unwrap(),
                             from_utf8(&seq).unwrap()
                         );
                     }
@@ -181,7 +201,8 @@ pub fn deduplicate(
     return (
         fasta.with_extension("dedup.fa"),
         fasta.with_extension("dedup.index"),
-        helper,
+        idx_to_name,
+        inner_idx_to_idxs, // INFO: only significant in indexed!
     );
 }
 
@@ -376,49 +397,47 @@ pub fn split_record(
 /// This function will panic if:
 /// - It fails to read the `diamond` output file.
 /// - It fails to parse a query ID or any other field from a line.
-pub fn parse_predictions(
+pub fn parse_predictions<'a>(
     diamond: &PathBuf,
     mode: &Mode,
     regex: &regex::Regex,
-) -> DashMap<u32, BlastRecord> {
+    inner_idx_to_idxs: &HashMap<u32, Vec<Arc<[u8]>>>,
+) -> DashMap<String, Arc<BlastRecord>> {
     let predictions = bed_reader(diamond)
         .unwrap_or_else(|e| panic!("ERROR: failed to read blast predictions file -> {e}"));
 
     let accumulator = DashMap::new();
 
     // INFO: filtering repeated blast hits by percent_identity -> preserving best
-    predictions
-        .par_lines()
-        .filter(|line| !line.starts_with('#'))
-        .for_each(|line| {
-            let parts: Vec<&str> = line.split('\t').collect();
+    for line in predictions.lines().into_iter() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        let header = parts[0];
 
-            // qseqid pident  qlen    slen   length qstart    qend   sstart   send     evalue
-            //  17      97.2    142     357     141     1       141     217     357     5.09e-93
-            // WARN: with extract indexing qseqid -> 0_ORF.1_[1-10](+)
-            let id = match mode {
-                Mode::Indexed => parts[0].split('_').collect::<Vec<&str>>()[0]
-                    .parse::<u32>()
-                    .unwrap_or_else(|_| {
-                        panic!("ERROR: failed to parse ID from line: {}", line);
-                    }),
-                Mode::Raw => parts[0].parse::<u32>().unwrap_or_else(|_| {
-                    panic!("ERROR: failed to parse ID from line: {}", line);
-                }),
-            };
+        if accumulator.contains_key(header) {
+            continue;
+        }
 
-            let data = BlastRecord::from_parts(&parts, mode, regex);
+        // qseqid pident  qlen    slen   length qstart    qend   sstart   send     evalue
+        //  17      97.2    142     357     141     1       141     217     357     5.09e-93
+        let data = Arc::from(BlastRecord::from_parts(&parts, mode, regex));
 
-            // WARN: using a transition collection to retain the best blast record based on % aligned
+        // INFO: checking if the current id was a secondary idx -> if can be parsed as u32
+        let u_header = header.parse::<u32>();
+        if let Ok(u_header) = u_header {
+            let handle = inner_idx_to_idxs.get(&u_header).unwrap_or_else(|| {
+                panic!("ERROR: could not find {u_header} in secondary index -> {parts:?}!")
+            });
+
+            for record in handle {
+                let rc = from_utf8(record).unwrap().to_owned(); // INFO: safe to unwrap
+                accumulator.entry(rc).or_insert(data.clone());
+            }
+        } else {
             accumulator
-                .entry(id)
-                .and_modify(|existing_data: &mut BlastRecord| {
-                    if data.blast_pid > existing_data.blast_pid {
-                        *existing_data = data.clone();
-                    }
-                })
-                .or_insert(data);
-        });
+                .entry(header.to_string())
+                .or_insert(data.clone());
+        };
+    }
 
     accumulator
 }

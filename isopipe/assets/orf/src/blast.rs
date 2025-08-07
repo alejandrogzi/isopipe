@@ -20,6 +20,7 @@ use packbed::{reader as bed_reader, record::GenePred};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::{
     blast::{cannonical::*, core::*, indexed::*},
@@ -34,6 +35,7 @@ pub mod indexed;
 const ORF_PEP: &str = "orfs.pep.fa";
 const RESULT: &str = "dmd.result";
 const HEADER_REGEX: &str = r"\[(\d+)-(\d+)\]\(([+-])\)";
+pub const VENV: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tai/.venv/bin/activate");
 
 /// Runs a complete BLAST analysis pipeline, including ORF prediction, deduplication,
 /// and alignment against a DIAMOND database.
@@ -67,7 +69,7 @@ pub fn run_blast(args: BlastArgs) {
     std::fs::create_dir_all(&dir)
         .unwrap_or_else(|e| panic!("ERROR: could not create directory -> {e}!"));
 
-    let pep = orfipy(&args.common.fasta, &dir, &args.orfipy);
+    let pep = orfipy(&args.common.fasta, &dir);
 
     let regex = regex::Regex::new(HEADER_REGEX).unwrap_or_else(|e| {
         panic!("ERROR: failed to compile regex for header parsing -> {e}");
@@ -82,7 +84,7 @@ pub fn run_blast(args: BlastArgs) {
     )
     .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}"));
 
-    let (dedup, mut index, _helper) = deduplicate(
+    let (dedup, mut index, idx_to_name, inner_idx_to_idxs) = deduplicate(
         &pep,
         true,
         args.orf_min_len,
@@ -110,7 +112,8 @@ pub fn run_blast(args: BlastArgs) {
         records,
         mode,
         &regex,
-        _helper,
+        idx_to_name,
+        inner_idx_to_idxs,
     );
 
     isopipe::depure!(dir, "result");
@@ -143,10 +146,10 @@ pub fn run_blast(args: BlastArgs) {
 /// ```rust, no_run
 /// let output = orfipy(&fasta_path, &output_dir, &orfipy_executable);
 /// ```
-fn orfipy(fasta: &PathBuf, dir: &PathBuf, executable: &PathBuf) -> PathBuf {
+fn orfipy(fasta: &PathBuf, dir: &PathBuf) -> PathBuf {
     let cmd = format!(
-        "{} {} --pep {} --partial-5 --partial-3 --include-stop --min 100 --ignore-case --outdir {}",
-        executable.display(),
+        "source {} && orfipy {} --pep {} --partial-5 --partial-3 --include-stop --min 100 --ignore-case --outdir {}",
+        VENV,
         fasta.display(),
         ORF_PEP,
         &dir.display()
@@ -201,7 +204,8 @@ fn diamond(
     records: DashMap<String, HashMap<String, GenePred>>,
     mode: Mode,
     regex: &regex::Regex,
-    helper: HashMap<usize, Vec<String>>,
+    idx_to_name: HashMap<usize, Vec<String>>,
+    inner_idx_to_idxs: HashMap<u32, Vec<Arc<[u8]>>>,
 ) {
     let diamond = dedup.with_extension("diamond");
     let cmd = format!(
@@ -217,7 +221,7 @@ fn diamond(
         .status()
         .unwrap_or_else(|e| panic!("ERROR: failed to execute diamond command -> {e}"));
 
-    let predictions = parse_predictions(&diamond, &mode, regex);
+    let predictions = parse_predictions(&diamond, &mode, regex, &inner_idx_to_idxs);
 
     let writer = BufWriter::new(
         File::create(diamond.with_extension(RESULT)).unwrap_or_else(|e| {
@@ -227,6 +231,13 @@ fn diamond(
 
     match mode {
         Mode::Raw => cannonical(index, predictions, records, writer),
-        Mode::Indexed => indexed(index, predictions, records, writer, helper),
+        Mode::Indexed => indexed(
+            index,
+            predictions,
+            records,
+            writer,
+            idx_to_name,
+            inner_idx_to_idxs,
+        ),
     }
 }
