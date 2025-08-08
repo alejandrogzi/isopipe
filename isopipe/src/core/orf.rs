@@ -311,9 +311,8 @@ fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut
             let chunked_dir = chunk.path(); // INFO: {chr}:{chunk}
 
             let mut blast = format!(
-                "{} blast -e {} --outdir {} --orf-min-len {} --db {} ",
+                "{} blast --outdir {} --orf-min-len {} --db {} ",
                 ORF_RELEASE,
-                args[1], // INFO: orfipy
                 chunked_dir.display(),
                 args[2], // INFO: orf_min_len,
                 args[3], // INFO: database
