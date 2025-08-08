@@ -128,7 +128,6 @@ toga_overrule = ""         # WARN: leavy empty
 threshold = 0.3            # threshold for toga overrule
 chunk = "30k"              # WARN: controls fusion .bed + .fa split sizes
 genome = ""                # FILL: genome in .fa format or .2bit
-orfipy = ""                # FILL: orfipy executable path
 orf_min_len = 30           # minimum ORF length in bp
 parallel_mode = "chr"      # WARN: controls parallelization, "chr" for chromosomes, "all" for all at once [recommended: "chr"]
 

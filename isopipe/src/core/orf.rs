@@ -41,7 +41,7 @@ pub fn orf(
     step_output_dir: &PathBuf,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
-    let args = config.get_step_custom_fields(step, vec![GENOME, ORFIPY, ORF_MIN_LEN, DATABASE]);
+    let args = config.get_step_custom_fields(step, vec![GENOME, ORF_MIN_LEN, DATABASE]);
 
     let mode = ParallelMode::from_str(&config.get_step_custom_field(step, PARALLEL_MODE));
 
