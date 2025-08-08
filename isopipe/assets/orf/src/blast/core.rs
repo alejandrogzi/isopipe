@@ -66,17 +66,11 @@ pub fn deduplicate(
     seq_type: SeqType,
     mode: &Mode,
     regex: &regex::Regex,
-) -> (
-    PathBuf,
-    PathBuf,
-    HashMap<usize, Vec<String>>,
-    HashMap<u32, Vec<Arc<[u8]>>>,
-) {
+) -> (PathBuf, PathBuf, HashMap<u32, Vec<Arc<[u8]>>>) {
     let seqs =
         parse_fa(fasta).unwrap_or_else(|e| panic!("ERROR: failed to parse FASTA file -> {e}"));
 
     let mut mapper = HashMap::new(); // INFO: seq -> name
-    let mut idx_to_name = HashMap::new(); // INFO: idx -> name
 
     // INFO: loops through sequences and populates mapper
     for (header, seq) in seqs.iter() {
@@ -111,24 +105,6 @@ pub fn deduplicate(
             continue;
         };
 
-        // INFO: 0_ORF.87 [4632-4770](-) -> { 0 : [ 0_ORF.87_[4632-4770](-) ] }
-        // INFO: 0_ORF.95 [4632-4770](-) -> { 0 : [ 0_ORF.87_[4632-4770](-), 0_ORF.95_[4632-4770](-) ] }
-        // WARN: 0 -> { 0 : [ 0_ORF.87_[4632-4770](-), 0_ORF.95_[4632-4770](-), 0 ] } -> from double index!
-        match mode {
-            Mode::Indexed => {
-                idx_to_name
-                    .entry(_idx.parse::<usize>().unwrap_or_else(|e| {
-                        panic!(
-                            "ERROR: could not parse number from name -> {:?}. {e}",
-                            header
-                        )
-                    }))
-                    .or_insert_with(Vec::new)
-                    .push(header.clone().replace(" ", "_"));
-            }
-            _ => {}
-        }
-
         for &b in seq {
             if b != b'\n' {
                 key.push(b);
@@ -146,8 +122,6 @@ pub fn deduplicate(
                 pattern,
                 seq_type,
                 &regex,
-                &mut idx_to_name,
-                mode,
             )
         }
 
@@ -201,7 +175,6 @@ pub fn deduplicate(
     return (
         fasta.with_extension("dedup.fa"),
         fasta.with_extension("dedup.index"),
-        idx_to_name,
         inner_idx_to_idxs, // INFO: only significant in indexed!
     );
 }
@@ -258,8 +231,6 @@ pub fn split_record(
     needle: &[u8],        // b"ATG" or b"M"
     seq_type: SeqType,    // determines scanning logic
     regex: &regex::Regex, // regex for parsing header
-    helper: &mut HashMap<usize, Vec<String>>,
-    mode: &Mode,
 ) {
     // INFO: always write the original full sequence
     let mut orf_count = 0;
@@ -339,21 +310,6 @@ pub fn split_record(
                             "{}_[{}-{}]({})@{}",
                             cannonical_id, nested_start, nested_end, strand, orf_count
                         );
-
-                        match mode {
-                            Mode::Indexed => {
-                                helper
-                                    .entry(_idx.parse::<usize>().unwrap_or_else(|e| {
-                                        panic!(
-                                            "ERROR: could not parse number from name -> {:?}. {e}",
-                                            header
-                                        )
-                                    }))
-                                    .or_insert_with(Vec::new)
-                                    .push(sub_id.clone());
-                            }
-                            _ => {}
-                        }
 
                         let mut inner_key = Vec::with_capacity(sub_seq.len());
 

@@ -84,7 +84,7 @@ pub fn run_blast(args: BlastArgs) {
     )
     .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}"));
 
-    let (dedup, mut index, idx_to_name, inner_idx_to_idxs) = deduplicate(
+    let (dedup, mut index, inner_idx_to_idxs) = deduplicate(
         &pep,
         true,
         args.orf_min_len,
@@ -112,7 +112,6 @@ pub fn run_blast(args: BlastArgs) {
         records,
         mode,
         &regex,
-        idx_to_name,
         inner_idx_to_idxs,
     );
 
@@ -204,7 +203,6 @@ fn diamond(
     records: DashMap<String, HashMap<String, GenePred>>,
     mode: Mode,
     regex: &regex::Regex,
-    idx_to_name: HashMap<usize, Vec<String>>,
     inner_idx_to_idxs: HashMap<u32, Vec<Arc<[u8]>>>,
 ) {
     let diamond = dedup.with_extension("diamond");
@@ -231,13 +229,6 @@ fn diamond(
 
     match mode {
         Mode::Raw => cannonical(index, predictions, records, writer),
-        Mode::Indexed => indexed(
-            index,
-            predictions,
-            records,
-            writer,
-            idx_to_name,
-            inner_idx_to_idxs,
-        ),
+        Mode::Indexed => indexed(index, predictions, records, writer),
     }
 }
