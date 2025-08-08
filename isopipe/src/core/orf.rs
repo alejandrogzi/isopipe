@@ -314,8 +314,8 @@ fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut
                 "{} blast --outdir {} --orf-min-len {} --db {} ",
                 ORF_RELEASE,
                 chunked_dir.display(),
-                args[2], // INFO: orf_min_len,
-                args[3], // INFO: database
+                args[1], // INFO: orf_min_len,
+                args[2], // INFO: database
             );
 
             let mut tai = format!("{} tai --outdir {} ", ORF_RELEASE, chunked_dir.display(),);
