@@ -314,7 +314,7 @@ fn cannonical(
                 });
                 let stop = orf_parts[1].parse::<u64>().unwrap_or_else(|_| {
                     panic!("ERROR: failed to parse stop position from ORF: {}", orf);
-                }) + 3; // INFO: stop is inclusive, so we add 3 to include the stop codon
+                }); // INFO: stop is inclusive, so we add 3 to include the stop codon
                 let start_score = orf_parts[2].parse::<f32>().unwrap_or_else(|_| {
                     panic!("ERROR: failed to parse start position from ORF: {}", orf);
                 });
@@ -330,7 +330,7 @@ fn cannonical(
                 }
 
                 // INFO: retrieving the reference gene prediction record
-                let (orf_start, orf_end) = records
+                let (mut orf_start, mut orf_end) = records
                     .get_mut(chr)
                     .unwrap_or_else(|| {
                         panic!(
@@ -349,11 +349,19 @@ fn cannonical(
 
                 // WARN: skipping unreliable ORFs for the current alignment
                 if orf_start == 0 && orf_end == 0 {
-                    warn!(
+                    log::debug!(
                         "WARN: ORF start and end are zero for ID: {}.p{}, skipping!",
-                        id, orf_idx
+                        id,
+                        orf_idx
                     );
                     continue;
+                }
+
+                // INFO: stop is inclusive, so we add 3 to include the stop codon
+                match strand.as_str() {
+                    "+" => orf_end += 3,
+                    "-" => orf_start -= 3,
+                    _ => panic!("ERROR: unexpected strand value: {}", strand),
                 }
 
                 // INFO: retrieving the reference gene prediction record
@@ -494,7 +502,7 @@ fn indexed(
                 });
                 let stop = orf_parts[1].parse::<u64>().unwrap_or_else(|_| {
                     panic!("ERROR: failed to parse stop position from ORF: {}", orf);
-                }) + 3; // INFO: stop is inclusive, so we add 3 to include the stop codon
+                });
                 let start_score = orf_parts[2].parse::<f32>().unwrap_or_else(|_| {
                     panic!("ERROR: failed to parse start position from ORF: {}", orf);
                 });
@@ -510,7 +518,7 @@ fn indexed(
                 }
 
                 // INFO: retrieving the reference gene prediction record
-                let (orf_start, orf_end) = records
+                let (mut orf_start, mut orf_end) = records
                     .get_mut(&chr)
                     .unwrap_or_else(|| {
                         panic!(
@@ -529,11 +537,19 @@ fn indexed(
 
                 // WARN: skipping unreliable ORFs for the current alignment
                 if orf_start == 0 && orf_end == 0 {
-                    // warn!(
-                    //     "WARN: ORF start and end are zero for ID: {}.p{}, skipping!",
-                    //     _id, orf_idx
-                    // );
+                    log::debug!(
+                        "WARN: ORF start and end are zero for ID: {}.p{}, skipping!",
+                        _id,
+                        orf_idx
+                    );
                     continue;
+                }
+
+                // INFO: stop is inclusive, so we add 3 to include the stop codon
+                match strand.as_str() {
+                    "+" => orf_end += 3,
+                    "-" => orf_start -= 3,
+                    _ => panic!("ERROR: unexpected strand value: {}", strand),
                 }
 
                 // INFO: queries are the orfs in the current record
