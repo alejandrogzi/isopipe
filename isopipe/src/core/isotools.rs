@@ -217,7 +217,7 @@ pub fn agg_fusions(
 
     executor
         .add_jobs(jobs)
-        .and_send(config, "agg-fusions", dir.clone(), 4, 8, None);
+        .and_send(config, "agg-fusions", dir.clone(), 1, 8, None);
 }
 
 /// Build non-cannonical fusions
@@ -383,7 +383,7 @@ pub fn polish(
     step_output_dir: &PathBuf,
     executor: &mut ParallelExecutor,
 ) -> Vec<Job> {
-    __aggregate_orfs(input_dir);
+    // __aggregate_orfs(input_dir);
     let jobs = Vec::new();
 
     let mut args = config
