@@ -111,8 +111,9 @@ def TIS_TTS_predictor(
     fhOut1 = open(fnOut1, "w")
     fhOut2 = open(fnOut2, "w")
     for idx in range(num_idx):
-        if not (idx % 10):
-            print("    Procssing the %d/%d sequence ..." % (idx + 1, num_idx))
+        if verbose:
+            if not (idx % 10):
+                print("    Procssing the %d/%d sequence ..." % (idx + 1, num_idx))
         Y_pred_TIS = [[] for t in range(1)]
         Y_pred_TTS = [[] for t in range(1)]
         X = h5f["X" + str(idx)][:]
@@ -120,7 +121,11 @@ def TIS_TTS_predictor(
         Xc, Yc = clip_datapoints(X, Y, int(modelScale), 1)  # set NGPU=1
         Yps = [np.zeros(Yc[0].shape)]
         for v in range(len(version)):
-            Yp = model[v].predict(Xc, batch_size=BATCH_SIZE)
+            if verbose:
+                Yp = model[v].predict(Xc, batch_size=BATCH_SIZE)
+            else:
+                Yp = model[v].predict(Xc, batch_size=BATCH_SIZE, verbose=0)
+
             if not isinstance(Yp, list):
                 Yp = [Yp]
             Yps[0] += Yp[0] / len(version)  # mean of the ensemble predictions is used
@@ -179,9 +184,7 @@ def main():
 
     args = get_options()
     if None in [args.input, args.threshold, args.output]:
-        logging.error(
-            "Usage: translationai [-h] [-I [input]] [-O [output]]"
-        )
+        logging.error("Usage: translationai [-h] [-I [input]] [-O [output]]")
         exit()
     fnIn = args.input
     threshold_str = args.threshold
@@ -213,7 +216,7 @@ def main():
         0,
         fnIn1,
         fnIn2,
-        args.verbose
+        args.verbose,
     )
 
     # INFO: isopipe change to easily manage output
