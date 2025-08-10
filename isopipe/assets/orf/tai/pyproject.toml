@@ -17,6 +17,7 @@ dependencies = [
     "h5py",
     "scikit-learn >=0.20.0",
     "orfipy >= 0.0.4",
+    "joblib >=1.0.0",
 ]
 
 optional-dependencies = { cpu = [
