@@ -97,7 +97,7 @@ pub fn orf(
 
     executor
         .add_jobs(jobs)
-        .execute(config, step, global_output_dir.clone());
+        .execute(config, step, global_output_dir.clone(), Some("prep"));
 
     predict(step_output_dir, &mode)
 }
@@ -314,7 +314,7 @@ fn unbounded_extract(
     // INFO: running inner_jobs
     executor
         .add_jobs(jobs)
-        .and_send(config, EXTRACT, step_output_dir.clone(), 8, 32, None);
+        .and_send(config, EXTRACT, step_output_dir.clone(), 8, 16, None, None);
 }
 
 /// Processes a BED file by extracting sequences, chunking them, and generating

@@ -300,7 +300,7 @@ pub fn agg_fusions(
 
     executor
         .add_jobs(jobs)
-        .and_send(config, "agg-fusions", dir.clone(), 1, 8, None);
+        .and_send(config, "agg-fusions", dir.clone(), 1, 8, None, None);
 }
 
 /// Build non-cannonical fusions
@@ -532,6 +532,7 @@ pub fn polish(
         step_output_dir.clone(),
         1,
         mem as u32,
+        None,
         None,
     );
 
@@ -772,5 +773,6 @@ fn split_reads(
         global_threads,
         8,
         Some(config.get_package_from_step(step)),
+        None,
     );
 }

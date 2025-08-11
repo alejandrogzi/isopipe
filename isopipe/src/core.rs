@@ -97,5 +97,5 @@ pub fn run_step(
 
     executor
         .add_jobs(jobs)
-        .execute(config, step, global_output_dir.clone());
+        .execute(config, step, global_output_dir.clone(), None);
 }

@@ -112,7 +112,13 @@ impl ParallelExecutor {
     ///
     /// executor.execute();
     /// ```
-    pub fn execute(&mut self, config: &Config, step: &PipelineStep, global_output_dir: PathBuf) {
+    pub fn execute(
+        &mut self,
+        config: &Config,
+        step: &PipelineStep,
+        global_output_dir: PathBuf,
+        suffix: Option<&str>,
+    ) {
         let jobs = write_jobs(self.jobs.clone(), global_output_dir.clone());
         let package = config.get_package_from_step(step);
 
@@ -166,6 +172,7 @@ impl ParallelExecutor {
                     threads as u32,
                     memory as u32,
                     Some(package),
+                    suffix,
                 );
             }
             ParallelManager::Snakemake => {
@@ -300,11 +307,12 @@ impl ParallelExecutor {
         threads: u32,
         memory: u32,
         package: Option<String>,
+        suffix: Option<&str>,
     ) {
         match self.manager {
             ParallelManager::Para => {
                 let jobs = write_jobs(self.jobs.clone(), dir.clone());
-                self.__para(config, step, &jobs, threads, memory, package);
+                self.__para(config, step, &jobs, threads, memory, package, suffix);
                 self.reset(dir);
             }
             _ => {
@@ -344,9 +352,14 @@ impl ParallelExecutor {
         threads: u32,
         memory: u32,
         package: Option<String>,
+        suffix: Option<&str>,
     ) {
         let run_id = config.get_run_id();
-        let step_code = format!("{}_{}", step, run_id);
+        let mut step_code = format!("{}_{}", step, run_id);
+
+        if let Some(suffix) = suffix {
+            step_code = format!("{}_{}", step_code, suffix);
+        }
 
         let mut cmd = format!(
             "para make {} {} -q {} -memoryMb {} -numCores {}",
