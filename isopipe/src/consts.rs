@@ -66,7 +66,7 @@ pub const SEQS: &str = "seqs";
 pub const FREE: &str = "free";
 pub const FUSIONS: &str = "fusions";
 pub const EXTRACT: &str = "extract";
-pub const TAI: &str = "TAI";
+pub const TAI: &str = "tai";
 
 // filenames | suffixes
 pub const NF_RUNNER: &str = "execute_joblist.nf";
@@ -119,6 +119,10 @@ pub const EXTRACT_RELEASE: &str = concat!(
 pub const TAI_VENV: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/assets/orf/tai/.venv/bin/activate"
+);
+pub const APARENT_PY: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../isotools/isotools/iso-polya/assets/run_aparent.py"
 );
 
 // collections
