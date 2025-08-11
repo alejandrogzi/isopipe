@@ -11,6 +11,69 @@ use std::path::PathBuf;
 use crate::{config::*, consts::*, executor::job::Job};
 use crate::{executor::manager::ParallelExecutor, isotools};
 
+pub fn iso_nmd(
+    step: &PipelineStep,
+    config: &Config,
+    input_dir: &PathBuf,
+    step_output_dir: &PathBuf,
+) -> Vec<Job> {
+    let _mode = ParallelMode::from_str(&config.get_step_custom_field(step, PARALLEL_MODE));
+    let mut jobs = Vec::new();
+
+    // INFO: path would look like: {step_orf}/seqs_{suffix} or toga
+    for entry in std::fs::read_dir(input_dir)
+        .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
+        .flatten()
+        .filter(|e| e.path().is_dir())
+    {
+        let subdir = entry.path(); // INFO: seqs_{suffix}
+
+        // INFO: structure {step_orf}/seqs_{suffix}/{chr}:{chunk}
+        for chunk in std::fs::read_dir(&subdir)
+            .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", subdir))
+            .flatten()
+            .filter(|e| e.path().is_dir())
+        {
+            let chunked_dir = chunk.path(); // INFO: {chr}:{chunk}
+            let chr = chunked_dir
+                .file_name()
+                .unwrap_or_else(|| panic!("ERROR: could not get file name from {:?}", chunked_dir))
+                .to_str()
+                .unwrap_or_else(|| panic!("ERROR: could not convert file name to str"))
+                .split(':')
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: could not get chromosome from {:?}", chunked_dir)
+                });
+
+            for file in std::fs::read_dir(&chunked_dir)
+                .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", chunked_dir))
+                .flatten()
+            {
+                let file = file.path();
+
+                if file.is_file() {
+                    // INFO: matching specific name
+                    if file.ends_with("tmp_predictions.bed") {
+                        let cmd = format!(
+                            "{} --ref {} --output {} --prefix {}",
+                            isotools!(ISO_NMD).display(),
+                            file.display(),
+                            step_output_dir.join(chr).display(),
+                            format!("tmp_{}", chunked_dir.file_name().unwrap().to_str().unwrap())
+                        );
+
+                        jobs.push(Job::from(cmd));
+                    }
+                }
+            }
+        }
+    }
+
+    log::info!("INFO [STEP 9]: Pre-processing completed -> Running...");
+    jobs
+}
+
 /// Run isotools iso-fusion
 ///
 /// # Arguments

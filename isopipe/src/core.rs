@@ -76,12 +76,18 @@ pub fn run_step(
             log::info!("INFO [STEP 8]: Pre-processing for orf started...");
 
             isotools::agg_fusions(&input_dir, executor, config, step);
-            orf::orf(step, config, executor, &input_dir, &step_output_dir)
+            orf::orf(
+                step,
+                config,
+                executor,
+                &input_dir,
+                &step_output_dir,
+                &global_output_dir,
+            )
         }
         PipelineStep::Nmd => {
-            todo!()
-            // log::info!("INFO [STEP 9]: Pre-processing for isotools nmd started...");
-            // isotools::nmd(step, config, &input_dir, &step_output_dir, executor)
+            log::info!("INFO [STEP 9]: Pre-processing for isotools nmd started...");
+            isotools::iso_nmd(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Polish => {
             log::info!("INFO [STEP 10]: Pre-processing for isotools polish started...");

@@ -39,6 +39,7 @@ pub fn orf(
     executor: &mut ParallelExecutor,
     input_dir: &PathBuf,
     step_output_dir: &PathBuf,
+    global_output_dir: &PathBuf,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
     let args = config.get_step_custom_fields(step, vec![GENOME, ORF_MIN_LEN, DATABASE]);
@@ -91,6 +92,132 @@ pub fn orf(
                     &mode,
                 );
             }
+        }
+    }
+
+    executor
+        .add_jobs(jobs)
+        .execute(config, step, global_output_dir.clone());
+
+    predict(step_output_dir, &mode)
+}
+
+fn predict(step_output_dir: &PathBuf, mode: &ParallelMode) -> Vec<Job> {
+    let mut jobs = Vec::new();
+
+    match mode {
+        ParallelMode::Chromosome => {
+            log::info!("INFO: Running ORF prediction in parallel mode: Chromosome");
+            let mut toga_merged = PathBuf::new();
+
+            // INFO: path would look like: {step_orf}/seqs_{suffix} or toga
+            for entry in std::fs::read_dir(step_output_dir)
+                .unwrap_or_else(|e| {
+                    panic!("ERROR: could read directory -> {:?}. {e}", step_output_dir)
+                })
+                .flatten()
+                .filter(|e| e.path().is_dir())
+            {
+                let subdir = entry.path(); // INFO: seqs_{suffix} or toga
+
+                if subdir.ends_with(TOGA) {
+                    toga_merged = subdir.join("toga_merged.tsv");
+                    continue;
+                }
+
+                // INFO: structure {step_orf}/seqs_{suffix}/{chr}:{chunk}
+                for chunk in std::fs::read_dir(&subdir)
+                    .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", subdir))
+                    .flatten()
+                    .filter(|e| e.path().is_dir())
+                {
+                    let chunked_dir = chunk.path(); // INFO: {chr}:{chunk}
+
+                    let mut alignments: Option<PathBuf> = None;
+                    let mut blast: Option<PathBuf> = None;
+                    let mut tai: Option<PathBuf> = None;
+
+                    for file in std::fs::read_dir(&chunked_dir)
+                        .unwrap_or_else(|e| {
+                            panic!("ERROR: could read directory -> {:?}. {e}", chunked_dir)
+                        })
+                        .flatten()
+                    {
+                        let file = file.path();
+
+                        if file.is_file() {
+                            // INFO: matching .bed and not _reduced.bed
+                            if let Some(ext) = file.extension().and_then(|e| e.to_str()) {
+                                if ext == "bed"
+                                    && !file
+                                        .file_name()
+                                        .unwrap_or_default()
+                                        .to_string_lossy()
+                                        .contains("_reduced")
+                                {
+                                    alignments = Some(file.clone());
+                                }
+                            }
+                        } else if file.is_dir() {
+                            let dir = file.file_name().unwrap_or_default().to_string_lossy();
+
+                            // INFO: looks like -> {step_orf}/seqs_{suffix}/{chr}:{chunk}/{orf, tai}
+                            if dir == ORF {
+                                // INFO: grab .result
+                                blast = Some(file.join("orfs.pep.dedup.dmd.result"));
+                            } else if dir == TAI {
+                                // INFO: grab .result
+                                for tai_entry in std::fs::read_dir(&file)
+                                    .unwrap_or_else(|e| {
+                                        panic!("ERROR: could read directory -> {:?}. {e}", file)
+                                    })
+                                    .flatten()
+                                {
+                                    let res_path = tai_entry.path();
+                                    if res_path.is_file() {
+                                        tai = Some(res_path.clone());
+                                    }
+                                }
+                            } else {
+                                continue;
+                            }
+                        } else {
+                            continue;
+                        }
+                    }
+
+                    let cmd =
+                        format!(
+                        "source {} && {} --blast {} --tai {} --toga {} --alignments {} --outdir {} --prefix tmp_",
+                        TAI_VENV, PREDICT_PY, blast.unwrap_or_else(|| {
+                            panic!(
+                                "ERROR: could not find blast file in chunked dir -> {}",
+                                chunked_dir.display()
+                            )
+                        }).display(),
+                        tai.unwrap_or_else(|| {
+                            panic!(
+                                "ERROR: could not find tai file in chunked dir -> {}",
+                                chunked_dir.display()
+                            )
+                        }).display(),
+                        toga_merged.display(),
+                        alignments.unwrap_or_else(|| {
+                            panic!(
+                                "ERROR: could not find alignments file in chunked dir -> {}",
+                                chunked_dir.display()
+                            )
+                        }).display(),
+                        chunked_dir.display()
+                    );
+
+                    jobs.push(Job::from(cmd));
+                }
+            }
+        }
+        ParallelMode::Genome => {
+            log::info!("INFO: Running ORF prediction in parallel mode: Genome");
+            todo!()
         }
     }
 

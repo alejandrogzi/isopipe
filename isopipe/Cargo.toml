@@ -31,6 +31,7 @@ config = { path = "../isotools/isotools/config", optional = true }
 iso-polya = { path = "../isotools/isotools/iso-polya", optional = true }
 isotools = { path = "../isotools/isotools/entry", optional = true }
 iso-split = { path = "../isotools/isotools/iso-split", optional = true }
+iso-nmd = { path = "../isotools/isotools/iso-nmd", optional = true }
 memchr = { version = "2.7.5", optional = true }
 
 [profile.release]
@@ -38,8 +39,6 @@ lto = true
 opt-level = 3
 
 [features]
-default = ["cfg", "core"]
-cfg = ["dep:memmap2", "dep:serde", "dep:log", "dep:chrono"]
 core = [
     "dep:rayon",
     "dep:dashmap",
@@ -49,7 +48,10 @@ core = [
     "dep:iso-polya",
     "dep:isotools",
     "dep:iso-split",
+    "dep:iso-nmd",
     "dep:twobit",
     "dep:simple_logger",
     "dep:memchr",
 ]
+default = ["cfg", "core"]
+cfg = ["dep:memmap2", "dep:serde", "dep:log", "dep:chrono"]

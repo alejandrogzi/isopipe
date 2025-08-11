@@ -58,6 +58,7 @@ pub const BAMTOBED: &str = "bamtobed";
 pub const POLYA_APARENT: &str = "aparent";
 pub const ISO_POLYA: &str = "iso-polya";
 pub const ISO_SPLIT: &str = "iso-split";
+pub const ISO_NMD: &str = "iso-nmd";
 pub const ISO_FUSION: &str = "iso-fusion";
 pub const SEGMENT: &str = "segment";
 pub const POLYA_PARTS: &str = "parts";
@@ -65,6 +66,7 @@ pub const SEQS: &str = "seqs";
 pub const FREE: &str = "free";
 pub const FUSIONS: &str = "fusions";
 pub const EXTRACT: &str = "extract";
+pub const TAI: &str = "TAI";
 
 // filenames | suffixes
 pub const NF_RUNNER: &str = "execute_joblist.nf";
@@ -109,9 +111,14 @@ pub const ISOTOOLS_RELEASE: &str = concat!(
 );
 pub const ORF_CHUNKS: usize = 50000; // 50k transcripts
 pub const ORF_RELEASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/orf/target/release/orf");
+pub const PREDICT_PY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/orf/predict/predict.py");
 pub const EXTRACT_RELEASE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/assets/extract/target/release/extract"
+);
+pub const TAI_VENV: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/orf/tai/.venv/bin/activate"
 );
 
 // collections

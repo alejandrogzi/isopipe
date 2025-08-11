@@ -1138,6 +1138,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "iso-nmd"
+version = "0.0.1"
+dependencies = [
+ "clap",
+ "config",
+ "dashmap",
+ "hashbrown 0.15.2",
+ "iso-pack",
+ "log",
+ "num_cpus",
+ "rayon",
+ "serde_json",
+ "simple_logger 5.0.0",
+]
+
+[[package]]
 name = "iso-orf"
 version = "0.0.1"
 dependencies = [
@@ -1158,7 +1174,7 @@ dependencies = [
 
 [[package]]
 name = "iso-pack"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "anyhow",
  "clap",
@@ -1248,6 +1264,7 @@ dependencies = [
  "dashmap",
  "hashbrown 0.14.5",
  "iso-fusion",
+ "iso-nmd",
  "iso-pack",
  "iso-polya",
  "iso-split",
