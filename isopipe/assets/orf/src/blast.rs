@@ -156,11 +156,22 @@ fn orfipy(fasta: &PathBuf, dir: &PathBuf) -> PathBuf {
 
     std::process::Command::new("bash")
         .arg("-c")
-        .arg(cmd)
+        .arg(&cmd)
         .status()
         .unwrap_or_else(|e| panic!("ERROR: failed to execute orfipy command -> {e}"));
 
-    dir.join(ORF_PEP)
+    // INFO: checking if orfipy output is empty and make it run again!
+    let outfile = dir.join(ORF_PEP);
+    if !outfile.exists() || outfile.metadata().unwrap().len() == 0 {
+        // INFO: forcing orfipy to run again
+        std::process::Command::new("bash")
+            .arg("-c")
+            .arg(cmd)
+            .status()
+            .unwrap_or_else(|e| panic!("ERROR: failed to execute orfipy command -> {e}"));
+    }
+
+    return outfile;
 }
 
 /// Performs a protein-protein BLAST search using DIAMOND and processes the results.
