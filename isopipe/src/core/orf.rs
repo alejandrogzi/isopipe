@@ -54,7 +54,8 @@ pub fn orf(
         "INFO: Merging TOGA predictions in a single file here: {}...",
         step_output_dir.display()
     );
-    __merge_toga(step_output_dir, config, step);
+
+    let toga_merged = __merge_toga(step_output_dir, config, step);
 
     // INFO: looping through all [per-chr or merged -> depend on parallel_mode opt]
     // INFO: each [subdir/main] should have -> free + fakes + review [other color + tag] and fusions
@@ -99,16 +100,15 @@ pub fn orf(
         .add_jobs(jobs)
         .execute(config, step, global_output_dir.clone(), Some("prep"));
 
-    predict(step_output_dir, &mode)
+    predict(step_output_dir, &mode, &toga_merged)
 }
 
-fn predict(step_output_dir: &PathBuf, mode: &ParallelMode) -> Vec<Job> {
+fn predict(step_output_dir: &PathBuf, mode: &ParallelMode, toga_merged: &PathBuf) -> Vec<Job> {
     let mut jobs = Vec::new();
 
     match mode {
         ParallelMode::Chromosome => {
             log::info!("INFO: Running ORF prediction in parallel mode: Chromosome");
-            let mut toga_merged = PathBuf::new();
 
             // INFO: path would look like: {step_orf}/seqs_{suffix} or toga
             for entry in std::fs::read_dir(step_output_dir)
@@ -119,11 +119,6 @@ fn predict(step_output_dir: &PathBuf, mode: &ParallelMode) -> Vec<Job> {
                 .filter(|e| e.path().is_dir())
             {
                 let subdir = entry.path(); // INFO: seqs_{suffix} or toga
-
-                if subdir.ends_with(TOGA) {
-                    toga_merged = subdir.join("toga_merged.tsv");
-                    continue;
-                }
 
                 // INFO: structure {step_orf}/seqs_{suffix}/{chr}:{chunk}
                 for chunk in std::fs::read_dir(&subdir)
@@ -184,6 +179,10 @@ fn predict(step_output_dir: &PathBuf, mode: &ParallelMode) -> Vec<Job> {
                         } else {
                             continue;
                         }
+                    }
+
+                    if !toga_merged.exists() {
+                        panic!("ERROR: toga_merged path is empty!");
                     }
 
                     let cmd =
@@ -727,7 +726,7 @@ pub fn bounded_extract(
 /// // orf --path /path/to/toga_raw_results --outdir /tmp/pipeline_output/merge_toga_step
 /// __merge_toga(&output_dir, &app_config, &current_step);
 /// ```
-fn __merge_toga(step_output_dir: &PathBuf, config: &Config, step: &PipelineStep) {
+fn __merge_toga(step_output_dir: &PathBuf, config: &Config, step: &PipelineStep) -> PathBuf {
     let toga = config.get_step_custom_field(step, TOGA);
     let msg = "INFO: Merging TOGA predictions in a single file...";
     let tool = "iso-orf";
@@ -740,6 +739,8 @@ fn __merge_toga(step_output_dir: &PathBuf, config: &Config, step: &PipelineStep)
     );
 
     shell(cmd, msg, tool);
+
+    return step_output_dir.join(TOGA).join("toga_merged.tsv");
 }
 
 /// Retrieves a return value by matching the file's suffix against a predefined list.
