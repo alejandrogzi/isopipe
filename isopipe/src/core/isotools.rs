@@ -508,6 +508,11 @@ pub fn polish(
             .filter(|e| e.path().is_dir())
         {
             let seqs_dir = seqs.path(); // INFO: {chr}/seqs_{suffix}
+            let suffix = seqs_dir
+                .file_name()
+                .unwrap_or_else(|| panic!("ERROR: could not get file name from {:?}", seqs_dir))
+                .to_str()
+                .unwrap_or_else(|| panic!("ERROR: could not convert file name to str"));
 
             let chr_beds = seqs_dir.join("*reads.bed");
             let chr_nmds = seqs_dir.join("*nmd.bed");
@@ -525,16 +530,18 @@ pub fn polish(
                 .output()
                 .expect("ERROR: Failed to concatenate bed files");
 
-            let bed = seqs_dir.join(format!("{chr}.reads.bed"));
+            if suffix == "seqs_free" {
+                let bed = seqs_dir.join(format!("{chr}.reads.bed"));
 
-            let apa_jobs = iso_polya_aparent(
-                step_output_dir,
-                &bed.to_str().unwrap().to_string(),
-                &twobit,
-                chr,
-            );
+                let apa_jobs = iso_polya_aparent(
+                    step_output_dir,
+                    &bed.to_str().unwrap().to_string(),
+                    &twobit,
+                    chr,
+                );
 
-            inner_jobs.extend(apa_jobs);
+                inner_jobs.extend(apa_jobs);
+            }
         }
     }
 
@@ -596,6 +603,27 @@ pub fn polish(
 
             jobs.push(Job::from(cmd))
         }
+
+        // INFO: remove anything tmp
+        let tmp = subdir.join("*/tmp*");
+        let nmd = subdir.join("*/*nmd.bed");
+        let fsn = subdir.join("seqs_fusions/*reads.bed");
+
+        let cmd = format!(
+            "rm {} && cat {} > {} && mv {} {}",
+            tmp.display(),
+            nmd.display(),
+            step_output_dir.join(chr).join("nmd.bed").display(),
+            fsn.display(),
+            step_output_dir.join(chr).join("fusions.bed").display()
+        );
+
+        std::process::Command::new("bash")
+            .arg("-c")
+            .arg(cmd)
+            .current_dir(&subdir)
+            .output()
+            .expect("ERROR: Failed to clean up directories");
     }
 
     return jobs;
