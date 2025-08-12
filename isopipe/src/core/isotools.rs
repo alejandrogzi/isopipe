@@ -76,7 +76,7 @@ pub fn iso_nmd(
                     // INFO: matching specific name
                     if file.ends_with("tmp_predictions.bed") {
                         let cmd = format!(
-                            "{} --ref {} --output {} --prefix {}",
+                            "{} --ref {} --outdir {} --prefix {}",
                             isotools!(ISO_NMD).display(),
                             file.display(),
                             step_output_dir.join(chr).display(),
