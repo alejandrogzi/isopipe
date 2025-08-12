@@ -134,8 +134,8 @@ parallel_mode = "chr"      # WARN: controls parallelization, "chr" for chromosom
 [params.nmd]
 input_dir = "step8_orf"  # previous step data dir [default]
 output_dir = "step9_nmd" # output dir
-memory = 16              # memory in GB
-num-threads = 8          # --num-threads
+memory = 8               # memory in GB
+num-threads = 2          # --num-threads, INFO: light work
 time = "24.h"            # time for each job
 parallel_mode = "chr"    # WARN: controls parallelization, "chr" for chromosomes, "all" for all at once [recommended: "chr"]
 
@@ -148,3 +148,11 @@ time = "24.h"                # time for each job
 toga = ""                    # FILL: toga query annotation
 genome = ""                  # FILL: genome in .2bit
 bigwig = ""                  # FILL: path to SpliceAI dir
+
+[params.load]
+input_dir = "step10_polish" # previous step data dir [default]
+output_dir = "step11_load"  # output dir
+memory = 16                 # memory in GB
+num-threads = 8             # --num-threads
+time = "24.h"               # time for each job
+schema = ""

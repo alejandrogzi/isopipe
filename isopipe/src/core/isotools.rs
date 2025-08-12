@@ -448,8 +448,6 @@ fn iso_polya_aparent(
         jobs.push(Job::from(cmd));
     }
 
-    log::info!("INFO [STEP 9a]: Pre-processing completed -> Running APARENT...");
-
     jobs
 }
 
@@ -489,7 +487,7 @@ pub fn polish(
     );
 
     let twobit = config.get_step_custom_fields(step, vec![GENOME])[0].clone();
-    let mem = CHUNK_SIZE as f32 * RAM_PER_SITE * 1024.0;
+    let mem = CHUNK_SIZE as f32 * RAM_PER_SITE; // INFO: will be converted to MB by executor
 
     // INFO: path would look like: {step_nmd}/{chr} -> looping for each chr
     for entry in std::fs::read_dir(input_dir)
