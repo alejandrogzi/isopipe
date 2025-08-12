@@ -103,6 +103,40 @@ pub fn orf(
     predict(step_output_dir, &mode, &toga_merged)
 }
 
+/// Predicts Open Reading Frames (ORFs)
+///
+/// This function processes input data organized in a specific directory structure,
+/// generating a list of `Job` commands that can be executed to perform the prediction.
+/// The operation mode can be either `Chromosome` or `Genome`, dictating how the input
+/// directories are traversed and processed.
+///
+/// # Arguments
+///
+/// * `step_output_dir` - A `PathBuf` reference pointing to the base directory where
+///   the step output data (e.g., `seqs_{suffix}` or `toga` directories) is located.
+///   This directory is expected to contain subdirectories for chromosomes and chunks.
+/// * `mode` - A reference to a `ParallelMode` enum, specifying whether to run
+///   the prediction per chromosome or per entire genome.
+///   - `ParallelMode::Chromosome`: Processes data chunk by chunk within chromosome-specific directories.
+///   - `ParallelMode::Genome`: (Currently unimplemented) Intended to process the entire genome data.
+/// * `toga_merged` - A `PathBuf` reference to the merged TOGA (Tool for Genome Annotation) file.
+///   This file is crucial for the prediction process and its existence is validated.
+///
+/// # Returns
+///
+/// A `Vec<Job>` containing a collection of `Job` structs, each representing a command
+/// to be executed for ORF prediction. These commands are formatted to run an external
+/// Python script (`PREDICT_PY`) with specific arguments derived from the input files.
+///
+/// # Panics
+///
+/// This function will panic under the following conditions:
+///
+/// * If `step_output_dir` or any of its expected subdirectories (chromosome subdirs, chunk subdirs)
+///   cannot be read.
+/// * If the `toga_merged` path does not exist.
+/// * If required input files (`.bed` alignments, `blast` results, or `tai` results)
+///   are not found within the expected `chunked_dir` for a `Chromosome` mode job.
 fn predict(step_output_dir: &PathBuf, mode: &ParallelMode, toga_merged: &PathBuf) -> Vec<Job> {
     let mut jobs = Vec::new();
 

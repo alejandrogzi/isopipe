@@ -47,6 +47,11 @@ pub fn iso_nmd(
         .filter(|e| e.path().is_dir())
     {
         let subdir = entry.path(); // INFO: seqs_{suffix}
+        let suffix = subdir
+            .file_name()
+            .unwrap_or_else(|| panic!("ERROR: could not get file name from {:?}", subdir))
+            .to_str()
+            .unwrap_or_else(|| panic!("ERROR: could not convert file name to str"));
 
         // INFO: structure {step_orf}/seqs_{suffix}/{chr}:{chunk}
         for chunk in std::fs::read_dir(&subdir)
@@ -79,7 +84,7 @@ pub fn iso_nmd(
                             "{} --ref {} --outdir {} --prefix {}",
                             isotools!(ISO_NMD).display(),
                             file.display(),
-                            step_output_dir.join(chr).display(),
+                            step_output_dir.join(chr).join(suffix).display(),
                             format!("tmp_{}", chunked_dir.file_name().unwrap().to_str().unwrap())
                         );
 
@@ -496,32 +501,40 @@ pub fn polish(
                 panic!("ERROR: could not convert chr name to str -> {subdir:?}")
             });
 
-        let chr_beds = subdir.join("*reads.bed");
-        let chr_nmds = subdir.join("*nmd.bed");
+        for seqs in std::fs::read_dir(&subdir)
+            .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", subdir))
+            .flatten()
+            .filter(|e| e.path().is_dir())
+        {
+            let seqs_dir = seqs.path(); // INFO: {chr}/seqs_{suffix}
 
-        let cat = format!(
-            "cat {} > {chr}.reads.bed && cat {} > {chr}.nmd.bed",
-            chr_beds.display(),
-            chr_nmds.display()
-        );
+            let chr_beds = seqs_dir.join("*reads.bed");
+            let chr_nmds = seqs_dir.join("*nmd.bed");
 
-        std::process::Command::new("bash")
-            .arg("-c")
-            .arg(cat)
-            .current_dir(&subdir)
-            .output()
-            .expect("ERROR: Failed to concatenate bed files");
+            let cat = format!(
+                "cat {} > {chr}.reads.bed && cat {} > {chr}.nmd.bed",
+                chr_beds.display(),
+                chr_nmds.display()
+            );
 
-        let bed = subdir.join("{chr}.reads.bed");
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(cat)
+                .current_dir(&seqs_dir)
+                .output()
+                .expect("ERROR: Failed to concatenate bed files");
 
-        let apa_jobs = iso_polya_aparent(
-            step_output_dir,
-            &bed.to_str().unwrap().to_string(),
-            &twobit,
-            chr,
-        );
+            let bed = seqs_dir.join(format!("{chr}.reads.bed"));
 
-        inner_jobs.extend(apa_jobs);
+            let apa_jobs = iso_polya_aparent(
+                step_output_dir,
+                &bed.to_str().unwrap().to_string(),
+                &twobit,
+                chr,
+            );
+
+            inner_jobs.extend(apa_jobs);
+        }
     }
 
     log::info!("INFO [STEP 9a]: Pre-processing completed -> Running APARENT...");
@@ -550,25 +563,38 @@ pub fn polish(
                 panic!("ERROR: could not convert chr name to str -> {subdir:?}")
             });
 
-        let bed = subdir.join(format!("{}.reads.bed", chr));
-        let apa = merge_aparent(subdir.clone(), "tmp");
-        let outdir = step_output_dir.join(chr);
+        for seqs in std::fs::read_dir(&subdir)
+            .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", subdir))
+            .flatten()
+            .filter(|e| e.path().is_dir())
+        {
+            let seqs_dir = seqs.path(); // INFO: {chr}/seqs_{suffix}
+            let suffix = seqs_dir
+                .file_name()
+                .unwrap_or_else(|| panic!("ERROR: could not get file name from {:?}", seqs_dir))
+                .to_str()
+                .unwrap_or_else(|| panic!("ERROR: could not convert file name to str"));
 
-        std::fs::create_dir_all(&outdir).expect(&format!(
-            "ERROR: Failed to create directory {}",
-            step_output_dir.display()
-        ));
+            let bed = seqs_dir.join(format!("{}.reads.bed", chr));
+            let apa = merge_aparent(seqs_dir.clone(), "tmp");
+            let outdir = step_output_dir.join(chr).join(suffix);
 
-        let cmd = format!(
-            "{} run --query {} --aparent {} --twobit {} {args} --outdir {}",
-            isotools!(ISOTOOLS).display(),
-            bed.display(),
-            apa.display(),
-            twobit,
-            outdir.display(),
-        );
+            std::fs::create_dir_all(&outdir).expect(&format!(
+                "ERROR: Failed to create directory {}",
+                step_output_dir.display()
+            ));
 
-        jobs.push(Job::from(cmd))
+            let cmd = format!(
+                "{} run --query {} --aparent {} --twobit {} {args} --outdir {}",
+                isotools!(ISOTOOLS).display(),
+                bed.display(),
+                apa.display(),
+                twobit,
+                outdir.display(),
+            );
+
+            jobs.push(Job::from(cmd))
+        }
     }
 
     return jobs;
