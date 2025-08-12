@@ -413,6 +413,8 @@ fn iso_polya_aparent(
     twobit: &String,
     prefix: &str,
 ) -> Vec<Job> {
+    log::info!("INFO [STEP 10a]: Pre-processing for APARENT...");
+
     let mut jobs = Vec::new();
 
     let outdir = step_output_dir.join(prefix);
@@ -423,6 +425,7 @@ fn iso_polya_aparent(
     ));
 
     let args = vec![
+        String::from("aparent"),
         String::from("--bed"),
         bed.clone(),
         String::from("--twobit"),
@@ -537,7 +540,7 @@ pub fn polish(
         }
     }
 
-    log::info!("INFO [STEP 9a]: Pre-processing completed -> Running APARENT...");
+    log::info!("INFO [STEP 10a]: Pre-processing completed -> Running APARENT...");
 
     executor.add_jobs(inner_jobs).and_send(
         config,
