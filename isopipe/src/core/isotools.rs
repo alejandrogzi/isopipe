@@ -626,7 +626,7 @@ pub fn polish(
 /// let outdir = PathBuf::from("/path/to/output_dir");
 /// merge_aparent(&outdir);
 /// ```
-fn merge_aparent(outdir: PathBuf, prefix: &str) -> PathBuf {
+fn merge_aparent(outdir: PathBuf, _prefix: &str) -> PathBuf {
     let assets = outdir.join(APARENT_CHUNKS);
 
     let mut beds = Vec::new();
@@ -645,7 +645,7 @@ fn merge_aparent(outdir: PathBuf, prefix: &str) -> PathBuf {
     }
 
     let bed = par_reader(beds).expect("ERROR: Failed to merge bed files");
-    let bed_dest = assets.join(format!("{prefix}_{APARENT_OUTPUT}"));
+    let bed_dest = assets.join(APARENT_OUTPUT);
     write_bed(bed_dest.clone(), bed);
 
     log::info!("INFO: Merged chunks and cleaning...");
@@ -657,7 +657,7 @@ fn merge_aparent(outdir: PathBuf, prefix: &str) -> PathBuf {
                 .unwrap()
                 .to_str()
                 .unwrap()
-                .starts_with("tmp_polya")
+                .starts_with("tmp")
             {
                 let _ = std::fs::remove_file(path);
             }
