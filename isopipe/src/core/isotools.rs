@@ -502,12 +502,13 @@ pub fn polish(
                 panic!("ERROR: could not convert chr name to str -> {subdir:?}")
             });
 
+        // INFO: {chr}/seqs_{suffix}
         for seqs in std::fs::read_dir(&subdir)
             .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", subdir))
             .flatten()
             .filter(|e| e.path().is_dir())
         {
-            let seqs_dir = seqs.path(); // INFO: {chr}/seqs_{suffix}
+            let seqs_dir = seqs.path();
             let suffix = seqs_dir
                 .file_name()
                 .unwrap_or_else(|| panic!("ERROR: could not get file name from {:?}", seqs_dir))
@@ -571,43 +572,27 @@ pub fn polish(
                 panic!("ERROR: could not convert chr name to str -> {subdir:?}")
             });
 
-        for seqs in std::fs::read_dir(&subdir)
-            .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", subdir))
-            .flatten()
-            .filter(|e| e.path().is_dir())
-        {
-            let seqs_dir = seqs.path(); // INFO: {chr}/seqs_{suffix}
-            let suffix = seqs_dir
-                .file_name()
-                .unwrap_or_else(|| panic!("ERROR: could not get file name from {:?}", seqs_dir))
-                .to_str()
-                .unwrap_or_else(|| panic!("ERROR: could not convert file name to str"));
+        // INFO: aparent is only ran per-seqs_free-{chr} -> not running isotools on seqs_fusions!
+        let apa = merge_aparent(step_output_dir.join(chr), "tmp");
 
-            let bed = seqs_dir.join(format!("{}.reads.bed", chr));
-            let apa = merge_aparent(seqs_dir.clone(), "tmp");
-            let outdir = step_output_dir.join(chr).join(suffix);
+        // INFO: again, we only want to run isotools on {chr}/seqs_free
+        let bed = subdir.join("seqs_free").join(format!("{}.reads.bed", chr));
+        let outdir = step_output_dir.join(chr);
 
-            std::fs::create_dir_all(&outdir).expect(&format!(
-                "ERROR: Failed to create directory {}",
-                step_output_dir.display()
-            ));
+        let cmd = format!(
+            "{} run --query {} --aparent {} --twobit {} {args} --outdir {}",
+            isotools!(ISOTOOLS).display(),
+            bed.display(),
+            apa.display(),
+            twobit,
+            outdir.display(),
+        );
 
-            let cmd = format!(
-                "{} run --query {} --aparent {} --twobit {} {args} --outdir {}",
-                isotools!(ISOTOOLS).display(),
-                bed.display(),
-                apa.display(),
-                twobit,
-                outdir.display(),
-            );
+        jobs.push(Job::from(cmd));
 
-            jobs.push(Job::from(cmd))
-        }
-
-        // INFO: remove anything tmp
-        let tmp = subdir.join("*/tmp*");
-        let nmd = subdir.join("*/*nmd.bed");
-        let fsn = subdir.join("seqs_fusions/*reads.bed");
+        let tmp = subdir.join("*/tmp*"); // INFO: remove anything tmp
+        let nmd = subdir.join("*/*nmd.bed"); // INFO: move nmds from free/fusions
+        let fsn = subdir.join("seqs_fusions/*reads.bed"); // INFO: fusions reads
 
         let cmd = format!(
             "rm {} && cat {} > {} && mv {} {}",
@@ -643,10 +628,11 @@ pub fn polish(
 /// ```
 fn merge_aparent(outdir: PathBuf, prefix: &str) -> PathBuf {
     let assets = outdir.join(APARENT_CHUNKS);
+
     let mut beds = Vec::new();
 
     for entry in std::fs::read_dir(assets.clone())
-        .expect("ERROR: Failed to read assets directory")
+        .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", assets))
         .flatten()
     {
         let path = entry.path();
@@ -671,7 +657,7 @@ fn merge_aparent(outdir: PathBuf, prefix: &str) -> PathBuf {
                 .unwrap()
                 .to_str()
                 .unwrap()
-                .starts_with("polya")
+                .starts_with("tmp_polya")
             {
                 let _ = std::fs::remove_file(path);
             }
