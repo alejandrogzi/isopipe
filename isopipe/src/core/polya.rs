@@ -149,6 +149,15 @@ pub fn merge(input_dir: &PathBuf) {
             //     continue;
             // }
 
+            if group.is_empty() {
+                log::warn!(
+                    "WARN [MERGE]: No {} files found in {}",
+                    file,
+                    input_dir.join(POLYA_PARTS).display()
+                );
+                continue;
+            }
+
             log::info!(
                 "INFO [MERGE]: Trying to merge {} files to per chromsome {} file",
                 group.len(),
