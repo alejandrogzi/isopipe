@@ -8,6 +8,7 @@ import time
 import os
 import h5py
 from keras.models import load_model
+import numpy as np
 from translationai.utils import *
 import argparse
 import logging
@@ -69,18 +70,31 @@ def TIS_TTS_predictor(
     TIS_score_cutoff,
     TTS_score_cutoff,
     input_fa_fn,
-    TIS_TTS,
-    use_pad,
+    _TIS_TTS,
+    _use_pad,
     fnOut1,
     fnOut2,
     verbose,
 ):
+    """
+    Batched predictor to reduce TensorFlow retracing and speed up inference.
+
+    Key changes vs. original:
+      * Batch multiple sequences into a single model.predict() call (fixed input container type).
+      * Keep ensemble averaging semantics identical to original.
+      * Preserve output format exactly.
+    """
     start_time = time.time()
 
     print("{:-^100}".format("Reading in translationAI models"))
-    BATCH_SIZE = 6
+    # Number of windows per predict() call (Keras batch_size is still used inside)
+    BATCH_SIZE = 6  # per Keras predict() internal mini-batches
+    SEQS_PER_PREDICT = (
+        32  # number of sequences grouped per outer call to model.predict()
+    )
+
     version = modelsUsed.split(",")
-    model = [[] for v in range(len(version))]
+    model = [[] for _ in range(len(version))]
     for v in range(len(version)):
         modelNA = "models/translationAI_" + modelScale + "_" + version[v] + ".h5"
         model[v] = load_model(resource_filename(__name__, modelNA))
@@ -96,6 +110,7 @@ def TIS_TTS_predictor(
         os.system(command)
     else:
         print("{:-^100}".format("Reading in input .h5 file"))
+
     h5f = h5py.File(h5f_name, "r")
     num_idx = len(h5f.keys()) // 2
     seqIn = open(input_fa_fn, "r").readlines()
@@ -107,70 +122,137 @@ def TIS_TTS_predictor(
             "!!!ERROR: The sequence numbers from the .h5 file and the .fa file do not match!"
         )
 
-    print("{:-^100}".format("Predicting TISs and TTSs"))
+    print("{:-^100}".format("Predicting TISs and TTSs (batched)"))
     fhOut1 = open(fnOut1, "w")
     fhOut2 = open(fnOut2, "w")
-    for idx in range(num_idx):
-        if verbose:
-            if not (idx % 10):
-                print("    Procssing the %d/%d sequence ..." % (idx + 1, num_idx))
-        Y_pred_TIS = [[] for t in range(1)]
-        Y_pred_TTS = [[] for t in range(1)]
-        X = h5f["X" + str(idx)][:]
-        Y = h5f["Y" + str(idx)][:]
-        Xc, Yc = clip_datapoints(X, Y, int(modelScale), 1)  # set NGPU=1
-        Yps = [np.zeros(Yc[0].shape)]
+
+    # process sequences in groups to stabilize input signatures
+    for batch_start in range(0, num_idx, SEQS_PER_PREDICT):
+        batch_end = min(batch_start + SEQS_PER_PREDICT, num_idx)
+        batch_indices = list(range(batch_start, batch_end))
+
+        # Gather inputs and per-sequence bookkeeping
+        X_list = []  # list of np arrays (windows x L x C)
+        meta = []  # per-sequence metadata for post-processing
+
+        for idx in batch_indices:
+            # print every 5000 seqs
+            print(f"Processing seq {idx + 1}/{num_idx} ...") if  not (idx % 5000) else None
+
+            if verbose and not (idx % 10):
+                print(f"    Preparing seq {idx + 1}/{num_idx} ...")
+
+            X = h5f["X" + str(idx)][:]
+            Y = h5f["Y" + str(idx)][:]
+            Xc, Yc = clip_datapoints(X, Y, int(modelScale), 1)  # NGPU=1
+
+            # Ensure a consistent container & dtype for TF (np.ndarray, float32)
+            Xc_arr = np.asarray(Xc, dtype=np.float32)
+
+            # Compute masks and bookkeeping matching original logic
+            seq_len = len(
+                seqIn[idx * 2 + 1]
+            )  # match original (includes newline char if present)
+            is_expr = Yc[0].sum(axis=(1, 2)) >= 1
+            n_windows = Xc_arr.shape[0]
+
+            X_list.append(Xc_arr)
+            meta.append(
+                {
+                    "idx": idx,
+                    "seq_len": seq_len,
+                    "is_expr": is_expr,
+                    "n_windows": n_windows,
+                }
+            )
+
+        # Concatenate all windows into one array for a single predict() call per model
+        if len(X_list) == 1:
+            X_batch = X_list[0]
+        else:
+            X_batch = np.concatenate(X_list, axis=0)
+
+        # Run ensemble prediction once per model on the concatenated batch
+        # Then split and average back per sequence
+        # Prepare per-sequence accumulators lazily after first model predicts
+        per_seq_preds = [None] * len(
+            meta
+        )  # each element: np.ndarray (n_windows, L, num_classes)
+
         for v in range(len(version)):
             if verbose:
-                Yp = model[v].predict(Xc, batch_size=BATCH_SIZE)
+                Yp_batch = model[v].predict(X_batch, batch_size=BATCH_SIZE)
             else:
-                Yp = model[v].predict(Xc, batch_size=BATCH_SIZE, verbose=0)
+                Yp_batch = model[v].predict(X_batch, batch_size=BATCH_SIZE, verbose=0)
 
-            if not isinstance(Yp, list):
-                Yp = [Yp]
-            Yps[0] += Yp[0] / len(version)  # mean of the ensemble predictions is used
-        seq_len = len(seqIn[idx * 2 + 1])
-        is_expr = Yc[0].sum(axis=(1, 2)) >= 1
-        ############################## Predict TIS ##############################
-        Y_pred_TIS[0].extend(Yps[0][is_expr, :, 2].flatten())  # TIS
-        argsorted_y_pred_TIS = np.argsort(Y_pred_TIS[0][0:seq_len])[::-1]
-        if TIS_score_cutoff < 1:  # using cutoff score
-            for i in range(len(argsorted_y_pred_TIS)):
-                if Y_pred_TIS[0][argsorted_y_pred_TIS[i]] < TIS_score_cutoff:
-                    ind_threshold = i
-                    break
-        else:  # threshold>=1: # indicating using top-threshold number
-            ind_threshold = TIS_score_cutoff
-        idx_pred = argsorted_y_pred_TIS[: int(ind_threshold)]
-        pred_TIS_pos_score = [
-            str(ind) + "," + str(Y_pred_TIS[0][ind]) for ind in idx_pred
-        ]
-        fhOut1.write(
-            seqIn[idx * 2].strip("\n") + "\t" + "\t".join(pred_TIS_pos_score) + "\n"
-        )
-        # fhOut1.write(seqIn[idx * 2 + 1])
-        ############################## Predict TTS ##############################
-        Y_pred_TTS[0].extend(Yps[0][is_expr, :, 1].flatten())  # TTS
-        argsorted_y_pred_TTS = np.argsort(Y_pred_TTS[0][0:seq_len])[::-1]
-        if TTS_score_cutoff < 1:  # indicating using cutoff score
-            for i in range(len(argsorted_y_pred_TTS)):
-                if Y_pred_TTS[0][argsorted_y_pred_TTS[i]] < TTS_score_cutoff:
-                    ind_threshold = i
-                    break
-        else:  # threshold>=1: # indicating using top-threshold number
-            ind_threshold = TTS_score_cutoff
-        idx_pred = argsorted_y_pred_TTS[: int(ind_threshold)]
-        pred_TTS_pos_score = [
-            str(ind) + "," + str(Y_pred_TTS[0][ind]) for ind in idx_pred
-        ]
-        fhOut2.write(
-            seqIn[idx * 2].strip("\n") + "\t" + "\t".join(pred_TTS_pos_score) + "\n"
-        )
-        # fhOut2.write(seqIn[idx * 2 + 1])
+            if not isinstance(Yp_batch, list):
+                Yp_batch = [Yp_batch]
+
+            # We only use the first output head as in original code
+            y0 = np.asarray(Yp_batch[0])
+
+            # Distribute slices back to sequences
+            offset = 0
+            for s, m in enumerate(meta):
+                n = m["n_windows"]
+                sl = y0[offset : offset + n]
+                if per_seq_preds[s] is None:
+                    per_seq_preds[s] = sl.astype(np.float32) / len(version)
+                else:
+                    per_seq_preds[s] += sl.astype(np.float32) / len(version)
+                offset += n
+
+        # Now post-process & write outputs per sequence (identical to original semantics)
+        for s, m in enumerate(meta):
+            idx = m["idx"]
+            seq_len = m["seq_len"]
+            is_expr = m["is_expr"]
+
+            # Compute class-specific scores on expressed bins only
+            Yps_seq = per_seq_preds[s]
+
+            # ---- Predict TIS ----
+            Y_pred_TIS = []
+            Y_pred_TIS.extend(Yps_seq[is_expr, :, 2].flatten())  # class 2 = TIS
+            Y_pred_TIS = np.asarray(Y_pred_TIS)
+            argsorted_y_pred_TIS = np.argsort(Y_pred_TIS[0:seq_len])[::-1]
+            if TIS_score_cutoff < 1:
+                ind_threshold = len(argsorted_y_pred_TIS)
+                for i in range(len(argsorted_y_pred_TIS)):
+                    if Y_pred_TIS[argsorted_y_pred_TIS[i]] < TIS_score_cutoff:
+                        ind_threshold = i
+                        break
+            else:
+                ind_threshold = int(TIS_score_cutoff)
+            idx_pred = argsorted_y_pred_TIS[:ind_threshold]
+            pred_TIS_pos_score = [f"{ind},{Y_pred_TIS[ind]}" for ind in idx_pred]
+            fhOut1.write(
+                seqIn[idx * 2].strip("\n") + "\t" + "\t".join(pred_TIS_pos_score) + "\n"
+            )
+
+            # ---- Predict TTS ----
+            Y_pred_TTS = []
+            Y_pred_TTS.extend(Yps_seq[is_expr, :, 1].flatten())  # class 1 = TTS
+            Y_pred_TTS = np.asarray(Y_pred_TTS)
+            argsorted_y_pred_TTS = np.argsort(Y_pred_TTS[0:seq_len])[::-1]
+            if TTS_score_cutoff < 1:
+                ind_threshold = len(argsorted_y_pred_TTS)
+                for i in range(len(argsorted_y_pred_TTS)):
+                    if Y_pred_TTS[argsorted_y_pred_TTS[i]] < TTS_score_cutoff:
+                        ind_threshold = i
+                        break
+            else:
+                ind_threshold = int(TTS_score_cutoff)
+            idx_pred = argsorted_y_pred_TTS[:ind_threshold]
+            pred_TTS_pos_score = [f"{ind},{Y_pred_TTS[ind]}" for ind in idx_pred]
+            fhOut2.write(
+                seqIn[idx * 2].strip("\n") + "\t" + "\t".join(pred_TTS_pos_score) + "\n"
+            )
 
     h5f.close()
     fhOut1.close()
     fhOut2.close()
+
     print(
         "{:-^100}".format(
             "TIS and TTS prediction done! Time used: %d seconds"
