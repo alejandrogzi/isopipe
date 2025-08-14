@@ -585,14 +585,15 @@ impl Config {
     /// assert_eq!(output, PathBuf::from("output_20210901120000"));
     /// ```
     pub fn create_global_output_dir(&self) -> PathBuf {
+        let dir_prefix = self.get_dir_prefix();
+
         let rs = format!(
-            "{}/{}_{}",
+            "{}/{dir_prefix}{OUTPUT}_{}",
             self.global
                 .get("global_output_dir")
                 .expect("ERROR: output not found!")
                 .to_path_buf()
                 .display(),
-            OUTPUT,
             chrono::Local::now().format("%Y%m%d%H%M")
         )
         .into();
@@ -621,6 +622,33 @@ impl Config {
             .get("data_prefix")
             .expect("ERROR: data_prefix not found!")
             .to_string()
+    }
+
+    /// Get global dir prefix from the Config.
+    ///
+    /// # Returns
+    ///
+    /// A String containing the global dir prefix.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let config = Config::new();
+    /// let dir_prefix = config.get_dir_prefix();
+    ///
+    /// assert_eq!(data_prefix, "data_");
+    /// ```
+    pub fn get_dir_prefix(&self) -> String {
+        if self.global.contains_key("dir_prefix") {
+            return self
+                .global
+                .get("dir_prefix")
+                .expect("ERROR: dir_prefix not found in config.toml!")
+                .to_string()
+                + "_";
+        } else {
+            return String::from("");
+        }
     }
 
     /// Get package name from the Config.
