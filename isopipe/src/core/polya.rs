@@ -320,7 +320,8 @@ pub fn __split_by_chr(files: &[PathBuf], dir: &PathBuf, suffix: &str) -> std::io
                 let outfile = dir.join(format!("{}_{}", &chr, suffix));
                 let file = OpenOptions::new()
                     .create(true)
-                    .append(true)
+                    .write(true)
+                    .truncate(true) // <- overwrite any existing file from previous runs
                     .open(outfile)
                     .unwrap_or_else(|_| {
                         panic!(
@@ -333,7 +334,9 @@ pub fn __split_by_chr(files: &[PathBuf], dir: &PathBuf, suffix: &str) -> std::io
             });
 
             w.write_all(&line)?;
-            line.clear();
+            if !line.ends_with(b"\n") {
+                w.write_all(b"\n")?;
+            }
         }
     }
 
