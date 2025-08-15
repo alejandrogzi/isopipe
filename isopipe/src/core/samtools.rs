@@ -170,6 +170,19 @@ pub fn index(config: &Config, input_dir: &PathBuf, executor: &mut ParallelExecut
         })
     {
         let bam = entry.path();
+        let mut bai = bam.clone();
+        bai.set_extension("bai");
+
+        // INFO: if .bai already exists, skip
+        if bai.exists() {
+            log::info!(
+                "INFO: Skipping indexing for {} as it already exists -> {}.",
+                bam.display(),
+                bai.display()
+            );
+            continue;
+        }
+
         let cmd = format!("samtools index -@ 8 {}", bam.display());
         let job = Job::from(cmd);
 
