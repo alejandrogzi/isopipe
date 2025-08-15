@@ -290,7 +290,11 @@ pub fn __split_by_chr(files: &[PathBuf], dir: &PathBuf, suffix: &str) -> std::io
         let mut rdr = BufReader::new(f);
         let mut line = Vec::with_capacity(1 << 16);
 
-        while rdr.read_until(b'\n', &mut line)? != 0 {
+        while {
+            line.clear(); // clear buffer before each read
+            rdr.read_until(b'\n', &mut line)?
+        } != 0
+        {
             let chr = {
                 // INFO: find first TAB; fallback to the whole line (trim \n)
                 let end = memchr(b'\t', &line).unwrap_or_else(|| {
