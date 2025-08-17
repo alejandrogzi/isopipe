@@ -505,8 +505,9 @@ fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut
                 };
             }
 
-            jobs.push(Job::from(blast));
-            jobs.push(Job::from(tai));
+            let cmd = format!("{} && {}", tai, blast);
+
+            jobs.push(Job::from(cmd));
         }
     }
 }
@@ -582,8 +583,12 @@ fn cannonical_processing(
             )
         });
 
-        let blast = format!(
-            "{} blast -e {} --fasta {} --alignments {} --outdir {} --orf-min-len {} --db {}",
+        let cmd = format!(
+            "{} tai --fasta {} --alignments {} --outdir {} && {} blast -e {} --fasta {} --alignments {} --outdir {} --orf-min-len {} --db {}",
+            ORF_RELEASE,
+            chunked_fa.display(),
+            chunked_bed.display(),
+            chunked_dir.display(),
             ORF_RELEASE,
             args[1], // INFO: orfipy
             &chunked_fa.display(),
@@ -593,16 +598,7 @@ fn cannonical_processing(
             args[3], // INFO: database
         );
 
-        let tai = format!(
-            "{} tai --fasta {} --alignments {} --outdir {}",
-            ORF_RELEASE,
-            chunked_fa.display(),
-            chunked_bed.display(),
-            chunked_dir.display(),
-        );
-
-        jobs.push(Job::from(blast));
-        jobs.push(Job::from(tai));
+        jobs.push(Job::from(cmd));
     }
 }
 
