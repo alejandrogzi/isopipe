@@ -396,8 +396,9 @@ impl ParallelExecutor {
 
         if !output.status.success() {
             log::error!(
-                "ERROR: Failed to execute command: {}",
-                String::from_utf8_lossy(&output.stderr)
+                "ERROR: Failed to execute command: {} -> {}",
+                String::from_utf8_lossy(&output.stderr),
+                cmd
             );
 
             if let Ok(step) = PipelineStep::from_str(step) {
