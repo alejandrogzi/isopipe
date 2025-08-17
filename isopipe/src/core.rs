@@ -5,6 +5,7 @@ pub mod ccs;
 pub mod isoseq;
 pub mod isotools;
 pub mod lima;
+pub mod load;
 pub mod minimap;
 pub mod orf;
 pub mod pbindex;
@@ -62,8 +63,6 @@ pub fn run_step(
         }
         PipelineStep::Polya => {
             log::info!("INFO [STEP 6]: Pre-processing for polya started...");
-
-            samtools::index(config, &input_dir, executor);
             polya::polya(step, config, &input_dir, &step_output_dir)
         }
         PipelineStep::Fusion => {
@@ -92,7 +91,10 @@ pub fn run_step(
         PipelineStep::Polish => {
             log::info!("INFO [STEP 10]: Pre-processing for isotools polish started...");
             isotools::polish(step, config, &input_dir, &step_output_dir, executor)
-        }
+        } // PipelineStep::Load => {
+          //     log::info!("INFO [STEP 11]: Pre-processing for loading final results started...");
+          //     load::load(step, config, &input_dir, &step_output_dir)
+          // }
     };
 
     executor
