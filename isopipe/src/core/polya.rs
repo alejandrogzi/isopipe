@@ -44,13 +44,26 @@ pub fn polya(
     let mut jobs = Vec::new();
 
     let parts = &step_output_dir.join(POLYA_PARTS);
+    let keep_temp = config
+        .get_step_custom_field(step, KEEP_TEMP)
+        .parse::<bool>()
+        .unwrap_or(false);
+
     let _ = create_dir_all(parts);
 
-    rm!(input_dir.join(CHUNKS));
+    if !keep_temp {
+        log::info!(
+            "INFO [STEP 6]: Removing previous parts directory: {}",
+            parts.display()
+        );
+        rm!(input_dir.join(CHUNKS));
+    }
 
     let args = config.get_step_args(
         step,
-        vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, TOGA, ASSEMBLY],
+        vec![
+            INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, TOGA, ASSEMBLY, KEEP_TEMP,
+        ],
     );
 
     // WARN: input_dir needs to be suffixed by /bam
@@ -77,7 +90,7 @@ pub fn polya(
             .unwrap_or_else(|| panic!("ERROR: could not build prefix for {:?}", bam));
 
         if std::fs::metadata(&bam).unwrap().len() == 0 {
-            log::warn!("WARNING: {} its empty!", bam.display());
+            log::warn!("WARN: {} its empty!", bam.display());
             continue;
         }
 
@@ -167,6 +180,7 @@ pub fn merge(input_dir: &PathBuf) {
             let _ = __split_by_chr(group, &input_dir, file);
         }
 
+        // INFO: not affected by keep_temp because should be removed anyway
         rm!(input_dir.join(POLYA_PARTS));
     } else {
         log::warn!(
@@ -200,6 +214,8 @@ pub fn merge(input_dir: &PathBuf) {
                     "INFO [MERGE]: successfully split {} into chunked chromosomes!",
                     bed.display()
                 );
+
+                // INFO: not affected by keep_temp because should be removed anyway
                 rm!(bed);
             }
         }
