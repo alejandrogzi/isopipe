@@ -11,7 +11,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{BedColumn, BedColumnValue, bed_to_nested_collection};
+use config::{bed_to_nested_collection, BedColumn, BedColumnValue};
 use dashmap::DashMap;
 use hashbrown::HashMap;
 use log::warn;
@@ -373,16 +373,13 @@ impl Mode {
 /// // let _ = get_chr_from_path(&path3); // This would panic
 /// ```
 pub fn get_chr_from_path(path: &PathBuf) -> String {
-    // INFO: tmp_chunk_chr16:{n} [.bed/.index/.fa]
+    // INFO: {...}/step8_orf/seqs_free/chr10_KZ289072_fix:0/{filename}
     let basename = path
-        .file_stem()
+        .parent()
         .unwrap_or_else(|| panic!("ERROR: could not get basename from {:?}", path))
         .to_string_lossy();
 
-    let chr = basename.split('_').collect::<Vec<&str>>()[2]
-        .split(':')
-        .collect::<Vec<&str>>()[0]
-        .to_string();
+    let chr = basename.split(':').collect::<Vec<&str>>()[0].to_string();
 
     chr
 }

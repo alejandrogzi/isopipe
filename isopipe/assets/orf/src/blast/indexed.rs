@@ -88,10 +88,7 @@ pub fn indexed(
         // INFO: unpacking index reference -> queries
         // INFO: for each query all blast records [ mapping 0 -> R12,R15,R20]
         let queries = index.get(&seq_id).unwrap_or_else(|| {
-            panic!(
-                "ERROR: no queries found for ID: {} in {chr} -> {data:?}; {parts:?}",
-                seq_id
-            );
+            panic!("ERROR: no queries found for ID: {seq_id} in {chr} -> {data:?}; {parts:?}\n{index:?}");
         });
 
         for query in queries.into_iter() {
