@@ -43,6 +43,7 @@ pub const ORF_MIN_LEN: &str = "orf_min_len";
 pub const ORFIPY: &str = "orfipy";
 pub const KEEP_REJECTED: &str = "keep_rejected";
 pub const PARALLEL_MODE: &str = "parallel_mode";
+pub const KEEP_TEMP: &str = "keep_temp";
 
 // project-wide pub const | names
 pub const ISOPIPE: &str = "isopipe";
@@ -124,6 +125,8 @@ pub const APARENT_PY: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../isotools/isotools/iso-polya/assets/run_aparent.py"
 );
+pub const HG_LOAD_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/bin/hgLoadBed");
+pub const BED_TO_BIG_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/bin/bedToBigBed");
 
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];
