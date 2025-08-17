@@ -211,7 +211,7 @@ impl ParallelExecutor {
 
         // INFO: remove jobs file
         let filename = global_output_dir.join("jobs");
-        std::fs::remove_file(&filename).expect("ERROR: Failed to remove job file");
+        std::fs::remove_file(&filename).expect("ERROR: Failed to remove job file -> {filename:?}");
     }
 
     /// Channels errors while using para as executor
@@ -388,9 +388,11 @@ impl ParallelExecutor {
 
         let output = std::process::Command::new("sh")
             .arg("-c")
-            .arg(cmd)
+            .arg(&cmd)
             .output()
-            .expect("ERROR: Failed to execute command");
+            .unwrap_or_else(|_| {
+                panic!("ERROR: Failed to execute command: {}", cmd);
+            });
 
         if !output.status.success() {
             log::error!(
@@ -663,7 +665,9 @@ fn __check_manager(manager: &str) {
     std::process::Command::new(manager)
         .arg("--version")
         .output()
-        .expect("ERROR: Failed to execute command");
+        .unwrap_or_else(|_| {
+            panic!("ERROR: Failed to execute command: {} --version", manager);
+        });
 }
 
 /// Get the assets directory
