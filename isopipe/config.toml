@@ -22,7 +22,8 @@ nextflow = ""
 
 [global]
 data_prefix = "foo"                   # FILL: raw data prefix
-global_output_dir = "/path/to/outdir" # FILL: output dir -> {outdir}/isopipe_run_{timestamp}
+dir_prefix = ""                       # FILL: output dir prefix [optional]
+global_output_dir = "/path/to/outdir" # FILL: output dir -> {outdir}/{dir_prefix}_isopipe_run_{timestamp}
 long_queue = "long"                   # FILL [AWARE]: long queue name
 short_queue = "day"                   # FILL [AWARE]: short queue name
 default_memory = 16                   # default memory in GB
@@ -107,11 +108,12 @@ toga = ""                   # FILL: toga query annotation
 assembly = ""               # FILL: assembly name [WILL CHANGE]
 tag = ""                    # WARN: --tag leave empty, will tag reads [erase if want to avoid tagging]
 bed = ""                    # WARN: --bed leave emtpy, [convert to bed, erase if want .bam]
+keep_temp = "false"         # WARN: keep temporary files, change to "true" to keep them
 
 [params.fusion]
 input_dir = "step6_polya"   # previous step data dir [default]
 output_dir = "step7_fusion" # output dir
-memory = 60                 # memory in GB
+memory = 16                 # memory in GB
 time = "24.h"               # time for each job
 toga = ""                   # FILL: toga query annotation
 keep_rejected = "false"     # WARN: drop rejected reads, change to "true" to keep them
@@ -119,7 +121,7 @@ keep_rejected = "false"     # WARN: drop rejected reads, change to "true" to kee
 [params.orf]
 input_dir = "step7_fusion" # previous step data dir [default]
 output_dir = "step8_orf"   # output dir
-memory = 32                # memory in GB
+memory = 16                # memory in GB
 num-threads = 8            # --num-threads
 time = "24.h"              # time for each job
 toga = ""                  # FILL: toga query [directory]
@@ -155,4 +157,5 @@ output_dir = "step11_load"  # output dir
 memory = 16                 # memory in GB
 num-threads = 8             # --num-threads
 time = "24.h"               # time for each job
-schema = ""
+user = ""                   # FILL: browser username
+upload-public = "false"     # WARN: upload to public browser, change to "true" to upload
