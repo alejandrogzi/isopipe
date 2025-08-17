@@ -72,10 +72,11 @@ pub fn minimap2(
             .join(basename.with_extension(BAM).file_name().unwrap());
 
         let compression = format!(
-            "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {} && rm {}",
+            "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {} && rm {} && {SAMTOOLS} index -@ 8 {}",
             sam.display(),
             bam.display(),
-            sam.display()
+            sam.display(),
+            bam.display()
         );
 
         let job = Job::new()
