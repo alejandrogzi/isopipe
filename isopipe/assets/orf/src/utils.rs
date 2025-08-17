@@ -11,7 +11,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{bed_to_nested_collection, BedColumn, BedColumnValue};
+use config::{BedColumn, BedColumnValue, bed_to_nested_collection};
 use dashmap::DashMap;
 use hashbrown::HashMap;
 use log::warn;
@@ -377,6 +377,8 @@ pub fn get_chr_from_path(path: &PathBuf) -> String {
     let basename = path
         .parent()
         .unwrap_or_else(|| panic!("ERROR: could not get basename from {:?}", path))
+        .file_stem()
+        .unwrap_or_else(|| panic!("ERROR: could not get file stem from {:?}", path))
         .to_string_lossy();
 
     let chr = basename.split(':').collect::<Vec<&str>>()[0].to_string();
