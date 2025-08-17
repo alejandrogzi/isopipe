@@ -218,10 +218,11 @@ fn build_non_cannonical(
             .join(format!("aligned.{}.{}", basename, BAM));
 
         let compression = format!(
-            "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {} && rm {}",
+            "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {} && rm {} && {SAMTOOLS} index -@ 8 {}",
             sam.display(),
             bam.display(),
-            sam.display()
+            sam.display(),
+            bam.display()
         );
 
         let job = Job::new()
