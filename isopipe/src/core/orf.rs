@@ -507,7 +507,7 @@ fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut
 
             // INFO: if tai results are less than 10 lines, skip the blast job
             let cmd = format!(
-                "{} && [ \"$(wc -l < {})\" -ge 10 ] && {}",
+                "{} && ( [ \"$(wc -l < {})\" -ge 10 ] && {} || true )",
                 tai,
                 chunked_dir.join(TAI).join("*.result").display(),
                 blast
