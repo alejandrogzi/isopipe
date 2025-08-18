@@ -505,7 +505,13 @@ fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut
                 };
             }
 
-            let cmd = format!("{} && {}", tai, blast);
+            // INFO: if tai results are less than 10 lines, skip the blast job
+            let cmd = format!(
+                "{} && [ \"$(wc -l < {})\" -ge 10 ] && {}",
+                tai,
+                chunked_dir.join(TAI).join("*.result").display(),
+                blast
+            );
 
             jobs.push(Job::from(cmd));
         }
