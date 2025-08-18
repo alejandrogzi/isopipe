@@ -219,15 +219,16 @@ fn predict(step_output_dir: &PathBuf, mode: &ParallelMode, toga_merged: &PathBuf
                         panic!("ERROR: toga_merged path is empty!");
                     }
 
+                    // INFO: if any of the required files are missing, skip the chunk
+                    let Some(blast) = blast else {
+                        log::warn!("WARN: could not find blast result in -> {chunk:?}");
+                        continue;
+                    };
+
                     let cmd =
                         format!(
                         "source {} && {} --blast {} --tai {} --toga {} --alignments {} --outdir {} --prefix tmp_",
-                        TAI_VENV, PREDICT_PY, blast.unwrap_or_else(|| {
-                            panic!(
-                                "ERROR: could not find blast file in chunked dir -> {}",
-                                chunked_dir.display()
-                            )
-                        }).display(),
+                        TAI_VENV, PREDICT_PY, blast.display(),
                         tai.unwrap_or_else(|| {
                             panic!(
                                 "ERROR: could not find tai file in chunked dir -> {}",
