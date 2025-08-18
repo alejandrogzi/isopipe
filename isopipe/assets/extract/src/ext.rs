@@ -13,13 +13,13 @@
 //! simple integers map to read identifiers [all of them as plain bytes].
 //! The process is heavily parallelized to offer fast performance on large datasets.
 
-use config::{OverlapType, SCALE, Sequence, Strand};
+use config::{OverlapType, Sequence, Strand, SCALE};
 use dashmap::DashMap;
 use iso_polya::utils::get_sequences;
-use packbed::{GenePred, unpack};
+use packbed::{unpack, GenePred};
 use rayon::prelude::*;
 
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{hash_map::Entry, HashMap};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
@@ -397,9 +397,10 @@ fn index(
                 v.insert(vec![encoded]);
 
                 // INFO: only for unseen seqs
-                let mut fields = tx.line_mut().split('\t').collect::<Vec<_>>();
-                let name = format!("{}", count);
-                fields[3] = &name;
+                let mut fields: Vec<String> =
+                    tx.line_mut().split('\t').map(|s| s.to_string()).collect();
+
+                fields[3] = count.to_string();
                 let line = fields.join("\t");
 
                 writeln!(writer_reduced_bed, "{}", line).unwrap_or_else(|e| {
