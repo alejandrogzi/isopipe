@@ -354,11 +354,12 @@ impl ParallelExecutor {
         package: Option<String>,
         suffix: Option<&str>,
     ) {
-        let run_id = config.get_run_id();
+        let mut run_id = config.get_run_id();
         let mut step_code = format!("{}_{}", step, run_id);
 
         if let Some(suffix) = suffix {
             step_code = format!("{}_{}", step_code, suffix);
+            run_id = format!("{}_{}", run_id, suffix);
         }
 
         let mut cmd = format!(
