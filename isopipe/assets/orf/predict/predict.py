@@ -44,10 +44,10 @@ BLAST_COLS: List = [
 ]
 TAI_COLS = [
     "tai_id",
+    "translationAI_orf_start_coord",
+    "translationAI_orf_stop_coord",
     "translationAI_orf_start",
     "translationAI_orf_stop",
-    "tai_s_score",
-    "tai_e_score",
     "strand",
     "tai_orf_start",
     "tai_orf_end",
