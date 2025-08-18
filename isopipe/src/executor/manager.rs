@@ -396,17 +396,32 @@ impl ParallelExecutor {
             });
 
         if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+
             log::error!(
-                "ERROR: Failed to execute command: {} -> {}",
-                String::from_utf8_lossy(&output.stderr),
-                cmd
+                "ERROR: Failed to execute command: stderr='{}' stdout='{}' cmd='{}' status={}",
+                if stderr.is_empty() {
+                    "<empty>"
+                } else {
+                    &stderr
+                },
+                if stdout.is_empty() {
+                    "<empty>"
+                } else {
+                    &stdout
+                },
+                cmd,
+                output.status
             );
 
             if let Ok(step) = PipelineStep::from_str(step) {
                 self.__channel_error(&step, run_id);
             }
 
-            std::process::exit(1);
+            // INFO: let the user decide what to do interactively
+            log::error!("ERROR: Command failed with status: {}", output.status);
+            // std::process::exit(1);
         } else {
             log::info!(
                 "INFO: Command executed successfully: {}",
