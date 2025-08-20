@@ -590,9 +590,9 @@ pub fn polish(
 
         jobs.push(Job::from(cmd));
 
-        let tmp = subdir.join("*/tmp*"); // INFO: remove anything tmp
-        let nmd = subdir.join("*/*nmd.bed"); // INFO: move nmds from free/fusions
-        let fsn = subdir.join("seqs_fusions/*reads.bed"); // INFO: fusions reads
+        let tmp = subdir.join("*/*/tmp*"); // INFO: remove anything tmp
+        let nmd = subdir.join("*/*/*nmd.bed"); // INFO: move nmds from free/fusions
+        let fsn = subdir.join("*/seqs_fusions/*reads.bed"); // INFO: fusions reads
 
         let cmd = format!(
             "rm {} && cat {} > {} && mv {} {}",
