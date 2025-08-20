@@ -415,13 +415,12 @@ impl ParallelExecutor {
                 output.status
             );
 
+            log::warn!("WARN: Will continue if there is no .crashed file!");
+
             if let Ok(step) = PipelineStep::from_str(step) {
                 self.__channel_error(&step, run_id);
+                std::process::exit(1);
             }
-
-            // INFO: let the user decide what to do interactively
-            log::error!("ERROR: Command failed with status: {}", output.status);
-            // std::process::exit(1);
         } else {
             log::info!(
                 "INFO: Command executed successfully: {}",
