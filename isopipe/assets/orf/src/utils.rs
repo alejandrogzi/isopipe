@@ -537,24 +537,33 @@ impl BlastRecord {
             );
         });
         // INFO: if parsed to zero, but string was not "0.0", it's subnormal
-        let blast_e_value = if blast_e_value == 0.0 && parts[9] != "0.0" {
+        let blast_e_value = if blast_e_value == 0.0 {
             // INFO: represent it with the minimum positive value
             f64::MIN_POSITIVE // INFO: ~2.225074e-308
         } else {
             blast_e_value
         };
 
-        let blast_offset = parts[7].parse::<i32>().unwrap_or_else(|_| {
-            panic!(
-                "ERROR: failed to parse blast offset from parts: {:?}",
-                parts
-            )
-        }) - parts[5].parse::<i32>().unwrap_or_else(|_| {
+        let qstart = parts[5].parse::<i32>().unwrap_or_else(|_| {
             panic!(
                 "ERROR: failed to parse blast offset from parts: {:?}",
                 parts
             );
         });
+        let qend = parts[6].parse::<i32>().unwrap_or_else(|_| {
+            panic!(
+                "ERROR: failed to parse blast offset from parts: {:?}",
+                parts
+            );
+        });
+
+        let blast_offset = parts[7].parse::<i32>().unwrap_or_else(|_| {
+            panic!(
+                "ERROR: failed to parse blast offset from parts: {:?}",
+                parts
+            )
+        }) - qstart;
+
         let blast_alignment_len = parts[4].parse::<u32>().unwrap_or_else(|_| {
             panic!(
                 "ERROR: failed to parse blast offset from parts: {:?}",
@@ -562,7 +571,7 @@ impl BlastRecord {
             )
         });
 
-        let percent_aligned = blast_alignment_len as f32
+        let percent_aligned = (qend - qstart + 1) as f32
             / parts[2].parse::<u32>().unwrap_or_else(|_| {
                 panic!(
                     "ERROR: failed to parse blast length from parts: {:?}",

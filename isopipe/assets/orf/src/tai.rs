@@ -11,7 +11,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{BedColumn, BedColumnValue, SCALE, bed_to_struct_collection};
+use config::{bed_to_struct_collection, BedColumn, BedColumnValue, SCALE};
 use dashmap::{DashMap, DashSet};
 use hashbrown::HashMap;
 use isopipe::config::depure;
