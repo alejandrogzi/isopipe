@@ -53,6 +53,7 @@ pub const OUTPUT: &str = "isopipe_run";
 pub const ISOSEQ: &str = "isoseq";
 pub const CLUSTER: &str = "cluster";
 pub const SAMTOOLS: &str = "samtools";
+pub const MINIMAP2: &str = "minimap2";
 pub const POLYA_FIRST_PASS: &str = "polya_first_pass";
 pub const BEDTOOLS: &str = "bedtools";
 pub const BAMTOBED: &str = "bamtobed";

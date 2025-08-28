@@ -38,6 +38,7 @@ pub fn minimap2(
     config: &Config,
     input_dir: &PathBuf,
     step_output_dir: &PathBuf,
+    executor: &mut crate::core::ParallelExecutor,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
 
@@ -45,7 +46,8 @@ pub fn minimap2(
         step,
         vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, GENOME, CHUNK],
     );
-    let genome = get_genome(config, step, step_output_dir);
+
+    let genome_index = index_genome(step, config, step_output_dir, executor);
 
     let _ = create_dir_all(&step_output_dir.join(SAM));
     let _ = create_dir_all(&step_output_dir.join(BAM));
@@ -83,7 +85,7 @@ pub fn minimap2(
             .task(*step)
             .arg(&args)
             .arg(&format!("-o {}", sam.display()))
-            .arg(&genome)
+            .arg(&genome_index.display())
             .arg(entry.display())
             .arg(compression);
 
@@ -95,7 +97,14 @@ pub fn minimap2(
             "WARN: No cannonical jobs found to run for minimap2 in {} -> trying to grab any .fasta.gz!",
             input_dir.display()
         );
-        build_non_cannonical(input_dir, step_output_dir, step, args, genome, &mut jobs);
+        build_non_cannonical(
+            input_dir,
+            step_output_dir,
+            step,
+            args,
+            genome_index,
+            &mut jobs,
+        );
     }
 
     log::info!("INFO [STEP 5]: Pre-processing completed -> Running...");
@@ -128,7 +137,7 @@ fn twobit_to_fa(genome: String, step_output_dir: &PathBuf) -> String {
     )));
 
     let _ = convert::fasta::to_fasta(&mut twobit, &mut writer)
-        .expect("ERROR: Failed to convert 2bit to FASTA");
+        .unwrap_or_else(|e| panic!("ERROR: Failed to convert {} to FASTA -> {e}", genome));
 
     fasta.display().to_string()
 }
@@ -187,7 +196,7 @@ fn build_non_cannonical(
     step_output_dir: &PathBuf,
     step: &PipelineStep,
     args: String,
-    genome: String,
+    genome: PathBuf,
     jobs: &mut Vec<Job>,
 ) {
     // INFO: only considering .fasta.gz + fa.gz; others are already considered as cannonical!
@@ -230,7 +239,7 @@ fn build_non_cannonical(
             .task(*step)
             .arg(&args)
             .arg(&format!("-o {}", sam.display()))
-            .arg(&genome)
+            .arg(&genome.display())
             .arg(entry.display())
             .arg(compression);
 
@@ -246,4 +255,50 @@ fn build_non_cannonical(
     } else {
         log::info!("INFO: sending {} non-cannonical jobs...", jobs.len());
     }
+}
+
+/// Indexes a genome file using minimap2
+///
+/// This function first retrieves the genome file from the configuration and then builds an index for it using the `minimap2` tool. The resulting index is saved in the step's output directory.
+///
+/// # Arguments
+///
+/// * `step` - The current pipeline step
+/// * `config` - The pipeline configuration
+/// * `step_output_dir` - The output directory for the current step
+/// * `executor` - The parallel executor for running jobs
+///
+/// # Returns
+///
+/// The path to the newly created genome index file
+///
+/// # Example
+///
+/// ```rust, no_run
+/// let mut executor = ParallelExecutor::new();
+/// let step = PipelineStep::IndexGenome;
+/// let output_dir = PathBuf::from("path/to/output");
+/// let genome_index_path = index_genome(&step, &config, &output_dir, &mut executor);
+///
+/// assert!(genome_index_path.exists());
+/// ```
+pub fn index_genome(
+    step: &PipelineStep,
+    config: &Config,
+    step_output_dir: &PathBuf,
+    executor: &mut crate::core::ParallelExecutor,
+) -> PathBuf {
+    // INFO: genome -> step_output_dir.join("genome.fa")
+    let genome = get_genome(config, step, step_output_dir);
+    let index = PathBuf::from(genome.clone()).with_extension("index");
+
+    // INFO: run minimap indexing and return new index path
+    let cmd = format!("{MINIMAP2} -d {} {genome}", index.display());
+    let job = Job::from(cmd);
+
+    executor
+        .add_job(job)
+        .execute(config, step, step_output_dir.clone(), Some("minimizer"));
+
+    return index;
 }

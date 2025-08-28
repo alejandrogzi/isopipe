@@ -59,7 +59,7 @@ pub fn run_step(
 
             let input_dir =
                 isotools::iso_split(step, config, &input_dir, &step_output_dir, executor);
-            minimap::minimap2(step, config, &input_dir, &step_output_dir)
+            minimap::minimap2(step, config, &input_dir, &step_output_dir, executor)
         }
         PipelineStep::Polya => {
             log::info!("INFO [STEP 6]: Pre-processing for polya started...");
