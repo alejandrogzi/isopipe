@@ -52,7 +52,10 @@ use clap::Parser;
 use log::info;
 use simple_logger::init_with_level;
 
-use extract::{cli::Args, ext};
+use extract::{
+    cli::{Args, Commands::*},
+    ext,
+};
 
 fn main() {
     let start = std::time::Instant::now();
@@ -65,7 +68,14 @@ fn main() {
         .build()
         .unwrap();
 
-    ext::extract(args);
+    match args.command {
+        Base(args) => {
+            ext::extract(args);
+        }
+        Read(args) => {
+            ext::find(args);
+        }
+    }
 
     let elapsed = start.elapsed();
     info!("Elapsed time: {:.3?}", elapsed);

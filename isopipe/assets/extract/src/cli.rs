@@ -13,12 +13,45 @@
 //! simple integers map to read identifiers [all of them as plain bytes].
 //! The process is heavily parallelized to offer fast performance on large datasets.
 
-use clap::{ArgAction, Parser, ValueEnum};
+use clap::{ArgAction, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
 #[command(name = "extract", about = "Extract sequences from a .2bit using .bed [and index them]", version = env!("CARGO_PKG_VERSION"))]
 pub struct Args {
+    #[command(subcommand)]
+    pub command: Commands,
+
+    #[arg(
+        short = 'T',
+        long = "threads",
+        help = "Number of threads",
+        value_name = "THREADS",
+        default_value_t = num_cpus::get()
+    )]
+    pub threads: usize,
+
+    #[arg(
+        short = 'L',
+        long = "level",
+        help = "Logging level",
+        value_name = "LEVEL",
+        default_value_t = log::Level::Info,
+    )]
+    pub level: log::Level,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum Commands {
+    /// Run extract using .2bit + .bed
+    Base(ExtractArgs),
+
+    /// Reads an index created with the 'base'
+    Read(IndexArgs),
+}
+
+#[derive(Debug, Parser)]
+pub struct ExtractArgs {
     #[arg(
         short = 't',
         long = "twobit",
@@ -98,24 +131,6 @@ pub struct Args {
         default_value("30000")
     )]
     pub chunk_size: usize,
-
-    #[arg(
-        short = 'T',
-        long = "threads",
-        help = "Number of threads",
-        value_name = "THREADS",
-        default_value_t = num_cpus::get()
-    )]
-    pub threads: usize,
-
-    #[arg(
-        short = 'L',
-        long = "level",
-        help = "Logging level",
-        value_name = "LEVEL",
-        default_value_t = log::Level::Info,
-    )]
-    pub level: log::Level,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -126,4 +141,41 @@ pub enum SeqMode {
     Exon,
     #[value(name = "intron", alias = "i")]
     Intron,
+}
+
+#[derive(Debug, Parser)]
+pub struct IndexArgs {
+    #[arg(
+        short = 'i',
+        long = "index",
+        required = true,
+        help = "Path to .index file produced by extract step",
+        value_name = "PATH"
+    )]
+    pub index: PathBuf,
+
+    #[arg(
+        short = 'w',
+        long = "write",
+        help = "Flag to write the whole index as plain text",
+        action = ArgAction::SetTrue
+    )]
+    pub write: bool,
+
+    #[arg(
+        long = "id",
+        help = "Index ID for lookup",
+        value_name = "VALUE",
+        conflicts_with = "write"
+    )]
+    pub id: Option<u32>,
+
+    #[arg(
+        short = 'o',
+        long = "outdir",
+        help = "Output directory",
+        value_name = "PATH",
+        default_value("index")
+    )]
+    pub output_dir: PathBuf,
 }

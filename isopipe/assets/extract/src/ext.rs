@@ -13,18 +13,18 @@
 //! simple integers map to read identifiers [all of them as plain bytes].
 //! The process is heavily parallelized to offer fast performance on large datasets.
 
-use config::{OverlapType, Sequence, Strand, SCALE};
+use config::{OverlapType, SCALE, Sequence, Strand};
 use dashmap::DashMap;
 use iso_polya::utils::get_sequences;
-use packbed::{unpack, GenePred};
+use packbed::{GenePred, unpack};
 use rayon::prelude::*;
 
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
-use crate::cli::{Args, SeqMode};
+use crate::cli::{ExtractArgs, SeqMode};
 
 /// Extracts sequences from a 2bit genome file based on BED records,
 /// chunks them, and writes them to temporary FASTA and BED files.
@@ -65,7 +65,7 @@ use crate::cli::{Args, SeqMode};
 /// - It fails to create chunk-specific directories or files.
 /// - It fails to write sequences or BED lines to the chunked files.
 /// - A chromosome is missing in the 2bit genome during sequence extraction.
-pub fn extract(args: Args) -> Vec<(PathBuf, PathBuf)> {
+pub fn extract(args: ExtractArgs) -> Vec<(PathBuf, PathBuf)> {
     let mode = ExtractMode::from(args.mode);
 
     log::info!(
@@ -377,7 +377,6 @@ fn index(
     seq_mode: &SeqMode,
 ) {
     let mut mapper = HashMap::new();
-    let mut helper = HashMap::new();
 
     let idx = path.join(format!("tmp_chunk_{}.index", chunk_id));
     let mut index = BufWriter::new(File::create(&idx).unwrap());
@@ -394,7 +393,7 @@ fn index(
         match mapper.entry(key) {
             Entry::Vacant(v) => {
                 // INFO: first one for this seq
-                v.insert(vec![encoded]);
+                v.insert(vec![count as u32, encoded]);
 
                 // INFO: only for unseen seqs
                 let mut fields: Vec<String> =
@@ -413,12 +412,20 @@ fn index(
                     )
                 });
 
-                helper.insert(encoded, count);
+                log::debug!(
+                    "NEW -> ENCODE: {encoded}, COUNT: {count}, NAME: {}",
+                    &tx.name
+                );
 
                 count += 1;
             }
             Entry::Occupied(mut o) => {
                 o.get_mut().push(encoded); // INFO: append to existing
+
+                log::debug!(
+                    "SEEN -> ENCODE: {encoded}, COUNT: {count}, NAME: {}",
+                    &tx.name
+                );
             }
         }
 
@@ -428,19 +435,16 @@ fn index(
 
     // INFO: for every element in mapper -> write encoded id and encoded group
     for (_, group) in mapper {
-        let header = *helper.get(&group[0]).unwrap_or_else(|| {
-            panic!(
-                "ERROR: could not get first ocurrence from helper -> {:?}",
-                group
-            )
-        }) as u32;
+        let header = &group[0];
 
-        let n_ids = group.len() as u16;
+        log::debug!("INSERTING: {header} as index for group: {group:?}");
+
+        let n_ids = group.len() as u16 - 1;
         index.write_all(&n_ids.to_be_bytes()).unwrap();
 
         index.write_all(&header.to_be_bytes()).unwrap();
 
-        for read in group {
+        for read in group.iter().skip(1) {
             index.write_all(&read.to_be_bytes()).unwrap();
         }
     }
@@ -497,4 +501,114 @@ fn encode_id(id: &String) -> u32 {
         .unwrap_or_else(|| panic!("ERROR: could not preserve numeric part from {id}"))
         .parse::<u32>()
         .unwrap_or_else(|e| panic!("ERROR: could not parse as number: {id} -> {e}"))
+}
+
+/// Locates or extracts read IDs from a binary index file.
+///
+/// This function serves two primary purposes: finding a specific group of read IDs
+/// associated with a given header, or iterating through the entire index and
+/// writing all header-ID group pairs to an output file. The function reads a
+/// custom binary format, which consists of a 2-byte count for the number of IDs
+/// in a group, followed by a 4-byte header, and then a sequence of 4-byte IDs.
+///
+/// # Arguments
+///
+/// * `args` - A `crate::cli::IndexArgs` struct containing command-line arguments,
+///            including the path to the index file (`args.index`), an optional
+///            header ID to search for (`args.id`), and flags to control the
+///            operation, such as whether to write the output (`args.write`)
+///            and the output directory (`args.output_dir`).
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - It fails to open the specified index file.
+/// - The `--write` flag is used, but the specified output directory cannot be created.
+/// - The `--write` flag is used, but the output file cannot be created within that directory.
+/// - A read operation from the index file fails unexpectedly before the end of the file is reached.
+/// - The `--write` flag is not used and no header ID is provided via `--id`.
+///
+/// # Example
+///
+/// ```rust, ignore
+/// // Example of finding a specific header ID:
+/// let args = IndexArgs {
+///     index: PathBuf::from("path/to/my/index.bin"),
+///     id: Some(1234),
+///     write: false,
+///     output_dir: PathBuf::new(),
+/// };
+/// find(args); // This would print the group of IDs associated with header 1234
+///
+/// // Example of writing all header-ID groups to a file:
+/// let args = IndexArgs {
+///     index: PathBuf::from("path/to/my/index.bin"),
+///     id: None,
+///     write: true,
+///     output_dir: PathBuf::from("output_dir"),
+/// };
+/// find(args); // This would create a file named 'index' in 'output_dir'
+/// ```
+pub fn find(args: crate::cli::IndexArgs) {
+    use std::io::Read;
+
+    let mut reader = std::io::BufReader::new(
+        File::open(args.index).unwrap_or_else(|e| panic!("ERROR: failed to open index -> {e}")),
+    );
+
+    let mut writer = None;
+    if args.write {
+        std::fs::create_dir_all(&args.output_dir).unwrap();
+
+        writer = Some(std::io::BufWriter::new(
+            File::create(args.output_dir.join("index")).unwrap(),
+        ));
+    }
+
+    loop {
+        let mut id_count_buf = [0u8; 2];
+        if reader.read_exact(&mut id_count_buf).is_err() {
+            break; // EOF reached cleanly
+        }
+        let n_ids = u16::from_be_bytes(id_count_buf);
+
+        let mut header_buf = [0u8; 4];
+        reader.read_exact(&mut header_buf).unwrap();
+        let header = u32::from_be_bytes(header_buf);
+
+        if args.write {
+            let mut id_buf = [0u8; 4];
+            let mut group = Vec::with_capacity(n_ids as usize);
+            for _ in 0..n_ids {
+                reader.read_exact(&mut id_buf).unwrap();
+                let id = u32::from_be_bytes(id_buf);
+
+                // WARN: id fmt -> R{int}_chr{chr}, skipping tags!
+                let name = format!("R{}", id);
+                group.push(name);
+            }
+
+            let _ = writeln!(writer.as_mut().unwrap(), "{}\t{:?}", header, group);
+        } else {
+            let id = args.id.unwrap_or_else(|| {
+                panic!("ERROR: you forgot to pass --id <ID>, otherwise use --write")
+            });
+
+            if header == id {
+                let mut id_buf = [0u8; 4];
+                let mut group = Vec::with_capacity(n_ids as usize);
+                for _ in 0..n_ids {
+                    reader.read_exact(&mut id_buf).unwrap();
+                    let id = u32::from_be_bytes(id_buf);
+
+                    // WARN: id fmt -> R{int}_chr{chr}, skipping tags!
+                    let name = format!("R{}", id);
+                    group.push(name);
+                }
+
+                let rs = format!("ID: {} -> {:?}", header, group);
+                print!("{}", rs);
+            }
+        }
+    }
 }
