@@ -47,8 +47,10 @@ impl ParallelExecutor {
     /// let executor = ParallelExecutor::new(ParallelManager::Nextflow);
     /// executor.add_job("job1");
     /// ```
-    pub fn add_job(&mut self, job: Job) {
+    pub fn add_job(&mut self, job: Job) -> &mut Self {
         self.jobs.push(job);
+
+        self
     }
 
     /// Add a list of jobs to the executor
