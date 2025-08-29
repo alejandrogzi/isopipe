@@ -41,6 +41,8 @@ BLAST_COLS: List = [
     "blast_o_end",
     "blast_orf_start",
     "blast_orf_end",
+    "blast_strand",
+    "blast_chr"
 ]
 TAI_COLS = [
     "tai_id",
@@ -48,9 +50,10 @@ TAI_COLS = [
     "translationAI_orf_stop_coord",
     "translationAI_orf_start",
     "translationAI_orf_stop",
-    "strand",
+    "tai_strand",
     "tai_orf_start",
     "tai_orf_end",
+    "tai_chr"
 ]
 TOGA_COLS: List = [
     "toga_id",
@@ -66,8 +69,9 @@ TOGA_COLS: List = [
 ]
 EXTENDED = [
     "blast_id",
-    "m_chr",
-    "strand",
+    "key",
+    "blast_chr",
+    "blast_strand",
     "masked",
     "toga_label",
     "tai_orf_start",
@@ -368,6 +372,9 @@ def read_blast(path: Union[str, PathLike, Path]) -> pd.DataFrame:
         + blast["blast_orf_start"].astype(str)
         + "-"
         + blast["blast_orf_end"].astype(str)
+        + "("
+        + blast["blast_strand"].astype(str)
+        + ")"
     )
     return blast
 
@@ -403,6 +410,9 @@ def read_tai(path: Union[str, PathLike, Path]) -> pd.DataFrame:
         + tai["tai_orf_start"].astype(str)
         + "-"
         + tai["tai_orf_end"].astype(str)
+        + "("
+        + tai["tai_strand"].astype(str)
+        + ")"
     )
     return tai
 
@@ -429,20 +439,15 @@ def read_toga(path: Union[str, PathLike, Path]) -> pd.DataFrame:
 
     Example
     -------
-    >>> # Assuming 'my_toga.tsv' exists with appropriate tab-separated data
+    >>> # Assuming 'my_toga.tsv' exists with appropriate tab-separated data:
+    >>> # ENST00000518498.3#TFF3#229 chr17 FI 75.72 67.90 31125482 31129576 - chr17:31125482-31129576(-) false
     >>> # toga_df = read_toga("my_toga.tsv")
     >>> # print(toga_df.head())
     """
-    toga = pd.read_csv(path, sep="\t", header=None, names=TOGA_COLS)
-    toga["key"] = np.where(
-        toga["toga_strand"] == "+",
-        toga["toga_chr"] + ":" + toga["toga_start"].astype(str),
-        toga["toga_chr"] + ":" + toga["toga_end"].astype(str),
-    )
+    toga = pd.read_csv(path, sep="\t", header=None, names=TOGA_COLS).drop_duplicates(subset="key", keep="first")
     toga.sort_values(by="toga_pid", inplace=True, ascending=False)
 
-    # INFO: remove duplicate keys keeping first
-    return toga.drop_duplicates(subset="key", keep="first")
+    return toga
 
 
 def merge_tables(
@@ -479,19 +484,15 @@ def merge_tables(
     >>> # final_table = merge_tables(blast_df, tai_df, toga_df)
     >>> # print(final_table.head())
     """
-    merged = tai.merge(blast, on="key", how="inner")
+    merged = tai.merge(blast, on="key", how="outer") # INFO: preserving ALL predictions
 
-    # INFO: extract chromosome from merged key
-    merged["m_chr"] = merged["key"].str.split("_").str[1].str.split(":").str[0]
+    merged.blast_strand = merged.blast_strand.fillna(merged.tai_strand)
+    merged.tai_orf_start = merged.tai_orf_start.fillna(merged.blast_orf_start)
+    merged.tai_orf_end = merged.tai_orf_end.fillna(merged.blast_orf_end)
+    merged.blast_chr = merged.blast_chr.fillna(merged.tai_chr)
+    merged.blast_id = merged.blast_id.fillna(merged.tai_id)
 
-    # INFO: create TOGA matching key based on strand
-    merged["toga_key"] = np.where(
-        merged["strand"] == "+",
-        merged["m_chr"] + ":" + merged["tai_orf_start"].astype(str),
-        merged["m_chr"] + ":" + merged["tai_orf_end"].astype(str),
-    )
-
-    table = merged.merge(toga, left_on="toga_key", right_on="key", how="left")
+    table = merged.merge(toga, on="key", how="left")
 
     # INFO: binary flag: 0 if toga_pid NaN else 1
     table["toga_overlap_bp"] = (~table["toga_pid"].isna()).astype(int)
