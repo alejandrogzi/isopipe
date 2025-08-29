@@ -5,7 +5,7 @@ pub mod ccs;
 pub mod isoseq;
 pub mod isotools;
 pub mod lima;
-pub mod load;
+// pub mod load;
 pub mod minimap;
 pub mod orf;
 pub mod pbindex;
