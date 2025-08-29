@@ -111,7 +111,7 @@ pub fn iso_nmd(
 /// A vector of jobs
 ///
 /// # Example
-/// ```
+/// ```rust, ignore
 /// let jobs = iso_fusion(&step, &config, &input_dir, &step_output_dir);
 /// ```
 pub fn iso_fusion(
@@ -142,7 +142,14 @@ pub fn iso_fusion(
                 .unwrap_or(false)
         })
     {
-        if file.path().ends_with(ALN_POLYA_REJECT) && !keep_rejected {
+        if file
+            .path()
+            .file_name()
+            .and_then(|ext| ext.to_str())
+            .unwrap()
+            .ends_with(ALN_POLYA_REJECT)
+            && !keep_rejected
+        {
             continue;
         }
 
