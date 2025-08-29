@@ -41,7 +41,7 @@ BLAST_COLS: List = [
     "blast_orf_start",
     "blast_orf_end",
     "blast_strand",
-    "blast_chr"
+    "blast_chr",
 ]
 TAI_COLS = [
     "tai_id",
@@ -52,7 +52,7 @@ TAI_COLS = [
     "tai_strand",
     "tai_orf_start",
     "tai_orf_end",
-    "tai_chr"
+    "tai_chr",
 ]
 TOGA_COLS: List = [
     "toga_id",
@@ -443,7 +443,9 @@ def read_toga(path: Union[str, PathLike, Path]) -> pd.DataFrame:
     >>> # toga_df = read_toga("my_toga.tsv")
     >>> # print(toga_df.head())
     """
-    toga = pd.read_csv(path, sep="\t", header=None, names=TOGA_COLS).drop_duplicates(subset="key", keep="first")
+    toga = pd.read_csv(path, sep="\t", header=None, names=TOGA_COLS).drop_duplicates(
+        subset="key", keep="first"
+    )
     toga.sort_values(by="toga_pid", inplace=True, ascending=False)
 
     return toga
@@ -483,7 +485,7 @@ def merge_tables(
     >>> # final_table = merge_tables(blast_df, tai_df, toga_df)
     >>> # print(final_table.head())
     """
-    merged = tai.merge(blast, on="key", how="outer") # INFO: preserving ALL predictions
+    merged = tai.merge(blast, on="key", how="outer")  # INFO: preserving ALL predictions
 
     merged.blast_strand = merged.blast_strand.fillna(merged.tai_strand)
     merged.tai_orf_start = merged.tai_orf_start.fillna(merged.blast_orf_start)
