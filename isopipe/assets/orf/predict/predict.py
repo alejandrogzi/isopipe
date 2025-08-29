@@ -9,7 +9,6 @@ import argparse
 from os import PathLike
 import logging
 from joblib import load
-import numpy as np
 from pathlib import Path
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
