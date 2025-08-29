@@ -16,7 +16,7 @@ use dashmap::DashMap;
 use flate2::read::MultiGzDecoder;
 use hashbrown::HashSet;
 use log::{debug, error};
-use packbed::{reader, record::Bed6};
+use packbed::{reader, record::Bed12};
 use rayon::prelude::*;
 
 use std::fs::File;
@@ -84,7 +84,7 @@ pub fn run_toga(args: TogaArgs) {
         args.path.join(SELENOCYSTEINE_CODONS),
     );
 
-    let records = bed_to_struct_collection::<Bed6>(
+    let records = bed_to_struct_collection::<Bed12>(
         reader(args.path.join(QUERY_ANNOTATION))
             .unwrap_or_else(|e| panic!("ERROR: failed to read BED file -> {e}"))
             .into(),
@@ -236,17 +236,23 @@ impl TogaPrediction {
     /// # Arguments
     ///
     /// * `data` - A reference to a `Bed6` record containing additional data to update.
-    fn update_rest(&mut self, data: &Bed6) {
-        let (start, end) = match data.strand {
-            Strand::Forward => (data.coord.0, data.coord.1),
-            Strand::Reverse => (config::SCALE - data.coord.1, config::SCALE - data.coord.0),
+    fn update_rest(&mut self, data: &Bed12) {
+        let (start, end) = match data.data.strand {
+            Strand::Forward => (data.data.cds_start, data.data.cds_end),
+            Strand::Reverse => (
+                config::SCALE - data.data.cds_end,
+                config::SCALE - data.data.cds_start,
+            ),
         };
 
         self.start = start;
         self.end = end;
-        self.strand = data.strand.as_str().to_string();
-        self.chrom = data.chrom.clone();
-        self.key = format!("{}:{}-{}", data.chrom, start, end);
+        self.strand = data.data.strand.as_str().to_string();
+        self.chrom = data.data.chrom.clone();
+        self.key = format!(
+            "{}:{}-{}({})",
+            data.data.chrom, start, end, data.data.strand
+        );
     }
 }
 
