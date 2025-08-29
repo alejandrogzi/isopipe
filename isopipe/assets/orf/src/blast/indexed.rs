@@ -92,10 +92,23 @@ pub fn indexed(
         });
 
         for query in queries.into_iter() {
-            let (orf_start, orf_end) = get_cds_coords(
-                &records,
-                &chr,
-                &format!("{}", seq_id),
+            let id_str = format!("{}", seq_id);
+
+            let mut chr_records = records
+                .get_mut(&chr)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: chromosome from {} not found in sequences -> {}!",
+                        &id_str, chr
+                    );
+                });
+            let gp = chr_records
+                .get_mut(&id_str)
+                .unwrap_or_else(|| {
+                    panic!("ERROR: id not found in BED, this is a bug -> {}!", id);
+                });
+
+            let (orf_start, orf_end) = gp.map_absolute_cds(
                 start as u64,
                 end as u64,
             );
@@ -118,7 +131,7 @@ pub fn indexed(
             writer
                 .write_all(
                     format!(
-                        "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\t{}\t{}\n",
+                        "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\t{}\t{}\t{}\t{}\n",
                         cannonical_id,
                         data.blast_idx_id,
                         data.blast_pid,
@@ -129,7 +142,9 @@ pub fn indexed(
                         start,
                         end,
                         orf_start,
-                        orf_end
+                        orf_end,
+                        gp.strand,
+                        gp.chrom
                     )
                     .as_bytes(),
                 )

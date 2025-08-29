@@ -11,7 +11,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{bed_to_struct_collection, BedColumn, BedColumnValue, SCALE};
+use config::{BedColumn, BedColumnValue, SCALE, bed_to_struct_collection};
 use dashmap::{DashMap, DashSet};
 use hashbrown::HashMap;
 use isopipe::config::depure;
@@ -330,22 +330,21 @@ fn cannonical(
                 }
 
                 // INFO: retrieving the reference gene prediction record
-                let (mut orf_start, mut orf_end) = records
-                    .get_mut(chr)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "ERROR: chromosome from {} not found in sequences -> {}!",
-                            cannonical_id, chr
-                        );
-                    })
-                    .get_mut(&cannonical_id)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "ERROR: id not found in BED, this is a bug -> {}!",
-                            cannonical_id
-                        );
-                    })
-                    .map_absolute_cds(start as u64, stop as u64);
+                let mut chr_records = records.get_mut(chr).unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: chromosome from {} not found in sequences -> {}!",
+                        cannonical_id, chr
+                    );
+                });
+
+                let gp = chr_records.get_mut(&cannonical_id).unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: id not found in BED, this is a bug -> {}!",
+                        cannonical_id
+                    );
+                });
+
+                let (mut orf_start, mut orf_end) = gp.map_absolute_cds(start as u64, stop as u64);
 
                 // WARN: skipping unreliable ORFs for the current alignment
                 if orf_start == 0 && orf_end == 0 {
@@ -369,8 +368,16 @@ fn cannonical(
                 // INFO: we safely assume ref gp record could be applied to all queries
                 let ref_id = format!("{}.p{}", id, orf_idx + 1);
                 let ref_line = format!(
-                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                    ref_id, start, stop, start_score, stop_score, strand, orf_start, orf_end,
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    ref_id,
+                    start,
+                    stop,
+                    start_score,
+                    stop_score,
+                    strand,
+                    orf_start,
+                    orf_end,
+                    gp.chrom
                 );
 
                 accumulator.insert(ref_line);
@@ -380,7 +387,7 @@ fn cannonical(
                     for query in queries {
                         let query_id = format!("{}.p{}", query, orf_idx + 1);
                         let query_line = format!(
-                            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                             query_id,
                             start,
                             stop,
@@ -388,7 +395,8 @@ fn cannonical(
                             stop_score,
                             strand,
                             orf_start,
-                            orf_end
+                            orf_end,
+                            gp.chrom
                         );
 
                         accumulator.insert(query_line);
@@ -518,22 +526,21 @@ fn indexed(
                 }
 
                 // INFO: retrieving the reference gene prediction record
-                let (mut orf_start, mut orf_end) = records
-                    .get_mut(&chr)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "ERROR: chromosome from {} not found in sequences -> {}!",
-                            cannonical_id, chr
-                        );
-                    })
-                    .get_mut(&cannonical_id)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "ERROR: id not found in BED, this is a bug -> {}!",
-                            cannonical_id
-                        );
-                    })
-                    .map_absolute_cds(start as u64, stop as u64);
+                let mut chr_records = records.get_mut(&chr).unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: chromosome from {} not found in sequences -> {}!",
+                        cannonical_id, chr
+                    );
+                });
+
+                let gp = chr_records.get_mut(&cannonical_id).unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: id not found in BED, this is a bug -> {}!",
+                        cannonical_id
+                    );
+                });
+
+                let (mut orf_start, mut orf_end) = gp.map_absolute_cds(start as u64, stop as u64);
 
                 // WARN: skipping unreliable ORFs for the current alignment
                 if orf_start == 0 && orf_end == 0 {
@@ -556,8 +563,16 @@ fn indexed(
                 for query in queries {
                     let query_id = format!("{}.p{}", query, orf_idx + 1);
                     let query_line = format!(
-                        "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                        query_id, start, stop, start_score, stop_score, strand, orf_start, orf_end
+                        "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        query_id,
+                        start,
+                        stop,
+                        start_score,
+                        stop_score,
+                        strand,
+                        orf_start,
+                        orf_end,
+                        gp.chrom
                     );
 
                     accumulator.insert(query_line);

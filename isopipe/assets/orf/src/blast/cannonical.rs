@@ -92,8 +92,18 @@ pub fn cannonical(
             let cannonical_id = format!("R{}_{}", read_id, chr);
             let query_id = format!("{}.p{}@{}", cannonical_id, orf, subseq_orf);
 
-            let (orf_start, orf_end) =
-                get_cds_coords(&records, &chr, &cannonical_id, *start as u64, *end as u64);
+            let mut chr_records = records.get_mut(&chr).unwrap_or_else(|| {
+                panic!(
+                    "ERROR: chromosome from {} not found in sequences -> {}!",
+                    &cannonical_id, chr
+                );
+            });
+
+            let gp = chr_records.get_mut(&cannonical_id).unwrap_or_else(|| {
+                panic!("ERROR: id not found in BED, this is a bug -> {}!", id);
+            });
+
+            let (orf_start, orf_end) = gp.map_absolute_cds(*start as u64, *end as u64);
 
             // WARN: skipping unreliable ORFs for the current alignment
             // INFO: none of these will match any other prediction because
@@ -109,7 +119,7 @@ pub fn cannonical(
             writer
                 .write_all(
                     format!(
-                        "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\t{}\t{}\n",
+                        "{}\t{}\t{:.2}\t{:e}\t{}\t{}\t{:2}\t{}\t{}\t{}\t{}\t{}\t{}\n",
                         query_id,
                         data.blast_idx_id,
                         data.blast_pid,
@@ -120,7 +130,9 @@ pub fn cannonical(
                         start,
                         end,
                         orf_start,
-                        orf_end
+                        orf_end,
+                        gp.strand,
+                        gp.chrom
                     )
                     .as_bytes(),
                 )
