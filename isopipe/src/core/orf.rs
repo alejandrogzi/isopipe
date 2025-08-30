@@ -332,7 +332,7 @@ fn unbounded_extract(
             // INFO: collect paths and collect extract cmds
             // INFO: end path would look like: {step_orf}/seqs_{suffix}/{chr}:{chunk}/{name}{fa/bed}
             let cmd = format!(
-                "{} --twobit {} --bed {} -o {} --index --suffix {} --chunk-size {}",
+                "{} base --twobit {} --bed {} -o {} --index --suffix {} --chunk-size {}",
                 EXTRACT_RELEASE,
                 &twobit.display(),
                 bed.display(),
