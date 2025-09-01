@@ -118,6 +118,7 @@ memory = 16                 # memory in GB
 time = "24.h"               # time for each job
 toga = ""                   # FILL: toga query annotation
 keep_rejected = "false"     # WARN: drop rejected reads, change to "true" to keep them
+keep_temp = "false"         # WARN: keep temporary files, change to "true" to keep them
 
 [params.orf]
 input_dir = "step7_fusion" # previous step data dir [default]
