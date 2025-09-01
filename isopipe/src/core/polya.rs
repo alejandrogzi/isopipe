@@ -53,10 +53,12 @@ pub fn polya(
 
     if !keep_temp {
         log::info!(
-            "INFO [STEP 6]: Removing previous parts directory: {}",
-            parts.display()
+            "INFO [STEP 6]: Removing minimap2 chunked directory: {}",
+            input_dir.join(CHUNKS).display()
         );
         rm!(input_dir.join(CHUNKS));
+    } else {
+        log::info!("INFO [STEP 6]: Keeping temporary files -> keep_temp set to true!",);
     }
 
     let args = config.get_step_args(
@@ -81,6 +83,7 @@ pub fn polya(
         .enumerate()
     {
         let bam = entry.path();
+        log::debug!("DEBUG [STEP 6]: processing {}...", bam.display());
 
         // INFO: for cannonical runs this yields -> chunk*{run}.singletons
         // INFO: and outputs chunk*{run}.singletons.good.bed
@@ -94,17 +97,29 @@ pub fn polya(
             continue;
         }
 
-        let cmd = format!(
-            "{} {} --bam {} {args} --prefix {} --outdir {} --batch {} && rm {} {}.bai",
-            binary.display(),
-            SEGMENT,
-            bam.display(),
-            prefix.to_string_lossy(),
-            &parts.display(),
-            batch,
-            bam.display(),
-            bam.display()
-        );
+        let cmd = if !keep_temp {
+            format!(
+                "{} {} --bam {} {args} --prefix {} --outdir {} --batch {} && rm {} {}.bai",
+                binary.display(),
+                SEGMENT,
+                bam.display(),
+                prefix.to_string_lossy(),
+                &parts.display(),
+                batch,
+                bam.display(),
+                bam.display()
+            )
+        } else {
+            format!(
+                "{} {} --bam {} {args} --prefix {} --outdir {} --batch {}",
+                binary.display(),
+                SEGMENT,
+                bam.display(),
+                prefix.to_string_lossy(),
+                &parts.display(),
+                batch,
+            )
+        };
 
         jobs.push(Job::from(cmd));
     }
@@ -128,11 +143,23 @@ pub fn polya(
 /// let input_dir = PathBuf::from("/path/to/input");
 /// merge(input_dir);
 /// ```
-pub fn merge(input_dir: &PathBuf) {
+pub fn merge(input_dir: &PathBuf, config: &Config, step: &PipelineStep) {
+    let parts = &input_dir.join(POLYA_PARTS);
+    let _ = create_dir_all(parts);
+
     log::info!(
         "INFO [MERGE]: Merging polyA segmentation results in {}...",
-        &input_dir.join(POLYA_PARTS).display()
+        &parts.display()
     );
+
+    let keep_temp = config
+        .get_step_custom_field(step, KEEP_TEMP)
+        .parse::<bool>()
+        .unwrap_or(false);
+
+    if keep_temp {
+        log::info!("INFO [MERGE]: Keeping temporary files -> keep_temp set to true!",);
+    }
 
     if input_dir.join(POLYA_PARTS).exists() {
         log::info!("INFO [MERGE]: chunked directory found, merging parts...");
@@ -152,6 +179,8 @@ pub fn merge(input_dir: &PathBuf) {
                 (s, g, b)
             },
         );
+
+        log::debug!("DEBUG: collected all .bed types -> SGN_ACCEPT: {singletons:?}, BED_ACCEPT: {accepts:?}, BED_REJECT: {rejections:?}");
 
         for (file, group) in ALN_POLYA_FILES
             .iter()
@@ -180,8 +209,9 @@ pub fn merge(input_dir: &PathBuf) {
             let _ = __split_by_chr(group, &input_dir, file);
         }
 
-        // INFO: not affected by keep_temp because should be removed anyway
-        rm!(input_dir.join(POLYA_PARTS));
+        if !keep_temp {
+            rm!(input_dir.join(POLYA_PARTS));
+        }
     } else {
         log::warn!(
             "WARN [MERGE]: parts/ directory not found under {}, skipping merge step and grabbing .bed files directly from input directory!",
@@ -189,6 +219,7 @@ pub fn merge(input_dir: &PathBuf) {
         );
 
         let files = scan_dir(input_dir, BED);
+        log::debug!("DEBUG: collected all .bed types -> {files:?}");
 
         log::warn!(
             "WARN [MERGE]: forcing chunking on non-cannonical files or already merged files in {}!",
@@ -215,8 +246,9 @@ pub fn merge(input_dir: &PathBuf) {
                     bed.display()
                 );
 
-                // INFO: not affected by keep_temp because should be removed anyway
-                rm!(bed);
+                if !keep_temp {
+                    rm!(bed);
+                }
             }
         }
     }
