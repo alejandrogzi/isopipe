@@ -97,20 +97,17 @@ def TIS_TTS_predictor(
     model = [[] for _ in range(len(version))]
     for v in range(len(version)):
         modelNA = "models/translationAI_" + modelScale + "_" + version[v] + ".h5"
-        model[v] = load_model(resource_filename(__name__, modelNA))
-        model[v].compile(loss=categorical_crossentropy_2d, optimizer="adam")
-
-    h5f_name = input_fa_fn[:-3] + ".h5"
-    if not os.path.exists(h5f_name):
-        print("{:-^100}".format("Creating .h5 dataset from .fa file"))
-        prog_path = resource_filename(__name__, "fa_to_h5_converter.py")
-        command = (
-            "python " + prog_path + " " + input_fa_fn + " " + input_fa_fn[:-3] + ".h5"
+        # model[v] = load_model(resource_filename(__name__, modelNA))
+        model[v] = load_model(
+            resource_filename(__name__, modelNA),
+            custom_objects={"categorical_crossentropy_2d": categorical_crossentropy_2d},
         )
-        os.system(command)
-    else:
-        print("{:-^100}".format("Reading in input .h5 file"))
+        # model[v].compile(loss=categorical_crossentropy_2d, optimizer="adam")
 
+    # INFO: hdf5 conversion moved as first step in main
+    h5f_name = input_fa_fn[:-3] + ".h5"
+
+    print("{:-^100}".format("Reading .h5 file"))
     h5f = h5py.File(h5f_name, "r")
     num_idx = len(h5f.keys()) // 2
     seqIn = open(input_fa_fn, "r").readlines()
@@ -137,7 +134,9 @@ def TIS_TTS_predictor(
 
         for idx in batch_indices:
             # print every 5000 seqs
-            print(f"Processing seq {idx + 1}/{num_idx} ...") if  not (idx % 5000) else None
+            print(f"Processing seq {idx + 1}/{num_idx} ...") if not (
+                idx % 5000
+            ) else None
 
             if verbose and not (idx % 10):
                 print(f"    Preparing seq {idx + 1}/{num_idx} ...")
@@ -270,6 +269,15 @@ def main():
         exit()
     fnIn = args.input
     threshold_str = args.threshold
+
+    h5f_name = fnIn[:-3] + ".h5"
+    if not os.path.exists(h5f_name):
+        print("{:-^100}".format("Creating .h5 dataset from .fa file"))
+        prog_path = resource_filename(__name__, "fa_to_h5_converter.py")
+        command = "python " + prog_path + " " + fnIn + " " + fnIn[:-3] + ".h5"
+        os.system(command)
+    else:
+        print("{:-^100}".format("Will read existing .h5 file"))
 
     TIS_score_cutoff = float(threshold_str.split(",")[0])
     TTS_score_cutoff = float(threshold_str.split(",")[1])
