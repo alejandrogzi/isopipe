@@ -327,11 +327,17 @@ fn unbounded_extract(
                 if !file.exists() {
                     log::warn!("WARN: file {file:?} does not exist under singletons, likely means that anything was found...");
                 } else {
-                    log::info!(
+                    log::debug!(
                         "INFO: file {file:?} found, will try to merge to its accept counterpart!"
                     );
 
                     let target = subdir.with_extension("accept").join(suffix); // chr10_all.aligned.accept/fusions.bed
+
+                    // INFO: forcing to create all accept dirs
+                    if !target.exists() {
+                        let _ = std::fs::create_dir_all(target.parent().unwrap());
+                    }
+
                     let cmd = format!(
                         "cat {} >> {} && rm {}",
                         file.display(),
@@ -339,7 +345,7 @@ fn unbounded_extract(
                         file.display()
                     );
 
-                    shell(cmd, "Merging singletons...", "ORF");
+                    shell(cmd, "Merging singletons", "ORF");
                 }
             }
 
