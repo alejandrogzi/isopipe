@@ -3,6 +3,7 @@ use crate::{config::*, consts::*, executor::job::Job};
 
 use config::{OverlapType, Sequence, Strand, FUSION_FREE, SCALE};
 use iso_polya::utils::get_sequences;
+use log::warn;
 use packbed::{unpack, GenePred};
 use rayon::prelude::*;
 
@@ -305,15 +306,48 @@ fn unbounded_extract(
     let suffixes = vec![config::FUSIONS, FUSION_FREE];
     let matched_suffixes = vec![crate::consts::FUSIONS, FREE];
 
-    // INFO: structure should be {step_fusion}/chr{chr}_all.aligned.{accept/reject}
+    // INFO: structure should be {step_fusion}/{chr}_all.aligned.{accept/reject/singletons}
     for entry in std::fs::read_dir(input_dir)
         .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
         .flatten()
         .filter(|e| e.path().is_dir())
     {
-        let subdir = entry.path();
+        let subdir = entry.path(); // INFO: chr10_all.aligned.accept
+        let extension = subdir // INFO: accept
+            .extension()
+            .unwrap_or_else(|| panic!("ERROR: could not get extension from {subdir:?}"));
 
-        // INFO: structure should be {step_fusion}/chr{chr}_all.aligned.accept/fusions*
+        if extension == "singletons" {
+            log::debug!("DEBUG: singleton dir {subdir:?} -> will merge to accept");
+
+            // INFO: merge singleton to accept and continue
+            for suffix in suffixes.iter() {
+                let file = subdir.join(suffix); // chr10_all.aligned.singletons/fusions.bed
+
+                if !file.exists() {
+                    log::warn!("WARN: file {file:?} does not exist under singletons, likely means that anything was found...");
+                } else {
+                    log::info!(
+                        "INFO: file {file:?} found, will try to merge to its accept counterpart!"
+                    );
+
+                    let target = subdir.with_extension("accept").join(suffix); // chr10_all.aligned.accept/fusions.bed
+                    let cmd = format!(
+                        "cat {} >> {} && rm {}",
+                        file.display(),
+                        target.display(),
+                        file.display()
+                    );
+
+                    shell(cmd, "Merging singletons...", "ORF");
+                }
+            }
+
+            // INFO: after merge we do not need singleton dirs
+            continue;
+        }
+
+        // INFO: structure should be {step_fusion}/{chr}_all.aligned.{accept/reject}/fusions*
         // INFO: expected: fusions.bed / fusions.free.bed
         for bed in std::fs::read_dir(&subdir)
             .unwrap()
