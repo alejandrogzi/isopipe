@@ -173,7 +173,13 @@ pub fn iso_fusion(
             prefix.display()
         ));
 
-        if file.path().ends_with(ALN_POLYA_SGN) {
+        if file
+            .path()
+            .file_name()
+            .and_then(|ext| ext.to_str())
+            .unwrap()
+            .ends_with(ALN_POLYA_SGN)
+        {
             let cmd = format!(
                 "{} --ref {} --query {} --prefix {} --tag {} --colorize {} --recover",
                 isotools!(ISO_FUSION).display(),
@@ -184,6 +190,7 @@ pub fn iso_fusion(
                 SGN_COLOR
             );
 
+            log::debug!("debug: processing {file:?} with cmd: {cmd:?}...");
             jobs.push(Job::from(cmd));
         } else {
             let cmd = format!(
@@ -194,6 +201,7 @@ pub fn iso_fusion(
                 prefix.display(),
             );
 
+            log::debug!("debug: processing {file:?} with cmd: {cmd:?}...");
             jobs.push(Job::from(cmd));
         }
 
