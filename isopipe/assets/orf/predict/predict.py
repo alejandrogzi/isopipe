@@ -365,6 +365,7 @@ def read_blast(path: Union[str, PathLike, Path]) -> pd.DataFrame:
     """
     blast = pd.read_csv(path, sep="\t", header=None, names=BLAST_COLS)
 
+    # INFO: needs to be the cannonical ID
     blast["key"] = (
         blast["blast_id"].str.split("__").str[0]
         + ":"
@@ -403,6 +404,8 @@ def read_tai(path: Union[str, PathLike, Path]) -> pd.DataFrame:
     >>> # print(tai_df.head())
     """
     tai = pd.read_csv(path, sep="\t", header=None, names=TAI_COLS)
+
+    # INFO: needs to be the cannonical ID
     tai["key"] = (
         tai["tai_id"].str.split(".").str[0]
         + ":"
@@ -413,6 +416,8 @@ def read_tai(path: Union[str, PathLike, Path]) -> pd.DataFrame:
         + tai["tai_strand"].astype(str)
         + ")"
     )
+    tai["tai_id"] = [id.replace(".p", "__OR") for id in tai.tai_id]
+
     return tai
 
 
