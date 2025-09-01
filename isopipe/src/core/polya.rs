@@ -89,7 +89,7 @@ pub fn polya(
         // INFO: and outputs chunk*{run}.singletons.good.bed
         let bind = bam.with_extension("");
         let prefix = bind
-            .file_stem()
+            .file_name()
             .unwrap_or_else(|| panic!("ERROR: could not build prefix for {:?}", bam));
 
         if std::fs::metadata(&bam).unwrap().len() == 0 {
