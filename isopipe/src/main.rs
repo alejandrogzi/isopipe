@@ -1,5 +1,5 @@
 use clap::{self, Parser};
-use log::{error, info, Level};
+use log::{error, info};
 use simple_logger::init_with_level;
 
 use isopipe::{
@@ -10,9 +10,9 @@ use isopipe::{
 
 fn main() {
     let start = std::time::Instant::now();
-    init_with_level(Level::Info).unwrap();
-
     let args: Args = Args::parse();
+
+    init_with_level(args.level).unwrap();
 
     let executor = match args.manager {
         ParallelManager::Nextflow | ParallelManager::Para => {

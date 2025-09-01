@@ -44,8 +44,19 @@ pub fn minimap2(
 
     let args = config.get_step_args(
         step,
-        vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, GENOME, CHUNK],
+        vec![
+            INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, GENOME, CHUNK, KEEP_TEMP,
+        ],
     );
+
+    let keep_temp = config
+        .get_step_custom_field(step, KEEP_TEMP)
+        .parse::<bool>()
+        .unwrap_or(false);
+
+    if keep_temp {
+        log::info!("INFO [STEP 5]: Keeping temporary files -> keep_temp set to true!");
+    }
 
     let genome_index = index_genome(step, config, step_output_dir, executor);
 
@@ -73,13 +84,22 @@ pub fn minimap2(
             .join(BAM)
             .join(basename.with_extension(BAM).file_name().unwrap());
 
-        let compression = format!(
-            "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {} && rm {} && {SAMTOOLS} index -@ 8 {}",
-            sam.display(),
-            bam.display(),
-            sam.display(),
-            bam.display()
-        );
+        let compression = if !keep_temp {
+            format!(
+                "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {} && rm {} && {SAMTOOLS} index -@ 8 {}",
+                sam.display(),
+                bam.display(),
+                sam.display(),
+                bam.display()
+            )
+        } else {
+            format!(
+                "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {} && {SAMTOOLS} index -@ 8 {}",
+                sam.display(),
+                bam.display(),
+                bam.display()
+            )
+        };
 
         let job = Job::new()
             .task(*step)
@@ -104,6 +124,7 @@ pub fn minimap2(
             args,
             genome_index,
             &mut jobs,
+            keep_temp,
         );
     }
 
@@ -198,6 +219,7 @@ fn build_non_cannonical(
     args: String,
     genome: PathBuf,
     jobs: &mut Vec<Job>,
+    keep_temp: bool,
 ) {
     // INFO: only considering .fasta.gz + fa.gz; others are already considered as cannonical!
     for entry in std::fs::read_dir(input_dir)
@@ -227,13 +249,22 @@ fn build_non_cannonical(
             .join(BAM)
             .join(format!("aligned.{}.{}", basename, BAM));
 
-        let compression = format!(
-            "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {} && rm {} && {SAMTOOLS} index -@ 8 {}",
-            sam.display(),
-            bam.display(),
-            sam.display(),
-            bam.display()
-        );
+        let compression = if !keep_temp {
+            format!(
+                "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {} && rm {} && {SAMTOOLS} index -@ 8 {}",
+                sam.display(),
+                bam.display(),
+                sam.display(),
+                bam.display()
+            )
+        } else {
+            format!(
+                "&& {SAMTOOLS} view -@ 8 -b {} | {SAMTOOLS} sort -@ 8 -o {} && {SAMTOOLS} index -@ 8 {}",
+                sam.display(),
+                bam.display(),
+                bam.display()
+            )
+        };
 
         let job = Job::new()
             .task(*step)
@@ -296,9 +327,20 @@ pub fn index_genome(
     let cmd = format!("{MINIMAP2} -d {} {genome}", index.display());
     let job = Job::from(cmd);
 
+    let package = config.get_package_from_step(step);
+
     executor
         .add_job(job)
-        .execute(config, step, step_output_dir.clone(), Some("minimizer"));
+        // .execute(config, step, step_output_dir.clone(), Some("minimizer"));
+        .and_send(
+            config,
+            &step.to_unique_str(),
+            step_output_dir.clone(),
+            8,
+            20,
+            Some(package),
+            Some("minimizer"),
+        );
 
     return index;
 }

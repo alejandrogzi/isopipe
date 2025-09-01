@@ -42,11 +42,11 @@ time = "24.h"              # time for each job
 log-level = "INFO"         # log-level [INFO]
 
 [params.lima]
+input_dir = "step1_ccs"   # previous step data dir [default]
+output_dir = "step2_lima" # output dir [default]
 isoseq = ""               # WARN: leave empty and position
 peek-guess = ""           # WARN: leave empty and position
 primers = ""              # FILL: primers file
-input_dir = "step1_ccs"   # previous step data dir [default]
-output_dir = "step2_lima" # output dir [default]
 memory = 50               # memory in GB
 time = "24.h"             # time for each job
 num-threads = 64          # -j
@@ -94,6 +94,7 @@ time = "24.h"                # time for each job
 chunk = "400k"               # WARN: controls iso-split fa/fq output [default: 400k]
 genome = ""                  # FILL: genome in .fa format or .2bit
 junc-bed = ""                # FILL: reference annotation in .bed format
+keep_temp = "false"          # WARN: keep temporary files, change to "true" to keep them
 
 [params.polya]
 input_dir = "step5_minimap" # previous step data dir [default]

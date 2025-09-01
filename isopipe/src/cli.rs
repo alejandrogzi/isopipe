@@ -22,6 +22,15 @@ pub struct Args {
         default_value = "para"
     )]
     pub manager: ParallelManager,
+
+    #[arg(
+        short = 'L',
+        long = "level",
+        help = "Logging level",
+        value_name = "LEVEL",
+        default_value_t = log::Level::Info,
+    )]
+    pub level: log::Level,
 }
 
 impl Args {}
