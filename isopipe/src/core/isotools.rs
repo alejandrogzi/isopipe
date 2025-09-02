@@ -621,10 +621,10 @@ pub fn polish(
         let outdir = step_output_dir.join(chr);
 
         // INFO: need to specify cleanup to include it in the cmd!
-        let tmp = subdir.join("*/*/tmp*"); // INFO: remove anything tmp
-        let nmd = subdir.join("*/*/*nmd.bed"); // INFO: move nmds from free/fusions
+        let tmp = subdir.join("*/tmp*"); // INFO: remove anything tmp
+        let nmd = subdir.join("*/*nmd.bed"); // INFO: move nmds from free/fusions
         let fsn = subdir.join("*/seqs_fusions/*reads.bed"); // INFO: fusions reads
-        let preds = subdir.join("*/*/*predictions*tsv"); // INFO: move nmds from free/fusions
+        let preds = subdir.join("*/*predictions*tsv"); // INFO: move nmds from free/fusions
 
         let cleaning = format!(
             "rm {} && cat {} > {} && mv {} {} && mv {} {}",
