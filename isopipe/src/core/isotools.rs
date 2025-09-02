@@ -40,6 +40,15 @@ pub fn iso_nmd(
     let _mode = ParallelMode::from_str(&config.get_step_custom_field(step, PARALLEL_MODE));
     let mut jobs = Vec::new();
 
+    let keep_temp = config
+        .get_step_custom_field(step, KEEP_TEMP)
+        .parse::<bool>()
+        .unwrap_or(false);
+
+    if keep_temp {
+        log::info!("INFO [STEP 9]: Keeping temporary files -> keep_temp set to true!");
+    }
+
     // INFO: path would look like: {step_orf}/seqs_{suffix} or toga
     for entry in std::fs::read_dir(input_dir)
         .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
@@ -80,14 +89,31 @@ pub fn iso_nmd(
                 if file.is_file() {
                     // INFO: matching specific name
                     if file.ends_with("tmp_predictions.bed") {
-                        let cmd = format!(
-                            "{} --ref {} --outdir {} --prefix {}",
+                        log::debug!("DEBUG: found predictions.bed for {chr:?} -> {file:?}");
+
+                        let chr_outdir = step_output_dir.join(chr).join(suffix);
+                        let mut cmd = format!(
+                            "{} --ref {} --outdir {} --prefix {} && cat {} >> {}",
                             isotools!(ISO_NMD).display(),
                             file.display(),
-                            step_output_dir.join(chr).join(suffix).display(),
-                            format!("tmp_{}", chunked_dir.file_name().unwrap().to_str().unwrap())
+                            chr_outdir.display(),
+                            format!("tmp_{}", chunked_dir.file_name().unwrap().to_str().unwrap()),
+                            file.with_extension("tsv").display(),
+                            chr_outdir
+                                .join(format!("{}.predictions.{}.tsv", chr, suffix))
+                                .display(),
                         );
 
+                        if !keep_temp {
+                            let rest = format!(
+                                " && rm {}",
+                                file.parent().unwrap().join("tmp*").display(),
+                            );
+
+                            cmd += &rest;
+                        }
+
+                        log::debug!("DEBUG: executing cmd: {cmd}");
                         jobs.push(Job::from(cmd));
                     }
                 }
@@ -594,36 +620,35 @@ pub fn polish(
         let bed = subdir.join("seqs_free").join(format!("{}.reads.bed", chr));
         let outdir = step_output_dir.join(chr);
 
+        // INFO: need to specify cleanup to include it in the cmd!
+        let tmp = subdir.join("*/*/tmp*"); // INFO: remove anything tmp
+        let nmd = subdir.join("*/*/*nmd.bed"); // INFO: move nmds from free/fusions
+        let fsn = subdir.join("*/seqs_fusions/*reads.bed"); // INFO: fusions reads
+        let preds = subdir.join("*/*/*predictions*tsv"); // INFO: move nmds from free/fusions
+
+        let cleaning = format!(
+            "rm {} && cat {} > {} && mv {} {} && mv {} {}",
+            tmp.display(),
+            nmd.display(),
+            step_output_dir.join(chr).join("nmd.bed").display(),
+            fsn.display(),
+            step_output_dir.join(chr).join("fusions.bed").display(),
+            preds.display(),
+            step_output_dir.join(chr).display()
+        );
+
         let cmd = format!(
-            "{} run --query {} --aparent {} --twobit {} {args} --outdir {}",
+            "{} run --query {} --aparent {} --twobit {} {args} --outdir {} && {}",
             isotools!(ISOTOOLS).display(),
             bed.display(),
             apa.display(),
             twobit,
             outdir.display(),
+            cleaning
         );
 
+        log::debug!("DEBUG: executing cmd: {cmd}");
         jobs.push(Job::from(cmd));
-
-        let tmp = subdir.join("*/*/tmp*"); // INFO: remove anything tmp
-        let nmd = subdir.join("*/*/*nmd.bed"); // INFO: move nmds from free/fusions
-        let fsn = subdir.join("*/seqs_fusions/*reads.bed"); // INFO: fusions reads
-
-        let cmd = format!(
-            "rm {} && cat {} > {} && mv {} {}",
-            tmp.display(),
-            nmd.display(),
-            step_output_dir.join(chr).join("nmd.bed").display(),
-            fsn.display(),
-            step_output_dir.join(chr).join("fusions.bed").display()
-        );
-
-        std::process::Command::new("bash")
-            .arg("-c")
-            .arg(cmd)
-            .current_dir(&subdir)
-            .output()
-            .expect("ERROR: Failed to clean up directories");
     }
 
     return jobs;
