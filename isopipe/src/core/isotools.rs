@@ -5,7 +5,7 @@ use iso_polya::{
 };
 use packbed::par_reader;
 
-use std::path::PathBuf;
+use std::{fs::remove_dir, path::PathBuf};
 
 use crate::{config::*, consts::*, executor::job::Job};
 use crate::{executor::manager::ParallelExecutor, isotools};
@@ -685,11 +685,14 @@ fn merge_aparent(outdir: PathBuf, _prefix: &str) -> PathBuf {
     }
 
     let bed = par_reader(beds).expect("ERROR: Failed to merge bed files");
-    let bed_dest = assets.join(APARENT_OUTPUT);
+    let bed_dest = outdir.join(APARENT_OUTPUT);
+
+    log::debug!("DEBUG: will write all chunked .bed to -> {bed_dest:?}");
+
     write_bed(bed_dest.clone(), bed);
 
     log::info!("INFO: Merged chunks and cleaning...");
-    for entry in std::fs::read_dir(assets).expect("ERROR: Failed to read assets directory") {
+    for entry in std::fs::read_dir(&assets).expect("ERROR: Failed to read assets directory") {
         if let Ok(entry) = entry {
             let path = entry.path();
             if path
@@ -703,6 +706,8 @@ fn merge_aparent(outdir: PathBuf, _prefix: &str) -> PathBuf {
             }
         }
     }
+
+    remove_dir(&assets).unwrap_or_else(|e| panic!("ERROR: {e} -> could not remove {assets:?}"));
 
     log::info!("SUCCESS: APPARENT finished successfully!");
     return bed_dest;
