@@ -17,6 +17,7 @@ from typing import List, Union
 
 MODEL = "model/model.joblib"
 MODEL_PATH = Path(__file__).parent / MODEL
+UNIQUE_TAI_TAG = "UT"
 FEATURES: List = [
     "blast_pid",
     "blast_e-value",
@@ -416,7 +417,9 @@ def read_tai(path: Union[str, PathLike, Path]) -> pd.DataFrame:
         + tai["tai_strand"].astype(str)
         + ")"
     )
-    tai["tai_id"] = [id.replace(".p", "__OR") for id in tai.tai_id]
+    tai["tai_id"] = [
+        id.replace(".p", "__OR") + f"#{UNIQUE_TAI_TAG}" for id in tai.tai_id
+    ]  # WARN: introducing unique TAI tag
 
     return tai
 
