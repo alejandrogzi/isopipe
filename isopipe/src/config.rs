@@ -1647,7 +1647,7 @@ fn cargo_install(path: &Path) {
 /// ```rust, no_run
 /// shell("ls -l".to_string(), "Listing files", "");
 /// ```
-pub fn shell(cmd: String, log_msg: &str, tool: &str) {
+pub fn shell(cmd: String, log_msg: &str, tool: &str, silent: bool) {
     let tool = if tool.is_empty() { ISOPIPE } else { tool };
 
     let output = std::process::Command::new("sh")
@@ -1657,7 +1657,9 @@ pub fn shell(cmd: String, log_msg: &str, tool: &str) {
         .expect(&format!("ERROR: Failed to execute process -> {}", cmd));
 
     if output.status.success() {
-        log::info!("INFO [{}]: {}!", tool, log_msg);
+        if !silent {
+            log::info!("INFO [{}]: {}!", tool, log_msg);
+        }
     } else {
         log::error!(
             "ERROR: failed to execute {}\n{}",

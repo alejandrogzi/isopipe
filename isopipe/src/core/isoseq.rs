@@ -107,6 +107,7 @@ pub fn cluster(
         format!("ls {} > {}", refine_fofn, all_fofn),
         "INFO: Grouping flnc reads...",
         CLUSTER,
+        false,
     );
 
     let args = config.get_step_args(step, vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, LOG_FILE]);
