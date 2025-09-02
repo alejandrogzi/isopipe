@@ -625,16 +625,19 @@ pub fn polish(
         let nmd = subdir.join("*/*nmd.bed"); // INFO: move nmds from free/fusions
         let fsn = subdir.join("*/seqs_fusions/*reads.bed"); // INFO: fusions reads
         let preds = subdir.join("*/*predictions*tsv"); // INFO: move nmds from free/fusions
+        let reads = subdir.join("*/seqs_free/*reads.bed"); // INFO: mv reads as raw reads
 
         let cleaning = format!(
-            "rm {} && cat {} > {} && mv {} {} && mv {} {}",
+            "rm {} && cat {} > {} && mv {} {} && mv {} {} && mv {} {}",
             tmp.display(),
             nmd.display(),
             step_output_dir.join(chr).join("nmd.bed").display(),
             fsn.display(),
             step_output_dir.join(chr).join("fusions.bed").display(),
             preds.display(),
-            step_output_dir.join(chr).display()
+            step_output_dir.join(chr).display(),
+            reads.display(),
+            step_output_dir.join(chr).join("raw_reads.bed").display(),
         );
 
         let cmd = format!(
