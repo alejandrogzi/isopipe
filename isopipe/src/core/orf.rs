@@ -3,7 +3,6 @@ use crate::{config::*, consts::*, executor::job::Job};
 
 use config::{OverlapType, Sequence, Strand, FUSION_FREE, SCALE};
 use iso_polya::utils::get_sequences;
-use log::warn;
 use packbed::{unpack, GenePred};
 use rayon::prelude::*;
 
@@ -327,14 +326,15 @@ fn unbounded_extract(
                 if !file.exists() {
                     log::warn!("WARN: file {file:?} does not exist under singletons, likely means that anything was found...");
                 } else {
-                    log::debug!(
-                        "INFO: file {file:?} found, will try to merge to its accept counterpart!"
-                    );
-
                     let target = subdir.with_extension("accept").join(suffix); // chr10_all.aligned.accept/fusions.bed
+
+                    log::debug!(
+                        "INFO: file {file:?} found, will try to merge to its accept counterpart -> {target:?}!"
+                    );
 
                     // INFO: forcing to create all accept dirs
                     if !target.exists() {
+                        log::debug!("DEBUG: forcing {target:?} to exist because singletons counterpart {file:?} needs to go somewhere...");
                         let _ = std::fs::create_dir_all(target.parent().unwrap());
                     }
 
@@ -345,11 +345,14 @@ fn unbounded_extract(
                         file.display()
                     );
 
-                    shell(cmd, "Merging singletons", "ORF");
+                    shell(cmd, "", "", true); // INFO: silent exec
                 }
             }
 
             // INFO: after merge we do not need singleton dirs
+            std::fs::remove_dir(&subdir)
+                .unwrap_or_else(|e| panic!("ERROR: {e}. could not remove dir -> {subdir:?}"));
+
             continue;
         }
 
@@ -805,7 +808,7 @@ pub fn bounded_extract(
 /// ```
 fn __merge_toga(step_output_dir: &PathBuf, config: &Config, step: &PipelineStep) -> PathBuf {
     let toga = config.get_step_custom_field(step, TOGA);
-    let msg = "INFO: Merging TOGA predictions in a single file...";
+    let msg = "INFO: Merging TOGA2 predictions -> {toga}";
     let tool = "iso-orf";
 
     let cmd = format!(
@@ -815,7 +818,7 @@ fn __merge_toga(step_output_dir: &PathBuf, config: &Config, step: &PipelineStep)
         step_output_dir.display()
     );
 
-    shell(cmd, msg, tool);
+    shell(cmd, msg, tool, false);
 
     return step_output_dir.join(TOGA).join("toga_merged.tsv");
 }
