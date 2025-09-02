@@ -134,6 +134,7 @@ chunk = "30k"              # WARN: controls fusion .bed + .fa split sizes
 genome = ""                # FILL: genome in .fa format or .2bit
 orf_min_len = 30           # minimum ORF length in bp
 parallel_mode = "chr"      # WARN: controls parallelization, "chr" for chromosomes, "all" for all at once [recommended: "chr"]
+keep_temp = "false"        # WARN: keep temporary files, change to "true" to keep them
 
 [params.nmd]
 input_dir = "step8_orf"  # previous step data dir [default]
@@ -142,6 +143,7 @@ memory = 8               # memory in GB
 num-threads = 2          # --num-threads, INFO: light work
 time = "24.h"            # time for each job
 parallel_mode = "chr"    # WARN: controls parallelization, "chr" for chromosomes, "all" for all at once [recommended: "chr"]
+keep_temp = "false"      # WARN: keep temporary files, change to "true" to keep them
 
 [params.polish]
 input_dir = "step9_nmd"      # previous step data dir [default]
