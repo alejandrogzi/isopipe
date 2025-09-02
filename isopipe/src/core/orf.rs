@@ -567,15 +567,13 @@ fn parallel_processing(
                 };
             }
 
-            // // INFO: if tai results are less than 10 lines, skip the blast job
-            // let cmd = format!(
-            //     "{} && ( [ \"$(wc -l < {})\" -ge 10 ] && {} || true )",
-            //     tai,
-            //     chunked_dir.join(TAI).join("*.result").display(),
-            //     blast
-            // );
-
-            let mut cmd = format!("{} && {}", tai, blast);
+            // INFO: if tai results are less than 10 lines, skip the blast job
+            let mut cmd = format!(
+                "{} && ( [ \"$(wc -l < {})\" -ge 10 ] && {} || true )",
+                tai,
+                chunked_dir.join(TAI).join("*.result").display(),
+                blast
+            );
 
             if !keep_temp {
                 let rest = format!(" && rm {}", chunked_dir.join("tmp*").display());
