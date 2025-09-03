@@ -70,7 +70,7 @@ impl Job {
             PipelineStep::Ccs => "ccs",
             PipelineStep::Lima => "lima",
             PipelineStep::Refine => "isoseq refine",
-            PipelineStep::Cluster => "isoseq cluster",
+            PipelineStep::Cluster => "isoseq cluster2",
             PipelineStep::Polya => "",
             PipelineStep::Minimap => "minimap2",
             PipelineStep::Fusion => "isotools iso-fusion",
