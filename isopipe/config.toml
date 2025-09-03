@@ -68,7 +68,6 @@ log-level = "INFO"          # log-level [INFO]
 input_dir = "step3_refine"     # previous step data dir [default]
 output_dir = "step4_cluster"   # output dir
 singletons = ""                # WARN: leave empty
-verbose = ""                   # WARN: leave empty [verbosity as default]
 memory = 50                    # memory in GB
 num-threads = 64               # --num-threads [higher the better]
 num-cores = 64                 # WARN: HPC
@@ -154,6 +153,7 @@ time = "24.h"                # time for each job
 toga = ""                    # FILL: toga query annotation
 genome = ""                  # FILL: genome in .2bit
 bigwig = ""                  # FILL: path to SpliceAI dir
+keep_temp = "false"          # WARN: keep temporary files, change to "true" to keep them
 
 [params.load]
 input_dir = "step10_polish" # previous step data dir [default]
