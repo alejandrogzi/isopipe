@@ -104,6 +104,7 @@ pub fn iso_nmd(
                                 .display(),
                         );
 
+                        // INFO: takes care of step8 tmp files
                         if !keep_temp {
                             let rest = format!(
                                 " && rm {}",

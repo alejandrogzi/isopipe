@@ -87,7 +87,6 @@ pub fn orf(
                 &args,
                 &mut jobs,
                 &mode,
-                keep_temp,
             );
         }
         ParallelMode::Genome => {
@@ -101,7 +100,6 @@ pub fn orf(
                     &args,
                     &mut jobs,
                     &mode,
-                    keep_temp,
                 );
             }
         }
@@ -458,10 +456,9 @@ fn process_bed(
     args: &Vec<String>,
     jobs: &mut Vec<Job>,
     mode: &ParallelMode,
-    keep_temp: bool,
 ) {
     match mode {
-        ParallelMode::Chromosome => parallel_processing(step_output_dir, args, jobs, keep_temp),
+        ParallelMode::Chromosome => parallel_processing(step_output_dir, args, jobs),
         ParallelMode::Genome => cannonical_processing(
             bed.unwrap(),
             twobit,
@@ -469,7 +466,6 @@ fn process_bed(
             chunk_size,
             args,
             jobs,
-            keep_temp,
         ),
     }
 }
@@ -506,12 +502,7 @@ fn process_bed(
 /// This function will panic if:
 /// - It fails to read the `step_output_dir` or any of its subdirectories.
 /// - It fails to construct a `Job` from the command string.
-fn parallel_processing(
-    step_output_dir: &PathBuf,
-    args: &Vec<String>,
-    jobs: &mut Vec<Job>,
-    keep_temp: bool,
-) {
+fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut Vec<Job>) {
     let suffixes = vec![REDUCED_BED, FA, INDEX];
 
     // INFO: need to loop again to run blast and tai
@@ -568,17 +559,12 @@ fn parallel_processing(
             }
 
             // INFO: if tai results are less than 10 lines, skip the blast job
-            let mut cmd = format!(
+            let cmd = format!(
                 "{} && ( [ \"$(wc -l < {})\" -ge 10 ] && {} || true )",
                 tai,
                 chunked_dir.join(TAI).join("*.result").display(),
                 blast
             );
-
-            if !keep_temp {
-                let rest = format!(" && rm {}", chunked_dir.join("tmp*").display());
-                cmd += &rest;
-            }
 
             jobs.push(Job::from(cmd));
         }
@@ -630,7 +616,6 @@ fn cannonical_processing(
     chunk_size: usize,
     args: &Vec<String>,
     jobs: &mut Vec<Job>,
-    keep_temp: bool,
 ) {
     if !bed.exists() || std::fs::metadata(&bed).unwrap().len() == 0 {
         log::warn!("WARN: {} does not exist or its empty!", bed.display());
@@ -657,7 +642,7 @@ fn cannonical_processing(
             )
         });
 
-        let mut cmd = format!(
+        let cmd = format!(
             "{} tai --fasta {} --alignments {} --outdir {} && {} blast -e {} --fasta {} --alignments {} --outdir {} --orf-min-len {} --db {}",
             ORF_RELEASE,
             chunked_fa.display(),
@@ -671,11 +656,6 @@ fn cannonical_processing(
             args[2], // INFO: orf_min_len,
             args[3], // INFO: database
         );
-
-        if !keep_temp {
-            let rest = format!(" && rm {}", chunked_dir.join("tmp*").display());
-            cmd += &rest;
-        }
 
         jobs.push(Job::from(cmd));
     }
