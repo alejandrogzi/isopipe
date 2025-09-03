@@ -525,8 +525,25 @@ pub fn polish(
 
     let args = config.get_step_args(
         step,
-        vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, GENOME, NUM_THREADS],
+        vec![
+            INPUT_DIR,
+            OUTPUT_DIR,
+            MEMORY,
+            TIME,
+            GENOME,
+            NUM_THREADS,
+            KEEP_TEMP,
+        ],
     );
+
+    let keep_temp = config
+        .get_step_custom_field(step, KEEP_TEMP)
+        .parse::<bool>()
+        .unwrap_or(false);
+
+    if keep_temp {
+        log::info!("INFO [STEP 10]: Keeping temporary files -> keep_temp set to true!");
+    }
 
     let twobit = config.get_step_custom_fields(step, vec![GENOME])[0].clone();
     let mem = CHUNK_SIZE as f32 * RAM_PER_SITE; // INFO: will be converted to MB by executor
@@ -629,8 +646,7 @@ pub fn polish(
         let reads = subdir.join("*/seqs_free/*reads.bed"); // INFO: mv reads as raw reads
 
         let cleaning = format!(
-            "rm {} && cat {} > {} && mv {} {} && mv {} {} && mv {} {}",
-            tmp.display(),
+            "cat {} >> {} && mv {} {} && mv {} {} && mv {} {}",
             nmd.display(),
             step_output_dir.join(chr).join("nmd.bed").display(),
             fsn.display(),
@@ -641,7 +657,7 @@ pub fn polish(
             step_output_dir.join(chr).join("raw_reads.bed").display(),
         );
 
-        let cmd = format!(
+        let mut cmd = format!(
             "{} run --query {} --aparent {} --twobit {} {args} --outdir {} && {}",
             isotools!(ISOTOOLS).display(),
             bed.display(),
@@ -650,6 +666,11 @@ pub fn polish(
             outdir.display(),
             cleaning
         );
+
+        // if !keep_temp {
+        //     let rest = format!(" && rm {}", tmp.display());
+        //     cmd += &rest;
+        // }
 
         log::debug!("DEBUG: executing cmd: {cmd}");
         jobs.push(Job::from(cmd));
