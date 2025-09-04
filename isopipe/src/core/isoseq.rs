@@ -114,12 +114,38 @@ pub fn cluster(
     let out_bam = format!("{}/{}", step_output_dir.display(), CLUSTERED_BAM);
     let fields = config.get_step_custom_fields(step, vec![LOG_FILE]);
 
+    let tmp_hq_bam = step_output_dir.join("hq.bam").to_string_lossy().to_string();
+    let tmp_singleton_bam = step_output_dir
+        .join("singletons.bam")
+        .to_string_lossy()
+        .to_string();
+    let hq_fasta = step_output_dir
+        .join("all.clustered.hq.fasta.gz")
+        .to_string_lossy()
+        .to_string();
+    let singleton_fasta = step_output_dir
+        .join("all.clustered.singletons.fasta.gz")
+        .to_string_lossy()
+        .to_string();
+
+    let merging = format!(
+        "&& samtools view -h -@ 4 {out_bam} \
+        | tee >(awk '{{if($1 ~ /^@/){{print; next}} for(i=12;i<=NF;i++){{if($i ~ /^is:i:1$/){{print; break}}}}}}' \
+            | samtools view -@ 4 -bo {tmp_singleton_bam} -) \
+        | awk '{{if($1 ~ /^@/){{print; next}} for(i=12;i<=NF;i++){{if($i ~ /^is:i:/){{split($i,a,\":\"); if(a[3]!=1){{print; break}}}}}}}}' \
+        | samtools view -@ 4 -bo {tmp_hq_bam} - \
+        && samtools fasta -@ 8 -c 9 {tmp_hq_bam} | gzip > {hq_fasta} \
+        && samtools fasta -@ 8 -c 9 {tmp_singleton_bam} | gzip > {singleton_fasta} \
+        && rm {tmp_hq_bam} {tmp_singleton_bam}"
+    );
+
     let jobs = vec![Job::new()
         .task(*step)
         .arg(&all_fofn)
         .arg(&out_bam)
         .arg(&args)
-        .arg(format!("--log-file {}/{}", &step_output_dir.display(), fields[0]).as_str())];
+        .arg(format!("--log-file {}/{}", &step_output_dir.display(), fields[0]).as_str())
+        .arg(merging)];
 
     log::info!("INFO [STEP 4]: Pre-processing completed -> Running...");
 
