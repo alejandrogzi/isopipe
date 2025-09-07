@@ -641,9 +641,9 @@ pub fn polish(
         // INFO: need to specify cleanup to include it in the cmd!
         let tmp = subdir.join("*/tmp*"); // INFO: remove anything tmp
         let nmd = subdir.join("*/*nmd.bed"); // INFO: move nmds from free/fusions
-        let fsn = subdir.join("*/seqs_fusions/*reads.bed"); // INFO: fusions reads
+        let fsn = subdir.join("seqs_fusions/*reads.bed"); // INFO: fusions reads
         let preds = subdir.join("*/*predictions*tsv"); // INFO: move predictions from free/fusions
-        let reads = subdir.join("*/seqs_free/*reads.bed"); // INFO: mv reads as raw reads
+        let reads = subdir.join("seqs_free/*reads.bed"); // INFO: mv reads as raw reads
 
         let cleaning = format!(
             "cat {} >> {} && mv {} {} && mv {} {} && mv {} {}",
