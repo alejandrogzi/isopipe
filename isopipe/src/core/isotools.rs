@@ -643,26 +643,39 @@ pub fn polish(
         // INFO: need to specify cleanup to include it in the cmd!
         let tmp = subdir.join("*/tmp*"); // INFO: remove anything tmp
         let nmd = subdir.join("*/*nmd.bed"); // INFO: move nmds from free/fusions
-        let fsn = subdir.join("seqs_fusions/*reads.bed"); // INFO: fusions reads
         let preds = subdir.join("*/*predictions*tsv"); // INFO: move predictions from free/fusions
-        let reads = subdir.join("seqs_free/*reads.bed"); // INFO: mv reads as raw reads
 
-        let cleaning = format!(
-            "cat {} >> {} && mv {} {} && mv {} {} && mv {} {}",
+        let fsn = subdir.join("seqs_fusions").join(format!("{chr}.reads.bed"));
+        let reads = subdir.join("seqs_free").join(format!("{chr}.reads.bed"));
+
+        let mut cleaning = format!(
+            "cat {} >> {} && mv {} {}",
             nmd.display(),
             step_output_dir.join(chr).join("nmd.bed").display(),
-            fsn.display(),
-            step_output_dir.join(chr).join("fusions.bed").display(),
             preds.display(),
             step_output_dir.join(chr).display(),
-            reads.display(),
-            step_output_dir.join(chr).join("raw_reads.bed").display(),
         );
+
+        if fsn.exists() {
+            cleaning += &format!(
+                " && mv {} {}",
+                fsn.display(),
+                step_output_dir.join(chr).join("fusions.bed").display()
+            );
+        }
+
+        if reads.exists() {
+            cleaning += &format!(
+                " && mv {} {}",
+                reads.display(),
+                step_output_dir.join(chr).join("raw_reads.bed").display()
+            );
+        }
 
         // INFO: subdirs should have then -> nmd.bed, fusions.bed, raw_reads.bed
         // INFO: an optionally -> {chr}.predictions.seqs_fusions.tsv, {chr}.predictions.seqs_free.tsv
-        let decisions = format!(
-            "source {} && {} --reads {} --predictions {} --introns {} --descriptor {} && {} --reads {} --predictions {} --name nmd.bb.bed  && {} --reads {} --predictions {} --name fusions.bb.bed",
+        let mut decisions = format!(
+            "source {} && {} --reads {} --predictions {} --introns {} --descriptor {} && {} --reads {} --predictions {} --name nmd.bb.bed",
             TAI_VENV,
             PRETTY_PY,
             step_output_dir.join(chr).join("raw_reads.bed").display(),
@@ -684,13 +697,20 @@ pub fn polish(
                 .join(chr)
                 .join(format!("{chr}.predictions.seqs_free.tsv"))
                 .display(),
-            PRETTY_PY,
-            step_output_dir.join(chr).join("fusions.bed").display(),
-            step_output_dir
-                .join(chr)
-                .join(format!("{chr}.predictions.seqs_fusions.tsv"))
-                .display(),
+
         );
+
+        if step_output_dir.join(chr).join("fusions.bed").exists() {
+            decisions += &format!(
+                "  && {} --reads {} --predictions {} --name fusions.bb.bed",
+                PRETTY_PY,
+                step_output_dir.join(chr).join("fusions.bed").display(),
+                step_output_dir
+                    .join(chr)
+                    .join(format!("{chr}.predictions.seqs_fusions.tsv"))
+                    .display(),
+            )
+        }
 
         let mut cmd = format!(
             "{} run --query {} --aparent {} --twobit {} {args} --outdir {} && {} && {}",
