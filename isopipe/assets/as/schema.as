@@ -39,4 +39,5 @@ table isopipe
     bool    TAG_review_fusion;          "Fusion under review flag"
     bool    TAG_strong_nmd;             "Strong NMD prediction"
     bool    TAG_weak_nmd;               "Weak NMD prediction"
+    bool    TAG_unique_tai;               "Unique translationAi prediction"
 )
