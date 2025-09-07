@@ -104,11 +104,13 @@ pub fn iso_nmd(
                                 .display(),
                         );
 
-                        // INFO: takes care of step8 tmp files
+                        // INFO: takes care of step8 tmp files except predictions
                         if !keep_temp {
                             let rest = format!(
-                                " && rm {}",
-                                file.parent().unwrap().join("tmp*").display(),
+                                " && rm {} {} {}",
+                                file.parent().unwrap().join("tmp*fa").display(),
+                                file.parent().unwrap().join("tmp*reduced*").display(),
+                                file.parent().unwrap().join("tmp*index").display(),
                             );
 
                             cmd += &rest;
