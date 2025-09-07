@@ -94,7 +94,7 @@ pub fn run_step(
         }
         PipelineStep::Load => {
             log::info!("INFO [STEP 11]: Pre-processing for loading final results started...");
-            load::load(step, config, &input_dir, &step_output_dir)
+            load::load(step, config, &input_dir, &step_output_dir, executor)
         }
     };
 
