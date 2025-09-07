@@ -44,7 +44,7 @@ pub fn load(
                     .unwrap_or_else(|| panic!("ERROR: could not get file name from {bed:?}"));
 
                 let cmd = format!(
-                    "{BED_TO_BIG_BED} -as={SCHEMA} -type=12+24 {} {} {}",
+                    "{BED_TO_BIG_BED} -as={SCHEMA} -type=12+25 {} {} {}",
                     input.display(),
                     chrom_sizes,
                     outdir.join(bb).display()
