@@ -372,7 +372,7 @@ def bed_to_big_bed(
         cmd_parts = [
             BED_TO_BIG_BED,
             f"-as={SCHEMA_SQL}",
-            "-type=12+25",  # INFO: static
+            "-type=12+24",  # INFO: static
             temp_bed_path,
             str(chrom_sizes),
             str(filename),
