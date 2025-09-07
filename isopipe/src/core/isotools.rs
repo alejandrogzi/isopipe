@@ -642,7 +642,7 @@ pub fn polish(
         let tmp = subdir.join("*/tmp*"); // INFO: remove anything tmp
         let nmd = subdir.join("*/*nmd.bed"); // INFO: move nmds from free/fusions
         let fsn = subdir.join("*/seqs_fusions/*reads.bed"); // INFO: fusions reads
-        let preds = subdir.join("*/*predictions*tsv"); // INFO: move nmds from free/fusions
+        let preds = subdir.join("*/*predictions*tsv"); // INFO: move predictions from free/fusions
         let reads = subdir.join("*/seqs_free/*reads.bed"); // INFO: mv reads as raw reads
 
         let cleaning = format!(
@@ -657,20 +657,54 @@ pub fn polish(
             step_output_dir.join(chr).join("raw_reads.bed").display(),
         );
 
+        // INFO: subdirs should have then -> nmd.bed, fusions.bed, raw_reads.bed
+        // INFO: an optionally -> {chr}.predictions.seqs_fusions.tsv, {chr}.predictions.seqs_free.tsv
+        let decisions = format!(
+            "source {} && {} --reads {} --predictions {} --introns {} --descriptor {} && {} --reads {} --predictions {} --name nmd.bb.bed  && {} --reads {} --predictions {} --name fusions.bb.bed",
+            TAI_VENV,
+            PRETTY_PY,
+            step_output_dir.join(chr).join("raw_reads.bed").display(),
+            step_output_dir
+                .join(chr)
+                .join(format!("{chr}.predictions.seqs_free.tsv"))
+                .display(),
+            step_output_dir
+                .join(chr)
+                .join("reference_introns.tsv")
+                .display(),
+            step_output_dir
+                .join(chr)
+                .join("global_descriptor.tsv")
+                .display(),
+            PRETTY_PY,
+            step_output_dir.join(chr).join("nmd.bed").display(),
+            step_output_dir
+                .join(chr)
+                .join(format!("{chr}.predictions.seqs_free.tsv"))
+                .display(),
+            PRETTY_PY,
+            step_output_dir.join(chr).join(".bed").display(),
+            step_output_dir
+                .join(chr)
+                .join(format!("{chr}.predictions.seqs_fusions.tsv"))
+                .display(),
+        );
+
         let mut cmd = format!(
-            "{} run --query {} --aparent {} --twobit {} {args} --outdir {} && {}",
+            "{} run --query {} --aparent {} --twobit {} {args} --outdir {} && {} && {}",
             isotools!(ISOTOOLS).display(),
             bed.display(),
             apa.display(),
             twobit,
             outdir.display(),
-            cleaning
+            cleaning,
+            decisions
         );
 
-        // if !keep_temp {
-        //     let rest = format!(" && rm {}", tmp.display());
-        //     cmd += &rest;
-        // }
+        if !keep_temp {
+            let rest = format!(" && rm {}", tmp.display());
+            cmd += &rest;
+        }
 
         log::debug!("DEBUG: executing cmd: {cmd}");
         jobs.push(Job::from(cmd));
