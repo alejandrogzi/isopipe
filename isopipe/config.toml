@@ -163,3 +163,4 @@ num-threads = 8             # --num-threads
 time = "24.h"               # time for each job
 user = ""                   # FILL: browser username
 upload-public = "false"     # WARN: upload to public browser, change to "true" to upload
+chrom_sizes = ""            # FILL: chromosome sizes file

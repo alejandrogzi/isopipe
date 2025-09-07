@@ -930,6 +930,7 @@ pub enum PipelineStep {
     Orf,
     Nmd,
     Polish,
+    Load,
 }
 
 impl PipelineStep {
@@ -962,6 +963,7 @@ impl PipelineStep {
             "orf" => Ok(Self::Orf),
             "nmd" => Ok(Self::Nmd),
             "polish" => Ok(Self::Polish),
+            "load" => Ok(Self::Load),
             _ => Err(format!("ERROR: Invalid pipeline step: {}", s)),
         }
     }
@@ -995,6 +997,7 @@ impl PipelineStep {
             8 => Ok(Self::Orf),
             9 => Ok(Self::Nmd),
             10 => Ok(Self::Polish),
+            11 => Ok(Self::Load),
             _ => Err(format!("ERROR: Invalid pipeline step: {}", i)),
         }
     }
@@ -1030,6 +1033,7 @@ impl PipelineStep {
             Self::Orf => "orf".into(),
             Self::Nmd => "nmd".into(),
             Self::Polish => "polish".into(),
+            Self::Load => "load".into(),
         }
     }
 
@@ -1064,6 +1068,7 @@ impl PipelineStep {
             Self::Orf => vec!["python3".into(), "diamond".into()],
             Self::Nmd => vec!["rust".into()],
             Self::Polish => vec!["rust".into(), "python3".into()],
+            Self::Load => vec!["python3".into()],
         }
     }
 
@@ -1098,6 +1103,7 @@ impl PipelineStep {
             Self::Orf => "orf".into(),
             Self::Nmd => "nmd".into(),
             Self::Polish => "polish".into(),
+            Self::Load => "load".into(),
         }
     }
 
@@ -1127,6 +1133,7 @@ impl PipelineStep {
             Self::Orf => 8,
             Self::Nmd => 9,
             Self::Polish => 10,
+            Self::Load => 11,
         }
     }
 

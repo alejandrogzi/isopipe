@@ -44,6 +44,7 @@ pub const ORFIPY: &str = "orfipy";
 pub const KEEP_REJECTED: &str = "keep_rejected";
 pub const PARALLEL_MODE: &str = "parallel_mode";
 pub const KEEP_TEMP: &str = "keep_temp";
+pub const CHROM_SIZES: &str = "chrom_sizes";
 
 // project-wide pub const | names
 pub const ISOPIPE: &str = "isopipe";
@@ -105,29 +106,36 @@ pub const DEFAULT_THREADS: &str = "default_threads";
 // miscellaneous constants
 pub const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 pub const RUN_ID_LEN: usize = 4;
-pub const ORFPY_ENV: &str = "/beegfs/projects/hillerlab/genome/src/ORFTree/.venv/bin/activate";
 pub const SGN_COLOR: &str = "51,153,255";
 pub const ISOTOOLS_RELEASE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../isotools/isotools/target/release"
 );
 pub const ORF_CHUNKS: usize = 50000; // 50k transcripts
-pub const ORF_RELEASE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/orf/target/release/orf");
-pub const PREDICT_PY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/orf/predict/predict.py");
+pub const ORF_RELEASE: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/rust/orf/target/release/orf"
+);
+pub const PREDICT_PY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/py/predict/predict.py");
+pub const PRETTY_PY: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/py/pretty/pretty_descriptor.py"
+);
 pub const EXTRACT_RELEASE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/assets/extract/target/release/extract"
+    "/assets/rust/extract/target/release/extract"
 );
 pub const TAI_VENV: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/assets/orf/tai/.venv/bin/activate"
+    "/assets/rust/orf/tai/.venv/bin/activate"
 );
 pub const APARENT_PY: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../isotools/isotools/iso-polya/assets/run_aparent.py"
 );
-pub const HG_LOAD_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/bin/hgLoadBed");
-pub const BED_TO_BIG_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/bin/bedToBigBed");
+pub const HG_LOAD_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/c/hgLoadBed");
+pub const BED_TO_BIG_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/c/bedToBigBed");
+pub const SCHEMA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/as/schema.as");
 
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];

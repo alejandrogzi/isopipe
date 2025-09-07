@@ -77,6 +77,7 @@ impl Job {
             PipelineStep::Orf => "",
             PipelineStep::Nmd => "isotools iso-nmd",
             PipelineStep::Polish => "isotools run",
+            PipelineStep::Load => "",
         };
 
         self.cmd.push_str(step_cmd);
