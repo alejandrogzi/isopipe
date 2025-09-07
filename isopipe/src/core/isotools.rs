@@ -683,7 +683,7 @@ pub fn polish(
                 .join(format!("{chr}.predictions.seqs_free.tsv"))
                 .display(),
             PRETTY_PY,
-            step_output_dir.join(chr).join(".bed").display(),
+            step_output_dir.join(chr).join("fusions.bed").display(),
             step_output_dir
                 .join(chr)
                 .join(format!("{chr}.predictions.seqs_fusions.tsv"))
