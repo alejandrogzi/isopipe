@@ -236,12 +236,12 @@ def parse_sam_into_dicts(original_sam: str, tmp_dir: str, cutoff=0, wiggle=0):
                 clip = -1
                 cols = line.split("\t")
                 my_id = cols[0]
-                unwrapped = my_id.split("_")
+                unwrapped = my_id.split(":")
                 for data in unwrapped:
-                    if data.startswith("3Clip"):
-                        clip = int(data.replace("3Clip", ""))
+                    if data.startswith("TC"):
+                        clip = int(data.replace("TC", ""))
                     if data.startswith("PolyA") and not data.startswith("PolyARead"):
-                        poly_a = int(data.replace("PolyA", ""))
+                        poly_a = int(data.replace("PA", ""))
                 if clip >= cutoff:
                     seq = cols[9]
                     # (+) strand
@@ -267,10 +267,10 @@ def parse_sam_into_dicts(original_sam: str, tmp_dir: str, cutoff=0, wiggle=0):
             chrom = cols[0]
             my_id = cols[3]
 
-            unwrapped = my_id.split("_")
+            unwrapped = my_id.split(":")
             for data in unwrapped:
-                if data.startswith("3Clip"):
-                    clip = int(data.replace("3Clip", ""))
+                if data.startswith("TC"):
+                    clip = int(data.replace("TC", ""))
 
             # 3' coord
             if strand == "+":

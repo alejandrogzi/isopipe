@@ -522,7 +522,7 @@ def parse() -> argparse.Namespace:
     >>> parse()
     """
     parser = argparse.ArgumentParser(
-        description="Run APPARENT to estimate poly(A) tail length from a chunked file"
+        description="Run Random Forest classifier to predict open-reading-frames"
     )
     parser.add_argument(
         "-b", "--blast", required=True, help="Path to BLAST results file"
