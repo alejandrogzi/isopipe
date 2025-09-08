@@ -702,13 +702,14 @@ pub fn polish(
 
         if step_output_dir.join(chr).join("fusions.bed").exists() {
             decisions += &format!(
-                "  && {} --reads {} --predictions {} --name fusions.bb.bed",
+                "  && {} --reads {} --predictions {} --name fusions.bb.bed --outdir {}",
                 PRETTY_PY,
                 step_output_dir.join(chr).join("fusions.bed").display(),
                 step_output_dir
                     .join(chr)
                     .join(format!("{chr}.predictions.seqs_fusions.tsv"))
                     .display(),
+                step_output_dir.join(chr).display()
             )
         }
 
