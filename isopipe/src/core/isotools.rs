@@ -649,7 +649,7 @@ pub fn polish(
         let reads = subdir.join("seqs_free").join(format!("{chr}.reads.bed"));
 
         let mut cleaning = format!(
-            "cat {} >> {} && mv {} {}",
+            "cat {} >> {} && cp {} {}",
             nmd.display(),
             step_output_dir.join(chr).join("nmd.bed").display(),
             preds.display(),
