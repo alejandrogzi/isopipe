@@ -107,10 +107,8 @@ pub fn iso_nmd(
                         // INFO: takes care of step8 tmp files except predictions
                         if !keep_temp {
                             let rest = format!(
-                                " && rm {} {} {}",
-                                file.parent().unwrap().join("tmp*fa").display(),
-                                file.parent().unwrap().join("tmp*reduced*").display(),
-                                file.parent().unwrap().join("tmp*index").display(),
+                                r" && find {} \( -name '*fa' -or -name '*reduced*' -or -name '*index' \) -exec rm {{}} ';'",
+                                file.parent().unwrap().display()
                             );
 
                             cmd += &rest;
@@ -640,8 +638,6 @@ pub fn polish(
         let bed = subdir.join("seqs_free").join(format!("{}.reads.bed", chr));
         let outdir = step_output_dir.join(chr);
 
-        // INFO: need to specify cleanup to include it in the cmd!
-        let tmp = subdir.join("*/tmp*"); // INFO: remove anything tmp
         let nmd = subdir.join("*/*nmd.bed"); // INFO: move nmds from free/fusions
         let preds = subdir.join("*/*predictions*tsv"); // INFO: move predictions from free/fusions
 
@@ -658,7 +654,7 @@ pub fn polish(
 
         if fsn.exists() {
             cleaning += &format!(
-                " && mv {} {}",
+                " && cp {} {}",
                 fsn.display(),
                 step_output_dir.join(chr).join("fusions.bed").display()
             );
@@ -725,7 +721,13 @@ pub fn polish(
         );
 
         if !keep_temp {
-            let rest = format!(" && rm {}", tmp.display());
+            // INFO: need to specify cleanup to include it in the cmd!
+            let tmp = subdir.join("*"); // INFO: remove anything tmp
+
+            let rest = format!(
+                " && find {} -type f -name 'tmp*' -exec rm {{}} ';'",
+                tmp.display()
+            );
             cmd += &rest;
         }
 
