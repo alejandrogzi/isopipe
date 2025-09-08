@@ -666,7 +666,7 @@ pub fn polish(
 
         if reads.exists() {
             cleaning += &format!(
-                " && mv {} {}",
+                " && cp {} {}",
                 reads.display(),
                 step_output_dir.join(chr).join("raw_reads.bed").display()
             );
