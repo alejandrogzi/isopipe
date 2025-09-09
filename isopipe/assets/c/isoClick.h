@@ -1,7 +1,8 @@
-/* isoClassClick - click handling for IsoSeq classification tracks */
+/* isoClick - click handling for IsoSeq classification tracks */
 
 /*
  * author: Alejandro Gonzales-Irribarren, 2025
+ * credits: Michael Hiller, Bogdan Kirilenko
  * email = "alejandrxgzi@gmail.com"
  * github = "https://github.com/alejandrogzi"
  * version = "0.0.1"
