@@ -12,6 +12,17 @@ pub fn load(
     let chrom_sizes = config.get_step_custom_field(step, CHROM_SIZES);
     let package = config.get_package_from_step(step);
 
+    // INFO: create bed and bb dirs
+    for subdir in ["bed", "bb"] {
+        let path = step_output_dir.join(subdir);
+        std::fs::create_dir_all(&path).unwrap_or_else(|e| {
+            panic!(
+                "ERROR: could not create {} directory -> {:?}. {e}",
+                subdir, path
+            )
+        });
+    }
+
     let categories = [
         "pass.bed",
         "trash.bed",
@@ -33,7 +44,7 @@ pub fn load(
             Job::from(format!(
                 "cat {} >> {}",
                 pattern.display(),
-                step_output_dir.join(out).display()
+                step_output_dir.join("bed").join(out).display()
             ))
         })
         .collect();
@@ -49,7 +60,7 @@ pub fn load(
     );
 
     // INFO: each .bed in step11_load should be converted into bigBed
-    for bed in std::fs::read_dir(&step_output_dir)
+    for bed in std::fs::read_dir(&step_output_dir.join("bed"))
         .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", step_output_dir))
         .flatten()
         .filter(|e| e.path().is_file())
@@ -65,7 +76,7 @@ pub fn load(
             "{BED_TO_BIG_BED} -tab -sort -as={SCHEMA} -type=bed12+25 {} {} {}",
             input.display(),
             chrom_sizes,
-            step_output_dir.join(bb).display()
+            step_output_dir.join("bb").join(bb).display()
         );
 
         jobs.push(Job::from(cmd));
