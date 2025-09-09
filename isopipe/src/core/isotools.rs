@@ -645,11 +645,11 @@ pub fn polish(
         let reads = subdir.join("seqs_free").join(format!("{chr}.reads.bed"));
 
         let mut cleaning = format!(
-            "cat {} >> {} && cp {} {}",
+            "cat {} >> {} && cat {} >> {}",
             nmd.display(),
             step_output_dir.join(chr).join("nmd.bed").display(),
             preds.display(),
-            step_output_dir.join(chr).display(),
+            step_output_dir.join(chr).join("predictions.tsv").display(),
         );
 
         if fsn.exists() {
@@ -671,13 +671,13 @@ pub fn polish(
         // INFO: subdirs should have then -> nmd.bed, fusions.bed, raw_reads.bed
         // INFO: an optionally -> {chr}.predictions.seqs_fusions.tsv, {chr}.predictions.seqs_free.tsv
         let mut decisions = format!(
-            "source {} && {} --reads {} --predictions {} --introns {} --descriptor {} && {} --reads {} --predictions {} --name nmd.bb.bed",
+            "source {} && {} --reads {} --predictions {} --introns {} --descriptor {} --outdir {} && {} --reads {} --predictions {} --name nmd.bed --nmd --outdir {}",
             TAI_VENV,
             PRETTY_PY,
             step_output_dir.join(chr).join("raw_reads.bed").display(),
             step_output_dir
                 .join(chr)
-                .join(format!("{chr}.predictions.seqs_free.tsv"))
+                .join(format!("predictions.tsv"))
                 .display(),
             step_output_dir
                 .join(chr)
@@ -687,23 +687,29 @@ pub fn polish(
                 .join(chr)
                 .join("global_descriptor.tsv")
                 .display(),
+            step_output_dir
+                .join(chr)
+                .display(),
             PRETTY_PY,
             step_output_dir.join(chr).join("nmd.bed").display(),
             step_output_dir
                 .join(chr)
-                .join(format!("{chr}.predictions.seqs_free.tsv"))
+                .join(format!("predictions.tsv"))
+                .display(),
+            step_output_dir
+                .join(chr)
                 .display(),
 
         );
 
         if step_output_dir.join(chr).join("fusions.bed").exists() {
             decisions += &format!(
-                "  && {} --reads {} --predictions {} --name fusions.bb.bed --outdir {}",
+                "  && {} --reads {} --predictions {} --name fusions.bed --outdir {}",
                 PRETTY_PY,
                 step_output_dir.join(chr).join("fusions.bed").display(),
                 step_output_dir
                     .join(chr)
-                    .join(format!("{chr}.predictions.seqs_fusions.tsv"))
+                    .join(format!("predictions.tsv"))
                     .display(),
                 step_output_dir.join(chr).display()
             )

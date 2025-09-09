@@ -131,10 +131,10 @@ def run(args: argparse.Namespace):
     reads = pd.read_csv(args.reads, sep="\t", header=None, names=BED12_COLS)
 
     if not args.introns or not args.descriptor:
-        schema = get_pretty_descriptor(reads, args.predictions)
+        schema = get_pretty_descriptor(reads, args.predictions, args.nmd)
     else:
         schema = get_pretty_descriptor(
-            reads, args.predictions, args.descriptor, args.introns
+            reads, args.predictions, args.nmd, args.descriptor, args.introns
         )
 
     log.info(f"INFO: got schema for -> {args.reads}. Will start deciding...")
@@ -253,6 +253,7 @@ def decide(
 def get_pretty_descriptor(
     reads: pd.DataFrame,
     predictions: PathLike,
+    nmd: bool = False,
     global_descriptor: Optional[PathLike] = None,
     ref_introns: Optional[PathLike] = None,
 ) -> pd.DataFrame:
@@ -289,7 +290,7 @@ def get_pretty_descriptor(
     if not global_descriptor or not ref_introns:
         sources = [
             reads,
-            get_orf_data(reads, predictions),
+            get_orf_data(reads, predictions, nmd),
             get_tags(reads),
         ]
     else:
@@ -1238,7 +1239,7 @@ def get_orf_metadata(path: PathLike) -> pd.DataFrame:
 
 
 def get_orf_data(
-    global_descriptor: pd.DataFrame, predictions: PathLike
+    global_descriptor: pd.DataFrame, predictions: PathLike, nmd: bool = False
 ) -> pd.DataFrame:
     """
     Extract and merge ORF prediction data with sequence identifiers.
@@ -1273,9 +1274,15 @@ def get_orf_data(
     merged = pd.merge(
         ids_df, orf, on="prefix", how="left"
     )  # INFO: orf contains also NMDs
-    merged = merged[
-        merged.apply(lambda r: r["suffix_main"].endswith(r["suffix"]), axis=1)
-    ]
+
+    if not nmd:
+        merged = merged[
+            merged.apply(lambda r: r["suffix_main"].endswith(r["suffix"]), axis=1)
+        ]
+    else:
+        merged = merged[
+            merged.apply(lambda r: r["suffix_main"].rsplit("#", 1)[0].endswith(r["suffix"]), axis=1)
+        ]
 
     return merged[["id", "O_read_orf_score", "O_metadata_html"]]
 
@@ -1313,6 +1320,12 @@ def parse() -> argparse.Namespace:
     parser.add_argument(
         "-bb",
         "--bigbed",
+        action="store_const",
+        const=True,
+        metavar="Flag to activate bigBed conversion",
+    )
+    parser.add_argument(
+        "--nmd",
         action="store_const",
         const=True,
         metavar="Flag to activate bigBed conversion",
