@@ -10,7 +10,7 @@
 
 #include "common.h"
 #include "hgc.h"
-#include "isoClassClick.h"
+#include "isoClick.h"
 #include "string.h"
 #include "htmshell.h"
 #include "chromAlias.h"
