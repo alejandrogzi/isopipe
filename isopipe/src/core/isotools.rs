@@ -702,12 +702,7 @@ pub fn polish(
 
         );
 
-        if step_output_dir.join(chr).join("fusions.bed").exists() {
-            log::warn!(
-                "WARN: {:?} does not exist, skipping...",
-                step_output_dir.join(chr).join("fusions.bed")
-            );
-
+        if fsn.exists() {
             decisions += &format!(
                 "  && {} --reads {} --predictions {} --name fusions.bed --outdir {}",
                 PRETTY_PY,
@@ -718,6 +713,11 @@ pub fn polish(
                     .display(),
                 step_output_dir.join(chr).display()
             )
+        } else {
+            log::warn!(
+                "WARN: {:?} does not exist, skipping...",
+                step_output_dir.join(chr).join("fusions.bed")
+            );
         }
 
         let mut cmd = format!(
