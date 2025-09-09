@@ -945,10 +945,7 @@ def row_to_html(
     # Columns to include (skip 'id')
     cols = [c for c in row.keys() if c not in exclude]
 
-    # Build header
     header = "".join(f"<th>{escape(col)}</th>" for col in cols)
-
-    # Build body
     body = "".join(f"<td>{escape(str(row.get(col)))}</td>" for col in cols)
 
     if extensible_cols and extensible_lookup is not None:
@@ -960,8 +957,7 @@ def row_to_html(
     header_html = "<tr>" + header + "</tr>"
     body_html = "<tr>" + body + "</tr>"
 
-    # Assemble table
-    table_html = f"""<table border="1" style="border-collapse:collapse;"><thead>{header_html}</thead><tbody>{body_html}</tbody></table>"""
+    table_html = f"<table border='1' style='border-collapse:collapse;'><thead>{header_html}</thead><tbody>{body_html}</tbody></table>"
     return table_html.strip()
 
 
@@ -1031,7 +1027,6 @@ def nested_row_to_html(
             header += f"<th>{escape(col)}</th>"
     header_html = f"<tr>{header}</tr>"
 
-    # Build body
     body_rows = []
     for event in range(events):
         cells = []
@@ -1051,9 +1046,7 @@ def nested_row_to_html(
 
     body_html = "".join(body_rows)
 
-    # Assemble table
-    return f"""<table border="1" style="border-collapse:collapse;">
-<thead>{header_html}</thead><tbody>{body_html}</tbody></table>""".strip()
+    return f"<table border='1' style='border-collapse:collapse;'><thead>{header_html}</thead><tbody>{body_html}</tbody></table>".strip()
 
 
 def get_polya_data(global_descriptor: pd.DataFrame) -> pd.DataFrame:
