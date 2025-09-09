@@ -215,12 +215,14 @@ def decide(
     if "HAS_RT_INTRON" in ignores:
         remaining_reads = schema.copy()
     else:
-        remaining_reads, df2 = [
-            x for _, x in schema.groupby(schema[INTRON_STATUS_COL] == HAS_RT_INTRON)
-        ]
+        grouped = dict(tuple(schema.groupby(schema[INTRON_STATUS_COL] == HAS_RT_INTRON)))
 
-        log.info(f"INFO: Found {len(df2)} flawed reads with RT-introns")
-        buckets[HAS_RT_BUCKET] = df2
+        remaining_reads = grouped.get(False, schema.iloc[0:0])  # INFO: empty if all True
+        df2 = grouped.get(True, None)
+
+        if df2 is not None and not df2.empty:
+            log.info(f"INFO: Found {len(df2)} flawed reads with RT-introns")
+            buckets[HAS_RT_BUCKET] = df2
 
     # INFO: slice to relevant columns
     sliced = remaining_reads[READ_DECIDE_COLUMNS].copy().reset_index(drop=True)
