@@ -29,7 +29,12 @@ pub fn load(
         .map(|target| {
             let pattern = input_dir.join("*").join("decision").join(target);
             let out = target; // INFO: output named same as input basename
-            Job::from(format!("cat {} >> {}", pattern.display(), out))
+
+            Job::from(format!(
+                "cat {} >> {}",
+                pattern.display(),
+                step_output_dir.join(out).display()
+            ))
         })
         .collect();
 

@@ -703,6 +703,11 @@ pub fn polish(
         );
 
         if step_output_dir.join(chr).join("fusions.bed").exists() {
+            log::warn!(
+                "WARN: {:?} does not exist, skipping...",
+                step_output_dir.join(chr).join("fusions.bed")
+            );
+
             decisions += &format!(
                 "  && {} --reads {} --predictions {} --name fusions.bed --outdir {}",
                 PRETTY_PY,
