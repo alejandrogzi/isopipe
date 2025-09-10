@@ -11,7 +11,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{BedColumn, BedColumnValue, SCALE, bed_to_struct_collection};
+use config::{bed_to_struct_collection, BedColumn, BedColumnValue, SCALE};
 use dashmap::{DashMap, DashSet};
 use hashbrown::HashMap;
 use isopipe::config::depure;
@@ -375,11 +375,11 @@ fn cannonical(
                     }
                     "-" => {
                         //
-                        if orf_start - 3 < gp.start {
+                        if orf_start - 3 < SCALE - gp.end {
                             log::warn!(
                                 "WARN: translationAi predicted a non-stop ORF: {orf:?} for {gp:?}"
                             );
-                            orf_start = gp.start
+                            orf_start = gp.end
                         } else {
                             orf_start -= 3;
                         }
@@ -594,12 +594,12 @@ fn indexed(
                         }
                     }
                     "-" => {
-                        // WARN: scalling down gp.start because orf_start represents scaled orf_end
-                        if orf_start - 3 < SCALE - gp.start {
+                        // WARN: scalling down gp.end because orf_start represents scaled orf_end
+                        if orf_start - 3 < SCALE - gp.end {
                             log::warn!(
                                 "WARN: translationAi predicted a non-stop ORF: {orf:?} with mapped coords {orf_start}:{orf_end} for {gp:?} because {orf_start} - 3 < {}", SCALE - gp.start
                             );
-                            orf_start = gp.start
+                            orf_start = gp.end
                         } else {
                             orf_start -= 3;
                         }
