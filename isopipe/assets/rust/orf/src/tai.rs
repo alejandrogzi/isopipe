@@ -11,7 +11,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{BedColumn, BedColumnValue, SCALE, bed_to_struct_collection};
+use config::{bed_to_struct_collection, BedColumn, BedColumnValue, SCALE};
 use dashmap::{DashMap, DashSet};
 use hashbrown::HashMap;
 use isopipe::config::depure;
@@ -578,8 +578,32 @@ fn indexed(
 
                 // INFO: stop is inclusive, so we add 3 to include the stop codon
                 match strand.as_str() {
-                    "+" => orf_end += 3,
-                    "-" => orf_start -= 3,
+                    // WARN: some weird cases where the tool predicts a non-stopped ORF:
+                    // WARN: R146001_manual_scaffold_1.p1    102     2199
+                    // WARN: sizes -> 144,117,332,112,120,117,138,78,66,270,246,137,79,156,87 = 2199
+                    // WARN: record -> manual_scaffold_1 189532046 189543938 R146001 60 + 189532148 189543941
+                    // WARN: would be out-of-bounds if we add +3 in this case
+                    "+" => {
+                        if orf_end + 3 > gp.end {
+                            log::warn!(
+                                "WARN: translationAi predicted a non-stop ORF: {orf:?} for {gp:?}"
+                            );
+                            orf_end = gp.end
+                        } else {
+                            orf_end += 3
+                        }
+                    }
+                    "-" => {
+                        //
+                        if orf_start - 3 < gp.start {
+                            log::warn!(
+                                "WARN: translationAi predicted a non-stop ORF: {orf:?} for {gp:?}"
+                            );
+                            orf_start = gp.start
+                        } else {
+                            orf_start -= 3;
+                        }
+                    }
                     _ => panic!("ERROR: unexpected strand value: {}", strand),
                 }
 
