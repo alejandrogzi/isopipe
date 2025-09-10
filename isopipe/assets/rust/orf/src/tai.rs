@@ -11,7 +11,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{bed_to_struct_collection, BedColumn, BedColumnValue, SCALE};
+use config::{BedColumn, BedColumnValue, SCALE, bed_to_struct_collection};
 use dashmap::{DashMap, DashSet};
 use hashbrown::HashMap;
 use isopipe::config::depure;
@@ -586,7 +586,7 @@ fn indexed(
                     "+" => {
                         if orf_end + 3 > gp.end {
                             log::warn!(
-                                "WARN: translationAi predicted a non-stop ORF: {orf:?} with mapped coords {orf_start}:{orf_end} for {gp:?} because {orf_end} + 3 > {gp.end}",
+                                "WARN: translationAi predicted a non-stop ORF: {orf:?} with mapped coords {orf_start}:{orf_end} for {gp:?} because {orf_end} + 3 > {}", gp.end,
                             );
                             orf_end = gp.end
                         } else {
