@@ -45,6 +45,11 @@ pub const KEEP_REJECTED: &str = "keep_rejected";
 pub const PARALLEL_MODE: &str = "parallel_mode";
 pub const KEEP_TEMP: &str = "keep_temp";
 pub const CHROM_SIZES: &str = "chrom_sizes";
+pub const SERVER: &str = "server";
+pub const UPLOAD_PUBLIC: &str = "upload-public";
+pub const USER: &str = "user";
+pub const TARGET: &str = "target";
+pub const WEB: &str = "web";
 
 // project-wide pub const | names
 pub const ISOPIPE: &str = "isopipe";
