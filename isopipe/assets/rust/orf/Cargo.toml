@@ -20,14 +20,14 @@ memmap2 = "0.9.5"
 dashmap = { version = "6", features = ["rayon"] }
 smol_str = "0.2.2"
 memchr = "2.7.4"
-iso-pack = { path = "../../../isotools/isotools/iso-pack" }
-config = { path = "../../../isotools/isotools/config" }
+iso-pack = { path = "../../../../isotools/isotools/iso-pack" }
+config = { path = "../../../../isotools/isotools/config" }
 hashbrown = { version = "0.15", features = ["rayon"] }
 rayon = "1.10.0"
 num_cpus = "1.16.0"
 regex = "1.11.1"
 flate2 = "1.0.20"
-isopipe = { path = "../..", features = ["cfg"], default-features = false }
+isopipe = { path = "../../..", features = ["cfg"], default-features = false }
 extract = { path = "../extract", features = ["read"], default-features = false }
 
 [profile.release]
