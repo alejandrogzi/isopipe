@@ -586,7 +586,10 @@ fn indexed(
                     "+" => {
                         if orf_end + 3 > gp.end {
                             log::warn!(
-                                "WARN: translationAi predicted a non-stop ORF: {orf:?} with mapped coords {orf_start}:{orf_end} for {gp:?} because {orf_end} + 3 > {}", gp.end,
+                                "WARN: translationAi predicted a non-stop ORF: {orf:?}
+                                with mapped coords {orf_start}:{orf_end} for {gp:?}
+                                because {orf_end} + 3 > {}",
+                                gp.end,
                             );
                             orf_end = gp.end
                         } else {
@@ -597,7 +600,10 @@ fn indexed(
                         // WARN: scalling down gp.end because orf_start represents scaled orf_end
                         if orf_start - 3 < SCALE - gp.end {
                             log::warn!(
-                                "WARN: translationAi predicted a non-stop ORF: {orf:?} with mapped coords {orf_start}:{orf_end} for {gp:?} because {orf_start} - 3 < {}", SCALE - gp.start
+                                "WARN: translationAi predicted a non-stop ORF: {orf:?}
+                                with mapped coords {orf_start}:{orf_end} for {gp:?}
+                                because {orf_start} - 3 < {}",
+                                SCALE - gp.end
                             );
                             orf_start = gp.end
                         } else {
