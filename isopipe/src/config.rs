@@ -1649,6 +1649,35 @@ fn run_command(cmd: &mut Command) -> ExitStatus {
     }
 }
 
+/// Get the RGB color string for a given bed file category.
+///
+/// # Arguments
+///
+/// * `target` - A string slice representing the bed file category to look up.
+///
+/// # Returns
+///
+/// A static string slice containing the RGB color values in "R,G,B" format.
+/// Returns "255,0,0" (red) as the default color if the target is not found.
+///
+/// # Example
+///
+/// ``` rust, no_run
+/// let color = get_color("rt_reads.bed");
+/// assert_eq!(color, "0,255,0");
+///
+/// // Unknown category returns default red
+/// let default_color = get_color("unknown.bed");
+/// assert_eq!(default_color, "255,0,0");
+/// ```
+pub fn get_color(target: &str) -> &'static str {
+    COLOR_SCHEMA
+        .iter()
+        .find(|(key, _)| *key == target)
+        .map(|(_, value)| *value)
+        .unwrap_or("255,0,0") // INFO: default red
+}
+
 /// Builds the isotools submodule.
 ///
 /// # Example

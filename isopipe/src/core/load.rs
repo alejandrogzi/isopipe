@@ -99,11 +99,24 @@ pub fn load(
             let pattern = input_dir.join("*").join("decision").join(target);
             let out = target; // INFO: output named same as input basename
 
-            Job::from(format!(
+            let mut cmd = format!(
                 "cat {} >> {}",
                 pattern.display(),
                 step_output_dir.join("bed").join(out).display()
-            ))
+            );
+
+            // INFO: ignore nmd and pass bc those colors are ok
+            if *target == "nmd.bed" || *target == "pass.bed" {
+                // INFO: gawk -i inplace -F'\t' 'BEGIN{OFS="\t"} {$9="255,0,0"; print}' rt_reads.bed
+                cmd = format!(
+                    "{cmd} && gawk -i inplace -F'\\t' 'BEGIN{{OFS=\"\\t\"}} {{$9=\"{}\"; print}}' {}",
+                    get_color(*target),
+                    step_output_dir.join("bed").join(out).display()
+                );
+
+            }
+
+            Job::from(cmd)
         })
         .collect();
 

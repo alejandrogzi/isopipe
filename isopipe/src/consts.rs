@@ -112,16 +112,21 @@ pub const DEFAULT_THREADS: &str = "default_threads";
 pub const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 pub const RUN_ID_LEN: usize = 4;
 pub const SGN_COLOR: &str = "51,153,255";
+pub const HG_LOAD_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/c/hgLoadBed");
+pub const BED_TO_BIG_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/c/bedToBigBed");
+pub const SCHEMA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/as/schema.as");
+pub const ORF_CHUNKS: usize = 50000; // 50k transcripts
+
+// tool binaries or scripts
+pub const PREDICT_PY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/py/predict/predict.py");
 pub const ISOTOOLS_RELEASE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../isotools/isotools/target/release"
 );
-pub const ORF_CHUNKS: usize = 50000; // 50k transcripts
 pub const ORF_RELEASE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/assets/rust/orf/target/release/orf"
 );
-pub const PREDICT_PY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/py/predict/predict.py");
 pub const PRETTY_PY: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/assets/py/pretty/pretty_descriptor.py"
@@ -138,14 +143,12 @@ pub const APARENT_PY: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../isotools/isotools/iso-polya/assets/run_aparent.py"
 );
-pub const HG_LOAD_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/c/hgLoadBed");
-pub const BED_TO_BIG_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/c/bedToBigBed");
-pub const SCHEMA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/as/schema.as");
 
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];
 pub const CLUSTERING_CATEGORIES: &[&str] = &["hq", "lq", "singletons"];
 pub const FUSION_TYPES: &[&str] = &["fusions", "free", "review", "fakes"];
+pub const ALN_POLYA_FILES: &[&str] = &[ALN_POLYA_SGN, ALN_POLYA_ACCEPT, ALN_POLYA_REJECT];
 pub const FUSION_FILES: &[&str] = &[
     "fusions.free.bed",
     "fusions.fusions.bed",
@@ -160,7 +163,6 @@ pub const GZ_EXTENSIONS: &[&str] = &[
     ".singletons.fasta.gz",
     ".singletons.fa.gz",
 ];
-pub const ALN_POLYA_FILES: &[&str] = &[ALN_POLYA_SGN, ALN_POLYA_ACCEPT, ALN_POLYA_REJECT];
 pub const MUST_FILL: &[&str] = &[
     OUTPUT_DIR,
     INPUT_DIR,
@@ -179,4 +181,12 @@ pub const MUST_FILL: &[&str] = &[
     "target",
     "web",
     "chrom_sizes",
+];
+pub const COLOR_SCHEMA: &[(&str, &str)] = &[
+    ("trash.bed", "255,41,0"),           // INFO: bright-red
+    ("rt_reads.bed", "233,21,237"),      // INFO: pink
+    ("retention.bed", "207,125,43"),     // INFO: orange
+    ("intraprimming.bed", "173,158,43"), // INFO: dark-yellow
+    ("truncation.bed", "102,86,61"),     // INFO: brown
+    ("fusions.bed", "128,60,171"),       // INFO: purple
 ];
