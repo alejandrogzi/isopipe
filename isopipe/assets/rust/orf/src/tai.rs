@@ -605,7 +605,7 @@ fn indexed(
                                 because {orf_start} - 3 < {}",
                                 SCALE - gp.end
                             );
-                            orf_start = gp.end
+                            orf_start = SCALE - gp.end
                         } else {
                             orf_start -= 3;
                         }
