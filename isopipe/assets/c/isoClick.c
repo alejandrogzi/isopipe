@@ -157,10 +157,10 @@ printf("<details open>\n"
        "  <h4>Spliced RT intron details</h4>\n"
        "  %s\n"
        "</details>\n",
-       info->R_metadata,
-       info->R_retentions,
-       info->R_retained_rt_introns,
-       info->R_spliced_rt_introns);
+       info->R_metadata_html,
+       info->R_retentions_html,
+       info->R_retains_rt_intron_html,
+       info->R_has_rt_html);
 
 htmlHorizontalLine();
 
@@ -171,7 +171,7 @@ printf("<details open>\n"
        "  <h4>Truncation details</h4>\n"
        "  %s\n"
        "</details>\n",
-       info->T_metadata);
+       info->T_metadata_html);
 
 htmlHorizontalLine();
 
@@ -182,7 +182,7 @@ printf("<details open>\n"
        "  <h4>Intraprimming details</h4>\n"
        "  %s\n"
        "</details>\n",
-       info->P_metadata);
+       info->P_metadata_html);
 
 htmlHorizontalLine();
 
@@ -193,7 +193,7 @@ printf("<details open>\n"
        "  <h4>ORF details</h4>\n"
        "  %s\n"
        "</details>\n",
-       info->O_metadata);
+       info->O_metadata_html);
 
 
 hPrintf("<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css\">");
