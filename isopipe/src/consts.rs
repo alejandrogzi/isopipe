@@ -161,3 +161,22 @@ pub const GZ_EXTENSIONS: &[&str] = &[
     ".singletons.fa.gz",
 ];
 pub const ALN_POLYA_FILES: &[&str] = &[ALN_POLYA_SGN, ALN_POLYA_ACCEPT, ALN_POLYA_REJECT];
+pub const MUST_FILL: &[&str] = &[
+    OUTPUT_DIR,
+    INPUT_DIR,
+    GENOME,
+    PRIMERS,
+    MEMORY,
+    TIME,
+    NUM_THREADS,
+    DATABASE,
+    ORF_MIN_LEN,
+    TOGA,
+    "junc-bed",
+    "bigwig",
+    "user",
+    "server",
+    "target",
+    "web",
+    "chrom_sizes",
+];

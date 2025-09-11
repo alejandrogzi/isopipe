@@ -230,7 +230,7 @@ impl Config {
     ///
     /// config.update_package();
     /// ```
-    #[deprecated = "Dropped loading modules on the fly, no reason to update packages"]
+    #[deprecated = "DEPRECATED: Dropped loading modules on the fly, no reason to update packages"]
     pub fn update_packages(&mut self) {
         let steps = &self.steps;
 
@@ -326,19 +326,26 @@ impl Config {
     /// let config = Config::new();
     /// config.load().unwrap();
     /// ```
-    pub fn load(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.set_run_id();
-
-        // INFO: since update_packages() is deprecated, we check if
-        // any isotools related step remains -> WARN: deprecated also for now
-        for step in &self.steps {
-            match step {
-                // PipelineStep::Fusion => build_isotools().expect("ERROR: Could not build isotools!"),
-                _ => (),
-            }
+    pub fn load(mut self) -> Self {
+        // INFO: only way possible to reach this point is with general run
+        if self.steps.is_empty() {
+            self.steps = vec![
+                PipelineStep::Ccs,
+                PipelineStep::Lima,
+                PipelineStep::Refine,
+                PipelineStep::Cluster,
+                PipelineStep::Minimap,
+                PipelineStep::Polya,
+                PipelineStep::Fusion,
+                PipelineStep::Orf,
+                PipelineStep::Nmd,
+                PipelineStep::Polish,
+                PipelineStep::Load,
+            ];
         }
 
-        Ok(())
+        self.set_run_id();
+        self
     }
 
     /// In-place modification of the steps in the Config
@@ -370,13 +377,84 @@ impl Config {
     ///
     /// assert_eq!(config.steps().len(), 6);
     /// ```
-    pub fn aware(&mut self, args: StepArgs) -> &mut Self {
+    pub fn aware(mut self, args: StepArgs) -> Self {
         let steps = args
             .abs_steps()
             .expect("ERROR: An error ocurred while materializing steps!");
 
         self.set_steps(steps);
         self.update_params();
+
+        self
+    }
+
+    /// Validates that all required parameters are filled for each step in the Config
+    ///
+    /// This method iterates through all steps in the configuration and checks that
+    /// parameters marked as required (defined in `MUST_FILL`) contain non-empty values.
+    /// If any required parameter is empty, the method will panic with a descriptive error.
+    ///
+    /// # Returns
+    ///
+    /// A Config struct with validated parameters.
+    ///
+    /// # Panics
+    ///
+    /// - If a step referenced in `self.steps` is not found in `self.params`
+    /// - If any parameter defined in `MUST_FILL` is empty for any step
+    ///
+    /// # Notes
+    ///
+    /// This method should be called after `aware()` to ensure the configuration is
+    /// properly validated before use. The `MUST_FILL` constant should contain the
+    /// names of parameters that are required for proper execution.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// let mut config = Config::new();
+    /// let args = StepArgs {
+    ///     config: PathBuf::from("config.toml"),
+    ///     from: "0".to_string(),
+    ///     to: "3".to_string(),
+    ///     only: None,
+    ///     skip: None,
+    ///     dry_run: false,
+    ///     verbose: false,
+    ///     quiet: false,
+    /// };
+    ///
+    /// config = config.aware(args).check();
+    /// // If all required parameters are filled, execution continues normally
+    /// // If any required parameter is missing, this will panic with an error message
+    /// ```
+    pub fn check(mut self) -> Self {
+        log::debug!(
+            "DEBUG: checking if all must-be-filled keys are filled in {:?}...",
+            &self.steps
+        );
+
+        for step in &self.steps {
+            let params = self.params.get_mut(step).unwrap_or_else(|| {
+                error!(
+                    "ERROR: Step {} not found in params! Please check config.toml",
+                    step
+                );
+                std::process::exit(1);
+            });
+
+            log::debug!("DEBUG: checking step {} with params {params:?}", step);
+
+            for (key, value) in params.values.iter_mut() {
+                if MUST_FILL.contains(&key.as_str()) && value.is_empty() {
+                    error!(
+                        "ERROR: Step {} parameter {} not filled! Please check config.toml",
+                        step, key
+                    );
+                    std::process::exit(1);
+                }
+            }
+        }
 
         self
     }
@@ -585,20 +663,28 @@ impl Config {
     /// assert_eq!(output, PathBuf::from("output_20210901120000"));
     /// ```
     pub fn create_global_output_dir(&self) -> PathBuf {
-        let dir_prefix = self.get_dir_prefix();
+        let dir_prefix = self.get_dir_prefix().unwrap_or_else(|e| {
+            panic!("ERROR: dir_prefix key in toml not filled -> {e}. Fill it!")
+        });
+
+        let global = self
+            .global
+            .get("global_output_dir")
+            .filter(|s| !s.is_empty()) // eliminate empty strings
+            .unwrap_or_else(|| {
+                panic!("ERROR: global_output_dir key in toml missing or empty. Fill it!")
+            })
+            .to_path_buf();
 
         let rs = format!(
             "{}/{dir_prefix}{OUTPUT}_{}",
-            self.global
-                .get("global_output_dir")
-                .expect("ERROR: output not found!")
-                .to_path_buf()
-                .display(),
+            global.display(),
             chrono::Local::now().format("%Y%m%d%H%M")
         )
         .into();
 
-        std::fs::create_dir_all(&rs).expect("ERROR: Could not create output directory!");
+        std::fs::create_dir_all(&rs)
+            .unwrap_or_else(|e| panic!("ERROR: Could not create output directory -> {e}!"));
 
         rs
     }
@@ -620,7 +706,7 @@ impl Config {
     pub fn get_data_prefix(&self) -> String {
         self.global
             .get("data_prefix")
-            .expect("ERROR: data_prefix not found!")
+            .unwrap_or_else(|| panic!("ERROR: data_prefix not found in toml. Fill it!"))
             .to_string()
     }
 
@@ -638,16 +724,20 @@ impl Config {
     ///
     /// assert_eq!(data_prefix, "data_");
     /// ```
-    pub fn get_dir_prefix(&self) -> String {
+    pub fn get_dir_prefix(&self) -> Result<String, Box<dyn std::error::Error>> {
         if self.global.contains_key("dir_prefix") {
-            return self
+            return Ok(self
                 .global
                 .get("dir_prefix")
-                .expect("ERROR: dir_prefix not found in config.toml!")
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: dir_prefix not found in toml. Update config using github template!"
+                    )
+                })
                 .to_string()
-                + "_";
+                + "_");
         } else {
-            return String::from("");
+            return Ok(String::from(""));
         }
     }
 
@@ -843,22 +933,27 @@ impl Config {
         let handle = self
             .metadata
             .get_mut(RUN_ID)
-            .expect("ERROR: RUN_ID not found in metadata!");
+            .unwrap_or_else(|| panic!("ERROR: RUN_ID not found in metadata!"));
 
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .expect("ERROR: Time went backwards")
+            .unwrap_or_else(|e| panic!("ERROR: Time went backwards -> {e}"))
             .as_nanos();
 
         let mut id = String::with_capacity(RUN_ID_LEN);
 
-        // Use simple deterministic mixing to extract characters
+        // INFO: use simple deterministic mixing to extract characters
         let mut hash = now;
         for _ in 0..RUN_ID_LEN {
             let idx = (hash % (CHARSET.len() as u128)) as usize;
             id.push(CHARSET[idx] as char);
             hash /= 7; // Crude entropy mixing
         }
+
+        info!(
+            "INFO: succesfully created run_id for current process: {}",
+            id
+        );
 
         *handle = id;
     }
@@ -1414,6 +1509,25 @@ impl ParamValue {
     pub fn to_bool(&self) -> bool {
         match self {
             ParamValue::Bool(b) => *b,
+            _ => false,
+        }
+    }
+    /// Check is ParamValue is empty
+    ///
+    /// # Returns
+    ///
+    /// A boolean.
+    ///
+    /// # Example
+    ///
+    /// ``` rust, no_run
+    /// let value = ParamValue::Str("");
+    ///
+    /// assert_eq!(value.is_empty(), true);
+    /// ```
+    pub fn is_empty(&self) -> bool {
+        match self {
+            ParamValue::Str(s) => s.is_empty(),
             _ => false,
         }
     }

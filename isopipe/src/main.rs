@@ -8,6 +8,8 @@ use isopipe::{
     executor::manager::ParallelManager,
 };
 
+#[allow(unused_variables)]
+
 fn main() {
     let start = std::time::Instant::now();
     let args: Args = Args::parse();
@@ -27,14 +29,10 @@ fn main() {
 
     match args.command {
         SubArgs::Run { args } => {
-            // args.check().unwrap_or_else(|e| {
-            //     error!("{}", e);
-            //     std::process::exit(1);
-            // });
-
-            let mut config = isopipe::config::Config::read(args.config)
-                .expect("ERROR: Could not read config file");
-            config.load().expect("ERROR: Could not load config file");
+            let config = isopipe::config::Config::read(args.config)
+                .unwrap_or_else(|e| panic!("ERROR: Could not read config file -> {e}"))
+                .load()
+                .check();
 
             let global_output_dir = config.create_global_output_dir();
 
@@ -44,18 +42,11 @@ fn main() {
             });
         }
         SubArgs::Step { args } => {
-            // args.check().unwrap_or_else(|e| {
-            //     error!("{}", e);
-            //     std::process::exit(1);
-            // });
-
-            let mut config = isopipe::config::Config::read(args.config.clone())
-                .expect("ERROR: Could not read config file");
-
-            config
+            let config = isopipe::config::Config::read(args.config.clone())
+                .unwrap_or_else(|e| panic!("ERROR: Could not read config file -> {e}"))
                 .aware(args.clone())
                 .load()
-                .expect("ERROR: Could not load config file");
+                .check();
 
             let global_output_dir = config.create_global_output_dir();
 
@@ -66,10 +57,6 @@ fn main() {
         }
         SubArgs::Write { args } => {
             todo!()
-            // args.check().unwrap_or_else(|e| {
-            //     error!("{}", e);
-            //     std::process::exit(1);
-            // });
 
             // write(args).unwrap_or_else(|e| {
             //     error!("{}", e);

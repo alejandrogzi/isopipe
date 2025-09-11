@@ -21,9 +21,9 @@ diamond = "2.1.11"
 nextflow = ""
 
 [global]
-data_prefix = "foo"                   # FILL: raw data prefix
+data_prefix = ""                   # FILL: raw data prefix
 dir_prefix = ""                       # FILL: output dir prefix [optional]
-global_output_dir = "/path/to/outdir" # FILL: output dir -> {outdir}/{dir_prefix}_isopipe_run_{timestamp}
+global_output_dir = "test" # FILL: output dir -> {outdir}/{dir_prefix}_isopipe_run_{timestamp}
 long_queue = "long"                   # FILL [AWARE]: long queue name
 short_queue = "day"                   # FILL [AWARE]: short queue name
 default_memory = 16                   # default memory in GB
@@ -105,7 +105,6 @@ tail-suffix = 30            # --tail-suffix
 memory = 60                 # memory in GB
 time = "24.h"               # time for each job
 toga = ""                   # FILL: toga query annotation
-assembly = ""               # FILL: assembly name [WILL CHANGE]
 tag = ""                    # WARN: --tag leave empty, will tag reads [erase if want to avoid tagging]
 bed = ""                    # WARN: --bed leave emtpy, [convert to bed, erase if want .bam]
 keep_temp = "false"         # WARN: keep temporary files, change to "true" to keep them
@@ -156,14 +155,14 @@ bigwig = ""                  # FILL: path to SpliceAI dir
 keep_temp = "false"          # WARN: keep temporary files, change to "true" to keep them
 
 [params.load]
-input_dir = "step10_polish"       # previous step data dir [default]
-output_dir = "step11_load"        # output dir
-memory = 8                        # memory in GB
-num-threads = 2                   # --num-threads
-time = "24.h"                     # time for each job
-user = ""                         # FILL: browser username
-server = "genome"                 # FILL: browser server [default: genome]
-upload-public = "true"            # WARN: upload to public browser [default: true]
-target = "/genome/gbdb-HL/{FILL}" # FILL: target species output directory on the server [prefix: isopipe] -> stores .bb
-web = "/genome/www/data/{FILL}"   # FILL: web storage dir for .bb files
-chrom_sizes = ""                  # FILL: chromosome sizes file
+input_dir = "step10_polish" # previous step data dir [default]
+output_dir = "step11_load"  # output dir
+memory = 8                  # memory in GB
+num-threads = 2             # --num-threads
+time = "24.h"               # time for each job
+user = ""                   # FILL: browser username
+server = ""                 # FILL: browser server [default: genome]
+upload-public = "true"      # WARN: upload to public browser [default: true]
+target = ""                 # FILL: target species output directory on the server [prefix: isopipe] -> stores .bb
+web = ""                    # FILL: web storage dir for .bb files
+chrom_sizes = ""            # FILL: chromosome sizes file
