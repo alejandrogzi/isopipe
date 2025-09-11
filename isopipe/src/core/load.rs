@@ -131,20 +131,22 @@ pub fn load(
             .unwrap_or_else(|| panic!("ERROR: could not get file name from {bed:?}"));
 
         let mut cmd = format!(
-            "{BED_TO_BIG_BED} -tab -sort -as={SCHEMA} -type=bed12+25 {} {} {}",
+            "{BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+25 {} {} {}",
             input.display(),
             chrom_sizes,
             step_output_dir.join("bb").join(bb).display()
         );
 
         if upload {
+            let bb_name = format!("HLIsoClassAnnot.{}", bb.to_string_lossy()); // INFO: HLIsoClassAnnot.pass.bb
+
             cmd = format!(
-                "{cmd} && ssh {user}@{server} mkdir {} && rsync -av {} {user}@{server}:{} && ln -sf {} {}",
+                "{cmd} && ssh {user}@{server} mkdir -p {} && rsync -av {} {user}@{server}:{} && ssh {user}@{server} ln -sf {} {}",
                 target.join(ISOPIPE).display(),
                 step_output_dir.join("bb").join(bb).display(),
-                target.join(ISOPIPE).join(bb).display(),
-                target.join(ISOPIPE).join(bb).display(),
-                web.join(bb).display(),
+                target.join(ISOPIPE).join(&bb_name).display(),
+                target.join(ISOPIPE).join(&bb_name).display(),
+                web.join(bb_name).display(),
             );
         }
 
