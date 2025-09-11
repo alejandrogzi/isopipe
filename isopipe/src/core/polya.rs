@@ -63,9 +63,7 @@ pub fn polya(
 
     let args = config.get_step_args(
         step,
-        vec![
-            INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, TOGA, ASSEMBLY, KEEP_TEMP,
-        ],
+        vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, TOGA, KEEP_TEMP],
     );
 
     // WARN: input_dir needs to be suffixed by /bam
