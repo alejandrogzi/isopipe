@@ -116,6 +116,7 @@ pub const HG_LOAD_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/c/hgL
 pub const BED_TO_BIG_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/c/bedToBigBed");
 pub const SCHEMA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/as/schema.as");
 pub const ORF_CHUNKS: usize = 50000; // 50k transcripts
+pub const HPC_MAX_NUM_JOBS: usize = 20000; // para max number of jobs
 
 // tool binaries or scripts
 pub const PREDICT_PY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/py/predict/predict.py");

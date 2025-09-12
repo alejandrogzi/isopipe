@@ -365,7 +365,7 @@ impl ParallelExecutor {
         }
 
         let mut cmd = format!(
-            "para make {} {} -q {} -memoryMb {} -numCores {}",
+            "para make {} {} -q {} -memoryMb {} -numCores {} -maxNumJobsStop {}",
             step_code,
             jobs.display(),
             config
@@ -374,6 +374,7 @@ impl ParallelExecutor {
                 .expect("ERROR: No short queue found"),
             memory * 1024, // WARN: Memory is in MB
             threads,
+            HPC_MAX_NUM_JOBS
         );
 
         if package.is_some() {
