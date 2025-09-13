@@ -62,6 +62,9 @@ pub fn iso_nmd(
             .to_str()
             .unwrap_or_else(|| panic!("ERROR: could not convert file name to str"));
 
+        let mut predictions = Vec::new();
+        let mut out_predictions = PathBuf::new();
+
         // INFO: structure {step_orf}/seqs_{suffix}/{chr}:{chunk}
         for chunk in std::fs::read_dir(&subdir)
             .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", subdir))
@@ -79,6 +82,7 @@ pub fn iso_nmd(
                 .unwrap_or_else(|| {
                     panic!("ERROR: could not get chromosome from {:?}", chunked_dir)
                 });
+            let chr_outdir = step_output_dir.join(chr).join(suffix);
 
             for file in std::fs::read_dir(&chunked_dir)
                 .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", chunked_dir))
@@ -91,18 +95,27 @@ pub fn iso_nmd(
                     if file.ends_with("tmp_predictions.bed") {
                         log::debug!("DEBUG: found predictions.bed for {chr:?} -> {file:?}");
 
-                        let chr_outdir = step_output_dir.join(chr).join(suffix);
+                        let prediction = file.with_extension("tsv");
+                        predictions.push(prediction);
+
                         let mut cmd = format!(
-                            "{} --ref {} --outdir {} --prefix {} && cat {} >> {}",
+                            "{} --ref {} --outdir {} --prefix {}",
                             isotools!(ISO_NMD).display(),
                             file.display(),
                             chr_outdir.display(),
                             format!("tmp_{}", chunked_dir.file_name().unwrap().to_str().unwrap()),
-                            file.with_extension("tsv").display(),
-                            chr_outdir
-                                .join(format!("{}.predictions.{}.tsv", chr, suffix))
-                                .display(),
                         );
+
+                        if out_predictions.components().count() == 0 {
+                            out_predictions =
+                                chr_outdir.join(format!("{}.predictions.{}.tsv", chr, suffix));
+
+                            // INFO: in-place duplicated header cleaning
+                            cmd = format!(
+                                    "{cmd} && gawk -i inplace 'NR==1 || $0 != header {{print}} NR==1 {{header=$0}}' {}",
+                                    out_predictions.display()
+                            );
+                        }
 
                         // INFO: takes care of step8 tmp files except predictions
                         if !keep_temp {
@@ -119,6 +132,13 @@ pub fn iso_nmd(
                     }
                 }
             }
+        }
+
+        if !predictions.is_empty() && out_predictions.components().count() > 0 {
+            log::debug!("DEBUG: merging predictions for {suffix:?} -> {out_predictions:?}");
+            crate::cat!(&predictions, out_predictions);
+        } else {
+            log::warn!("WARN: No predictions found in {:?} -> skipping...", entry);
         }
     }
 
