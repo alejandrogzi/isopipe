@@ -135,8 +135,12 @@ pub fn iso_nmd(
         }
 
         if !predictions.is_empty() && out_predictions.components().count() > 0 {
-            log::debug!("DEBUG: merging predictions for {suffix:?} -> {out_predictions:?}");
-            crate::cat!(&predictions, out_predictions);
+            log::debug!(
+                "DEBUG: merging predictions for {suffix:?} in {entry:?} -> {out_predictions:?}"
+            );
+            cat(&predictions, &out_predictions).unwrap_or_else(|e| {
+                panic!("ERROR: could not concatenate predictions for {suffix:?} in {entry:?} to {out_predictions:?} -> {e}")
+            });
         } else {
             log::warn!("WARN: No predictions found in {:?} -> skipping...", entry);
         }

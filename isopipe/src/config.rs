@@ -1830,6 +1830,7 @@ pub fn cat<P: AsRef<Path>>(files: &[PathBuf], output: P) -> io::Result<()> {
         let mmap = unsafe { memmap2::Mmap::map(&file)? };
 
         if mmap.is_empty() {
+            log::warn!("WARN: skipping empty file {:?}", path);
             continue;
         }
 
