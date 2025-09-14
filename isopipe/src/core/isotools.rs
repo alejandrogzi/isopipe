@@ -84,6 +84,11 @@ pub fn iso_nmd(
                 });
             let chr_outdir = step_output_dir.join(chr).join(suffix);
 
+            std::fs::create_dir_all(&chr_outdir).expect(&format!(
+                "ERROR: Failed to create directory {}",
+                chr_outdir.display()
+            ));
+
             for file in std::fs::read_dir(&chunked_dir)
                 .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", chunked_dir))
                 .flatten()
@@ -136,7 +141,7 @@ pub fn iso_nmd(
 
         if !predictions.is_empty() && out_predictions.components().count() > 0 {
             log::debug!(
-                "DEBUG: merging predictions for {suffix:?} in {entry:?} -> {out_predictions:?}"
+                "DEBUG: merging predictions for {predictions:?} for {suffix:?} in {entry:?} -> {out_predictions:?}"
             );
             cat(&predictions, &out_predictions).unwrap_or_else(|e| {
                 panic!("ERROR: could not concatenate predictions for {predictions:?} to {out_predictions:?} -> {e}")
