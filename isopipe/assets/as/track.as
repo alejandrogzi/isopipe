@@ -7,9 +7,8 @@ group genes
 priority 2
 visibility pack
 itemRgb on
-type bigBed 12 +
+type bigBed 37
 searchPriority 2.07207
-searchType bigBed
 
         track HLIsoClassAnnotPass
         parent HLIsoClassAnnot
@@ -20,9 +19,8 @@ searchType bigBed
         priority 1
         visibility pack
         itemRgb On
-        type bed 12 +
+        type bigBed 37
         bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.pass.bb
-        searchType bigBed
 
         track HLIsoClassAnnotFusions
         parent HLIsoClassAnnot
@@ -33,9 +31,8 @@ searchType bigBed
         priority 1
         visibility pack
         itemRgb On
-        type bed 12 +
+        type bigBed 37
         bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.fusions.bb
-        searchType bigBed
 
         track HLIsoClassAnnotRetention
         parent HLIsoClassAnnot
@@ -46,9 +43,8 @@ searchType bigBed
         priority 1
         visibility pack
         itemRgb On
-        type bed 12 +
+        type bigBed 37
         bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.retention.bb
-        searchType bigBed
 
         track HLIsoClassAnnotIntrprimming
         parent HLIsoClassAnnot
@@ -59,9 +55,8 @@ searchType bigBed
         priority 1
         visibility pack
         itemRgb On
-        type bed 12 +
+        type bigBed 37
         bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.intraprimming.bb
-        searchType bigBed
 
         track HLIsoClassAnnotNmd
         parent HLIsoClassAnnot
@@ -72,9 +67,8 @@ searchType bigBed
         priority 1
         visibility pack
         itemRgb On
-        type bed 12 +
+        type bigBed 37
         bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.nmd.bb
-        searchType bigBed
 
         track HLIsoClassAnnotTruncation
         parent HLIsoClassAnnot
@@ -85,9 +79,8 @@ searchType bigBed
         priority 1
         visibility pack
         itemRgb On
-        type bed 12 +
-        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.pass.bb
-        searchType bigBed
+        type bigBed 37
+        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.truncation.bb
 
         track HLIsoClassAnnotRT
         parent HLIsoClassAnnot
@@ -98,9 +91,8 @@ searchType bigBed
         priority 1
         visibility pack
         itemRgb On
-        type bed 12 +
+        type bigBed 37
         bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.rt_reads.bb
-        searchType bigBed
 
         track HLIsoClassAnnotTrash
         parent HLIsoClassAnnot
@@ -111,6 +103,5 @@ searchType bigBed
         priority 1
         visibility pack
         itemRgb On
-        type bed 12 +
+        type bigBed 37
         bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.trash.bb
-        searchType bigBed
