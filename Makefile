@@ -9,6 +9,7 @@
 
 configure:
 	@bash isopipe/assets/sh/cfg.sh
+	@$(MAKE) test
 
 test:
 	@echo "INFO: Testing installation..."

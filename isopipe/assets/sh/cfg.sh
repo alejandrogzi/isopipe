@@ -48,6 +48,4 @@ echo "INFO: [6/7] Returning to repo root..."
 cd ../../../
 
 echo "INFO: [7/7] Running test..."
-make test
-
 echo "INFO: Configuration completed successfully!"
