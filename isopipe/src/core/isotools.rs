@@ -139,7 +139,7 @@ pub fn iso_nmd(
                 "DEBUG: merging predictions for {suffix:?} in {entry:?} -> {out_predictions:?}"
             );
             cat(&predictions, &out_predictions).unwrap_or_else(|e| {
-                panic!("ERROR: could not concatenate predictions for {suffix:?} in {entry:?} to {out_predictions:?} -> {e}")
+                panic!("ERROR: could not concatenate predictions for {predictions:?} to {out_predictions:?} -> {e}")
             });
         } else {
             log::warn!("WARN: No predictions found in {:?} -> skipping...", entry);
