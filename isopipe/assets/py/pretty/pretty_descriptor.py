@@ -84,7 +84,7 @@ from pretty_consts import (
 PathLike = Union[str, os.PathLike]
 
 log = logging.getLogger(__name__)
-logging.basicConfig(encoding='utf-8', level=logging.INFO)
+logging.basicConfig(encoding="utf-8", level=logging.INFO)
 
 
 def run(args: argparse.Namespace):
@@ -137,7 +137,14 @@ def run(args: argparse.Namespace):
             reads, args.predictions, args.nmd, args.descriptor, args.introns
         )
 
-    log.info(f"INFO: got schema for -> {args.reads}. Will start deciding...")
+    log.info(
+        f"INFO: Filtering schema of size {len(schema)} for {args.orf_score_threshold} ORF score"
+    )
+    schema = schema[schema["O_read_orf_score"] >= args.orf_score_threshold]
+
+    log.info(
+        f"INFO: got filtered schema of size {len(schema)} for -> {args.reads}. Will start deciding..."
+    )
 
     if args.introns and args.descriptor:
         files = decide(schema, args.flaws, args.ignore)
@@ -215,9 +222,13 @@ def decide(
     if "HAS_RT_INTRON" in ignores:
         remaining_reads = schema.copy()
     else:
-        grouped = dict(tuple(schema.groupby(schema[INTRON_STATUS_COL] == HAS_RT_INTRON)))
+        grouped = dict(
+            tuple(schema.groupby(schema[INTRON_STATUS_COL] == HAS_RT_INTRON))
+        )
 
-        remaining_reads = grouped.get(False, schema.iloc[0:0])  # INFO: empty if all True
+        remaining_reads = grouped.get(
+            False, schema.iloc[0:0]
+        )  # INFO: empty if all True
         df2 = grouped.get(True, None)
 
         if df2 is not None and not df2.empty:
@@ -314,7 +325,6 @@ def get_pretty_descriptor(
 
     schema = fill_schema(merged)
     return schema.loc[:, ~schema.columns.duplicated(keep="first")]
-
 
 
 def bed_to_big_bed(
@@ -724,9 +734,24 @@ def read_descriptor(path: PathLike) -> pd.DataFrame:
     """
     descriptor = pd.read_csv(path, sep="\t")
 
+    # INFO: if descriptor does not have all columns, force them and fill with NaNs
+    expected_columns = (
+        INTRON_METADATA_COLUMNS_FROM_DESCRIPTOR
+        + POLYA_METADATA_COLUMNS_FROM_DESCRIPTOR[1:]
+        + TRUNCATION_METADATA_COLUMNS_FROM_DESCRIPTOR[1:]
+    )
+
+    for col in expected_columns:
+        if col not in descriptor.columns:
+            log.warning(
+                f"WARN: descriptor does not have the following required column: {col}, forcing it..."
+            )
+            descriptor[col] = np.nan
+
     # Step 1: Convert descriptor columns into proper lists
     for col in DESCRIPTOR_COLUMNS_TO_VECTOR:
-        descriptor[col] = descriptor[col].apply(convert_to_proper_list)
+        if col in descriptor.columns:
+            descriptor[col] = descriptor[col].apply(convert_to_proper_list)
 
     # Step 2: Apply column-specific mappings
     _apply_column_mappings(descriptor)
@@ -1276,7 +1301,10 @@ def get_orf_data(
         ]
     else:
         merged = merged[
-            merged.apply(lambda r: r["suffix_main"].rsplit("#", 1)[0].endswith(r["suffix"]), axis=1)
+            merged.apply(
+                lambda r: r["suffix_main"].rsplit("#", 1)[0].endswith(r["suffix"]),
+                axis=1,
+            )
         ]
 
     return merged[["id", "O_read_orf_score", "O_metadata_html"]]
@@ -1338,6 +1366,13 @@ def parse() -> argparse.Namespace:
         type=int,
         help="Minimum number of flaws to be send to trash",
         default=2,
+    )
+    parser.add_argument(
+        "-O",
+        "--orf-score-threshold",
+        type=int,
+        help="ORF score threshold to filter reads out",
+        default=0.3,
     )
     parser.add_argument(
         "-ig",

@@ -453,5 +453,5 @@ BB_SCHEMA_COLUMNS = [
     "TAG_review_fusion",
     "TAG_strong_nmd",
     "TAG_weak_nmd",
-    "TAG_unique_tai"
+    "TAG_unique_tai",
 ]
