@@ -737,6 +737,7 @@ def read_descriptor(path: PathLike) -> pd.DataFrame:
     # INFO: if descriptor does not have all columns, force them and fill with NaNs
     expected_columns = (
         INTRON_METADATA_COLUMNS_FROM_DESCRIPTOR
+        + DESCRIPTOR_COLUMNS_TO_VECTOR
         + POLYA_METADATA_COLUMNS_FROM_DESCRIPTOR[1:]
         + TRUNCATION_METADATA_COLUMNS_FROM_DESCRIPTOR[1:]
     )
