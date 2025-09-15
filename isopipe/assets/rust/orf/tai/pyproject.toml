@@ -12,10 +12,10 @@ requires-python = ">=3.8,<3.10"
 
 dependencies = [
     "keras >=2.0.5",
-    "numpy >=1.14.0",
+    "numpy >=1.14.0, <2.0",
     "pandas >=0.24.2",
     "h5py",
-    "scikit-learn >=0.20.0",
+    "scikit-learn ==1.4.1.post1",
     "orfipy >= 0.0.4",
     "joblib >=1.0.0",
 ]
