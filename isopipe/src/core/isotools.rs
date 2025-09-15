@@ -577,6 +577,18 @@ pub fn polish(
     let twobit = config.get_step_custom_fields(step, vec![GENOME])[0].clone();
     let mem = CHUNK_SIZE as f32 * RAM_PER_SITE; // INFO: will be converted to MB by executor
 
+    // INFO: cleaning input_dir to avoid calling cmds on empty files/dirs
+    let _clean = format!(
+        "find {} -type f -name '*.bed' -empty -delete && find {} -type d -empty -delete",
+        input_dir.display(),
+        input_dir.display()
+    );
+    std::process::Command::new("bash")
+        .arg("-c")
+        .arg(_clean)
+        .output()
+        .unwrap_or_else(|e| panic!("ERROR: Failed to clean input directory -> {e}"));
+
     // INFO: path would look like: {step_nmd}/{chr} -> looping for each chr
     for entry in std::fs::read_dir(input_dir)
         .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
