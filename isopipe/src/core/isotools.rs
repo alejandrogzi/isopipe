@@ -674,10 +674,11 @@ pub fn polish(
         let reads = subdir.join("seqs_free").join(format!("{chr}.reads.bed"));
 
         let mut cleaning = format!(
-            "cat {} >> {} && cat {} >> {}",
+            "cat {} > {} && cat {} > {} && gawk -i inplace 'NR==1 || $0 != header {{print}} NR==1 {{header=$0}}' {}",
             nmd.display(),
             step_output_dir.join(chr).join("nmd.bed").display(),
             preds.display(),
+            step_output_dir.join(chr).join("predictions.tsv").display(),
             step_output_dir.join(chr).join("predictions.tsv").display(),
         );
 
