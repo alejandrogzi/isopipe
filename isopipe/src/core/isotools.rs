@@ -5,7 +5,7 @@ use iso_polya::{
 };
 use packbed::par_reader;
 
-use std::{fs::remove_dir, path::PathBuf};
+use std::{collections::HashMap, fs::remove_dir, path::PathBuf};
 
 use crate::{config::*, consts::*, executor::job::Job};
 use crate::{executor::manager::ParallelExecutor, isotools};
@@ -49,6 +49,9 @@ pub fn iso_nmd(
         log::info!("INFO [STEP 9]: Keeping temporary files -> keep_temp set to true!");
     }
 
+    let mut predictions = HashMap::new();
+    let mut out_predictions = HashMap::new();
+
     // INFO: path would look like: {step_orf}/seqs_{suffix} or toga
     for entry in std::fs::read_dir(input_dir)
         .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
@@ -61,9 +64,6 @@ pub fn iso_nmd(
             .unwrap_or_else(|| panic!("ERROR: could not get file name from {:?}", subdir))
             .to_str()
             .unwrap_or_else(|| panic!("ERROR: could not convert file name to str"));
-
-        let mut predictions = Vec::new();
-        let mut out_predictions = PathBuf::new();
 
         // INFO: structure {step_orf}/seqs_{suffix}/{chr}:{chunk}
         for chunk in std::fs::read_dir(&subdir)
@@ -82,6 +82,7 @@ pub fn iso_nmd(
                 .unwrap_or_else(|| {
                     panic!("ERROR: could not get chromosome from {:?}", chunked_dir)
                 });
+
             let chr_outdir = step_output_dir.join(chr).join(suffix);
 
             std::fs::create_dir_all(&chr_outdir).expect(&format!(
@@ -101,7 +102,11 @@ pub fn iso_nmd(
                         log::debug!("DEBUG: found predictions.bed for {chr:?} -> {file:?}");
 
                         let prediction = file.with_extension("tsv");
-                        predictions.push(prediction);
+
+                        predictions
+                            .entry(format!("{}.{}", chr, suffix))
+                            .or_insert_with(|| Vec::new())
+                            .push(prediction.clone());
 
                         let mut cmd = format!(
                             "{} --ref {} --outdir {} --prefix {}",
@@ -111,15 +116,21 @@ pub fn iso_nmd(
                             format!("tmp_{}", chunked_dir.file_name().unwrap().to_str().unwrap()),
                         );
 
-                        if out_predictions.components().count() == 0 {
-                            out_predictions =
-                                chr_outdir.join(format!("{}.predictions.{}.tsv", chr, suffix));
+                        // INFO: if out_predictions does not have a key, set it and do in-place cleaning
+                        if !out_predictions.contains_key(&format!("{}.{}", chr, suffix)) {
+                            out_predictions.insert(
+                                format!("{}.{}", chr, suffix),
+                                chr_outdir.join(format!("{}.predictions.{}.tsv", chr, suffix)),
+                            );
 
                             // INFO: in-place duplicated header cleaning
                             cmd = format!(
                                     "{cmd} && gawk -i inplace 'NR==1 || $0 != header {{print}} NR==1 {{header=$0}}' {}",
-                                    out_predictions.display()
-                            );
+                                    out_predictions
+                                        .get(&format!("{}.{}", chr, suffix))
+                                        .unwrap()
+                                        .display()
+                                );
                         }
 
                         // INFO: takes care of step8 tmp files except predictions
@@ -139,13 +150,19 @@ pub fn iso_nmd(
             }
         }
 
-        if !predictions.is_empty() && out_predictions.components().count() > 0 {
-            log::debug!(
-                "DEBUG: merging predictions for {predictions:?} for {suffix:?} in {entry:?} -> {out_predictions:?}"
-            );
-            cat(&predictions, &out_predictions).unwrap_or_else(|e| {
-                panic!("ERROR: could not concatenate predictions for {predictions:?} to {out_predictions:?} -> {e}")
-            });
+        if !predictions.is_empty() && !out_predictions.is_empty() {
+            for (key, target) in out_predictions.iter() {
+                let childs = predictions.get(key).unwrap_or_else(|| {
+                    panic!("ERROR: could not get predictions for key {key:?} in {predictions:?}")
+                });
+
+                log::debug!(
+                    "DEBUG: merging predictions for {childs:?} for {suffix:?} in {entry:?} -> {target:?}"
+                );
+                cat(&childs, &target).unwrap_or_else(|e| {
+                    panic!("ERROR: could not concatenate predictions for {childs:?} to {target:?} -> {e}")
+                });
+            }
         } else {
             log::warn!("WARN: No predictions found in {:?} -> skipping...", entry);
         }
