@@ -11,7 +11,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{Strand, bed_to_struct_collection, get_progress_bar};
+use config::{bed_to_struct_collection, get_progress_bar, Strand};
 use dashmap::DashMap;
 use flate2::read::MultiGzDecoder;
 use hashbrown::HashSet;
@@ -26,7 +26,7 @@ use std::path::PathBuf;
 
 use crate::cli::TogaArgs;
 
-const QUERY_ANNOTATION: &str = "query_annotation.bed";
+const QUERY_ANNOTATION: &str = "query_annotation.with_utrs.bed";
 const TRANSCRIPT_METADATA: &str = "meta/transcript_meta.tsv.gz";
 const SELENOCYSTEINE_CODONS: &str = "meta/selenocysteine_codons.tsv";
 const TOGA: &str = "toga";
