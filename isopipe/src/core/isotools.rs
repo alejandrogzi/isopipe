@@ -600,6 +600,8 @@ pub fn polish(
         input_dir.display(),
         input_dir.display()
     );
+    log::debug!("DEBUG: cleaning input directory with cmd: {_clean}");
+
     std::process::Command::new("bash")
         .arg("-c")
         .arg(_clean)
@@ -632,14 +634,24 @@ pub fn polish(
                 .to_str()
                 .unwrap_or_else(|| panic!("ERROR: could not convert file name to str"));
 
-            let chr_beds = seqs_dir.join("*reads.bed");
-            let chr_nmds = seqs_dir.join("*nmd.bed");
-
-            let cat = format!(
-                "cat {} > {chr}.reads.bed && cat {} > {chr}.nmd.bed",
-                chr_beds.display(),
-                chr_nmds.display()
+            let beds = format!("find {} -type f -name {} -print0 | xargs -0 cat > {} && find {} -type f -empty -name {} -delete",
+                seqs_dir.display(),
+                "*reads.bed",
+                seqs_dir.join(format!("{chr}.reads.bed")).display(),
+                seqs_dir.display(),
+                "*reads.bed"
             );
+
+            let nmds = format!("find {} -type f -name {} -print0 | xargs -0 cat > {} && find {} -type f -empty -name {} -delete",
+                seqs_dir.display(),
+                "*nmd.bed",
+                seqs_dir.join(format!("{chr}.nmd.bed")).display(),
+                seqs_dir.display(),
+                "*nmd.bed"
+            );
+
+            let cat = format!("{beds} && {nmds}");
+            log::debug!("DEBUG: concatenating bed files with cmd: {cat}");
 
             std::process::Command::new("bash")
                 .arg("-c")
@@ -658,6 +670,7 @@ pub fn polish(
                     chr,
                 );
 
+                log::debug!("DEBUG: APARENT jobs for {chr:?} -> {:?}", apa_jobs.len());
                 inner_jobs.extend(apa_jobs);
             }
         }
