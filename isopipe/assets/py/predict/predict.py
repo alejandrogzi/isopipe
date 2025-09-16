@@ -64,7 +64,7 @@ TOGA_COLS: List = [
     "toga_start",
     "toga_end",
     "toga_strand",
-    "key",
+    "toga_key",
     "masked",
 ]
 EXTENDED = [
@@ -452,7 +452,7 @@ def read_toga(path: Union[str, PathLike, Path]) -> pd.DataFrame:
     >>> # print(toga_df.head())
     """
     toga = pd.read_csv(path, sep="\t", header=None, names=TOGA_COLS).drop_duplicates(
-        subset="key", keep="first"
+        subset="toga_key", keep="first"
     )
     toga.sort_values(by="toga_pid", inplace=True, ascending=False)
 
@@ -501,7 +501,9 @@ def merge_tables(
     merged.blast_chr = merged.blast_chr.fillna(merged.tai_chr)
     merged.blast_id = merged.blast_id.fillna(merged.tai_id)
 
-    table = merged.merge(toga, on="key", how="left")
+    merged["toga_key"] = [key.split("_")[-1] for key in merged.key]
+    table = merged.merge(toga, on="toga_key", how="left")
+    table.drop(columns=["toga_key"], inplace=True)
 
     # INFO: binary flag: 0 if toga_pid NaN else 1
     table["toga_overlap_bp"] = (~table["toga_pid"].isna()).astype(int)

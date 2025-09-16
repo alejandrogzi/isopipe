@@ -140,7 +140,10 @@ def run(args: argparse.Namespace):
     log.info(
         f"INFO: Filtering schema of size {len(schema)} for {args.orf_score_threshold} ORF score"
     )
-    schema = schema[pd.to_numeric(schema["O_read_orf_score"], errors="coerce") >= args.orf_score_threshold]
+    schema = schema[
+        pd.to_numeric(schema["O_read_orf_score"], errors="coerce")
+        >= args.orf_score_threshold
+    ]
 
     log.info(
         f"INFO: got filtered schema of size {len(schema)} for -> {args.reads}. Will start deciding..."
