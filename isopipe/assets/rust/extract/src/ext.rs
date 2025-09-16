@@ -223,7 +223,7 @@ fn get_sequence(
     transcript: &GenePred,
     seq_mode: &SeqMode,
 ) -> config::Sequence {
-    let mut chr_seq = genome
+    let chr_seq = genome
         .get_mut(chr)
         .unwrap_or_else(|| panic!("ERROR: missing chromosome in .2bit -> {chr}"));
 
@@ -259,9 +259,18 @@ fn get_sequence(
                     Strand::Reverse => {
                         let start = (SCALE - *exon_end) as usize;
                         let end = (SCALE - *exon_start) as usize;
-                        let target = &mut chr_seq[start..end];
+                        let mut buf = chr_seq[start..end].to_vec();
+                        __rev_complement_u8(&mut buf);
 
-                        exonic_seq.extend_from_slice(target);
+                        log::debug!(
+                            "DEBUG: reversing exon seq -> {}:{}-{} ({})",
+                            chr,
+                            start,
+                            end,
+                            Sequence::new(&buf)
+                        );
+
+                        exonic_seq.extend_from_slice(&buf);
                     }
                 }
             }
@@ -269,10 +278,7 @@ fn get_sequence(
             let exonic = Sequence::new(&exonic_seq);
             log::debug!("DEBUG: extracted exonic seq -> {}", exonic);
 
-            match transcript.strand {
-                Strand::Forward => exonic,
-                Strand::Reverse => exonic.reverse_complement(), // INFO: seq is already reversed in exons!
-            }
+            exonic
         }
 
         SeqMode::Intron => {
@@ -288,9 +294,10 @@ fn get_sequence(
                     Strand::Reverse => {
                         let start = (SCALE - *intron_end) as usize;
                         let end = (SCALE - *intron_start) as usize;
-                        let target = &mut chr_seq[start..end];
+                        let mut buf = chr_seq[start..end].to_vec();
+                        __rev_complement_u8(&mut buf);
 
-                        intronic_seq.extend_from_slice(target);
+                        intronic_seq.extend_from_slice(&buf);
                     }
                 }
             }
@@ -298,10 +305,7 @@ fn get_sequence(
             let intronic = Sequence::new(&intronic_seq);
             log::debug!("DEBUG: extracted intronic seq -> {}", intronic);
 
-            match transcript.strand {
-                Strand::Forward => intronic,
-                Strand::Reverse => intronic.reverse_complement(),
-            }
+            intronic
         }
     };
 
@@ -623,4 +627,71 @@ pub fn find(args: crate::cli::IndexArgs) {
             }
         }
     }
+}
+
+/// Computes the reverse complement of a DNA sequence in-place.
+///
+/// This function takes a mutable reference to a vector of bytes representing a DNA sequence
+/// and transforms it into its reverse complement. The sequence is reversed and each base is
+/// complemented according to Watson-Crick base pairing rules: A ↔ T and C ↔ G. The operation
+/// is performed in-place, modifying the original vector. Ambiguous bases (like 'N') and
+/// unrecognized characters remain unchanged.
+///
+/// # Arguments
+///
+/// * `seq` - A mutable reference to a `Vec<u8>` containing the DNA sequence as ASCII bytes.
+///           The sequence can contain uppercase or lowercase nucleotide characters (A, T, C, G).
+///           Other characters (such as 'N' for ambiguous bases) are preserved unchanged.
+///
+/// # Panics
+///
+/// This function does not panic under normal circumstances.
+///
+/// # Example
+///
+/// ```rust, ignore
+/// // Example with a simple DNA sequence:
+/// let mut sequence = b"ATCG".to_vec();
+/// __rev_complement_u8(&mut sequence);
+/// assert_eq!(sequence, b"CGAT".to_vec());
+///
+/// // Example with mixed case:
+/// let mut sequence = b"AtcG".to_vec();
+/// __rev_complement_u8(&mut sequence);
+/// assert_eq!(sequence, b"CGAT".to_vec());
+///
+/// // Example with ambiguous bases:
+/// let mut sequence = b"ATCGN".to_vec();
+/// __rev_complement_u8(&mut sequence);
+/// assert_eq!(sequence, b"NCGAT".to_vec());
+/// ```
+///
+/// # Notes
+///
+/// - The function handles both uppercase and lowercase nucleotide characters
+/// - Ambiguous bases (N) and unrecognized characters remain in their original positions but reversed
+/// - The algorithm is optimized to work in-place with O(1) additional memory usage
+/// - Time complexity is O(n) where n is the length of the sequence
+pub fn __rev_complement_u8(seq: &mut Vec<u8>) {
+    // INFO: A <-> T, C <-> G
+    let complement = |base: u8| match base {
+        b'A' | b'a' => b'T',
+        b'T' | b't' => b'A',
+        b'C' | b'c' => b'G',
+        b'G' | b'g' => b'C',
+        _ => base, // INFO: N or other ambiguous bases remain unchanged
+    };
+
+    let len = seq.len();
+    for i in 0..(len / 2) {
+        let j = len - 1 - i;
+        let temp = complement(seq[i]);
+        seq[i] = complement(seq[j]);
+        seq[j] = temp;
+    }
+
+    // INFO: if the sequence length is odd, complement the middle base
+    if len % 2 == 1 {
+        seq[len / 2] = complement(seq[len / 2]);
+    };
 }
