@@ -106,7 +106,7 @@ pub fn load(
             );
 
             // INFO: ignore nmd and pass bc those colors are ok
-            if *target != "nmd.bed" || *target != "pass.bed" {
+            if *target != "nmd.bed" && *target != "pass.bed" {
                 // INFO: gawk -i inplace -F'\t' 'BEGIN{OFS="\t"} {$9="255,0,0"; print}' rt_reads.bed
                 cmd = format!(
                     "{cmd} && gawk -i inplace -F'\\t' 'BEGIN{{OFS=\"\\t\"}} {{$9=\"{}\"; print}}' {}",
