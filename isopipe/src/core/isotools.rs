@@ -634,17 +634,17 @@ pub fn polish(
                 .to_str()
                 .unwrap_or_else(|| panic!("ERROR: could not convert file name to str"));
 
-            let beds = format!("find {} -type f -name {} -print0 | xargs -0 cat > {} && find {} -type f -empty -name {} -delete",
+            let beds = format!("find {} -type f -name '{}' -print0 | xargs -0 cat > {} && find {} -type f -empty -name '{}' -delete",
                 seqs_dir.display(),
-                "*reads.bed",
+                "tmp*reads.bed",
                 seqs_dir.join(format!("{chr}.reads.bed")).display(),
                 seqs_dir.display(),
                 "*reads.bed"
             );
 
-            let nmds = format!("find {} -type f -name {} -print0 | xargs -0 cat > {} && find {} -type f -empty -name {} -delete",
+            let nmds = format!("find {} -type f -name '{}' -print0 | xargs -0 cat > {} && find {} -type f -empty -name '{}' -delete",
                 seqs_dir.display(),
-                "*nmd.bed",
+                "tmp*nmd.bed",
                 seqs_dir.join(format!("{chr}.nmd.bed")).display(),
                 seqs_dir.display(),
                 "*nmd.bed"
