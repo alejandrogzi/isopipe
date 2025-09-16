@@ -147,7 +147,7 @@ pub fn run_blast(args: BlastArgs) {
 /// ```
 fn orfipy(fasta: &PathBuf, dir: &PathBuf) -> PathBuf {
     let cmd = format!(
-        "source {} && orfipy {} --pep {} --partial-5 --partial-3 --include-stop --min 100 --ignore-case --outdir {}",
+        "source {} && orfipy {} --pep {} --partial-5 --partial-3 --start ATG --include-stop --min 100 --ignore-case --outdir {}",
         VENV,
         fasta.display(),
         ORF_PEP,
