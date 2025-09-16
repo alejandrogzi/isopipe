@@ -16,6 +16,7 @@
 use config::{OverlapType, SCALE, Sequence, Strand};
 use dashmap::DashMap;
 use iso_polya::utils::get_sequences;
+use log::debug;
 use packbed::{GenePred, unpack};
 use rayon::prelude::*;
 
@@ -90,6 +91,7 @@ pub fn extract(args: ExtractArgs) -> Vec<(PathBuf, PathBuf)> {
                 args.bed.display()
             )
         });
+    log::debug!("DEBUG: packed bed -> {bed:#?}");
 
     let (genome, _) = get_sequences(args.twobit.clone()).unwrap_or_else(|| {
         panic!(
@@ -97,6 +99,7 @@ pub fn extract(args: ExtractArgs) -> Vec<(PathBuf, PathBuf)> {
             args.twobit.display()
         )
     });
+    debug!("DEBUG: loaded genome with {} chromosomes", genome.len());
 
     // INFO: define the chunk size for parallel processing
     // INFO: if chunk size > bed records -> symlink
@@ -224,6 +227,14 @@ fn get_sequence(
         .get_mut(chr)
         .unwrap_or_else(|| panic!("ERROR: missing chromosome in .2bit -> {chr}"));
 
+    log::debug!(
+        "DEBUG: extracting sequence for {}:{}-{} ({:?})",
+        chr,
+        transcript.start,
+        transcript.end,
+        transcript.strand
+    );
+
     let seq = match seq_mode {
         SeqMode::Genome => match transcript.strand {
             Strand::Forward => {
@@ -250,17 +261,17 @@ fn get_sequence(
                         let end = (SCALE - *exon_start) as usize;
                         let target = &mut chr_seq[start..end];
 
-                        target.reverse();
-
                         exonic_seq.extend_from_slice(target);
                     }
                 }
             }
 
             let exonic = Sequence::new(&exonic_seq);
+            log::debug!("DEBUG: extracted exonic seq -> {}", exonic);
+
             match transcript.strand {
                 Strand::Forward => exonic,
-                Strand::Reverse => exonic.complement(), // INFO: seq is already reversed in exons!
+                Strand::Reverse => exonic.reverse_complement(), // INFO: seq is already reversed in exons!
             }
         }
 
@@ -278,7 +289,6 @@ fn get_sequence(
                         let start = (SCALE - *intron_end) as usize;
                         let end = (SCALE - *intron_start) as usize;
                         let target = &mut chr_seq[start..end];
-                        target.reverse();
 
                         intronic_seq.extend_from_slice(target);
                     }
@@ -286,9 +296,11 @@ fn get_sequence(
             }
 
             let intronic = Sequence::new(&intronic_seq);
+            log::debug!("DEBUG: extracted intronic seq -> {}", intronic);
+
             match transcript.strand {
                 Strand::Forward => intronic,
-                Strand::Reverse => intronic.complement(),
+                Strand::Reverse => intronic.reverse_complement(),
             }
         }
     };
