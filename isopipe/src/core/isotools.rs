@@ -703,7 +703,15 @@ pub fn polish(
             });
 
         // INFO: aparent is only ran per-seqs_free-{chr} -> not running isotools on seqs_fusions!
-        let apa = merge_aparent(step_output_dir.join(chr), "tmp");
+        let apa = if let Some(file) = merge_aparent(step_output_dir.join(chr), "tmp") {
+            file
+        } else {
+            log::warn!(
+                "WARN: could not find any APARENT output for {chr:?} in {} -> skipping isotools polish for this chr!",
+                step_output_dir.join(chr).display()
+            );
+            continue;
+        };
 
         // INFO: again, we only want to run isotools on {chr}/seqs_free
         let bed = subdir.join("seqs_free").join(format!("{}.reads.bed", chr));
@@ -833,7 +841,7 @@ pub fn polish(
 /// let outdir = PathBuf::from("/path/to/output_dir");
 /// merge_aparent(&outdir);
 /// ```
-fn merge_aparent(outdir: PathBuf, _prefix: &str) -> PathBuf {
+fn merge_aparent(outdir: PathBuf, _prefix: &str) -> Option<PathBuf> {
     let assets = outdir.join(APARENT_CHUNKS);
 
     let mut beds = Vec::new();
@@ -854,8 +862,17 @@ fn merge_aparent(outdir: PathBuf, _prefix: &str) -> PathBuf {
     let bed = par_reader(beds).expect("ERROR: Failed to merge bed files");
     let bed_dest = outdir.join(APARENT_OUTPUT);
 
-    log::debug!("DEBUG: will write all chunked .bed to -> {bed_dest:?}");
+    if bed.is_empty() {
+        log::warn!(
+            "WARN: could not find any .bed files in {:?} to merge for APARENT -> will erase this dir!",
+            assets
+        );
+        remove_dir(&outdir).unwrap_or_else(|e| panic!("ERROR: {e} -> could not remove {outdir:?}"));
 
+        return None;
+    }
+
+    log::debug!("DEBUG: will write all chunked .bed to -> {bed_dest:?}");
     write_bed(bed_dest.clone(), bed);
 
     log::info!("INFO: Merged chunks and cleaning...");
@@ -877,7 +894,7 @@ fn merge_aparent(outdir: PathBuf, _prefix: &str) -> PathBuf {
     remove_dir(&assets).unwrap_or_else(|e| panic!("ERROR: {e} -> could not remove {assets:?}"));
 
     log::info!("SUCCESS: APPARENT finished successfully!");
-    return bed_dest;
+    return Some(bed_dest);
 }
 
 /// Run isotools iso-split
