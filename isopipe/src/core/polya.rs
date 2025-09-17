@@ -143,7 +143,6 @@ pub fn polya(
 /// ```
 pub fn merge(input_dir: &PathBuf, config: &Config, step: &PipelineStep) {
     let parts = &input_dir.join(POLYA_PARTS);
-    let _ = create_dir_all(parts);
 
     log::info!(
         "INFO [MERGE]: Merging polyA segmentation results in {}...",
