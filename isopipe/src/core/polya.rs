@@ -81,7 +81,10 @@ pub fn polya(
         .enumerate()
     {
         let bam = entry.path();
-        log::debug!("DEBUG [STEP 6]: processing {}...", bam.display());
+        log::debug!(
+            "DEBUG [STEP 6]: processing {} with --batch {batch}...",
+            bam.display()
+        );
 
         // INFO: for cannonical runs this yields -> chunk*{run}.singletons
         // INFO: and outputs chunk*{run}.singletons.good.bed
@@ -103,7 +106,7 @@ pub fn polya(
                 bam.display(),
                 prefix.to_string_lossy(),
                 &parts.display(),
-                batch,
+                batch + 1,
                 bam.display(),
                 bam.display()
             )
@@ -115,10 +118,11 @@ pub fn polya(
                 bam.display(),
                 prefix.to_string_lossy(),
                 &parts.display(),
-                batch,
+                batch + 1,
             )
         };
 
+        log::debug!("DEBUG [STEP 6]: running command: {}", cmd);
         jobs.push(Job::from(cmd));
     }
 
