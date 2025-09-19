@@ -340,17 +340,21 @@ pub fn __sync_ids<P: AsRef<Path> + Debug + Copy>(input_dir: P, keep_rejected: bo
                 panic!("ERROR: could not create temporary file {:?} -> {e}", &tmp)
             });
 
-            for (i, line) in reader.lines().enumerate() {
+            for line in reader.lines() {
                 let mut l = line.unwrap_or_else(|e| {
-                    panic!("ERROR: could not read line {} in {:?} -> {e}", i + 1, &file)
+                    panic!(
+                        "ERROR: could not read line {} in {:?} -> {e}",
+                        counter + 1,
+                        &file
+                    )
                 });
 
                 // INFO: replace R<number> with R<counter>
-                l = __rename_id(&l, i + 1);
+                l = __rename_id(&l, counter + 1);
                 writeln!(writer, "{}", l).unwrap_or_else(|e| {
                     panic!(
                         "ERROR: could not write line {} to temporary file {:?} -> {e}",
-                        i + 1,
+                        counter + 1,
                         &tmp
                     )
                 });
