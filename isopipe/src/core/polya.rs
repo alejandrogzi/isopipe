@@ -188,9 +188,10 @@ pub fn merge(input_dir: &PathBuf, config: &Config, step: &PipelineStep) {
             .zip([singletons, accepts, rejections].iter())
         {
             // INFO: does not make any sense cat rejected files
-            // if *file == ALN_POLYA_REJECT {
-            //     continue;
-            // }
+            if *file == ALN_POLYA_REJECT && !keep_temp {
+                log::info!("INFO [MERGE]: skipping rejected files from merging step...");
+                continue;
+            }
 
             if group.is_empty() {
                 log::warn!(
