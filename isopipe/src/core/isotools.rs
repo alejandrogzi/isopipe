@@ -5,7 +5,13 @@ use iso_polya::{
 };
 use packbed::par_reader;
 
-use std::{collections::HashMap, fs::remove_dir, path::PathBuf};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    fs::remove_dir,
+    io::{BufRead, BufReader, Write},
+    path::{Path, PathBuf},
+};
 
 use crate::{config::*, consts::*, executor::job::Job};
 use crate::{executor::manager::ParallelExecutor, isotools};
@@ -202,6 +208,9 @@ pub fn iso_fusion(
         .parse::<bool>()
         .unwrap_or(false);
 
+    // INFO: synchronizing IDs across all .bed files in input_dir
+    __sync_ids(input_dir, keep_rejected);
+
     // INFO: input_dir would have per-chr .bed files with polya suffixes
     for file in std::fs::read_dir(input_dir)
         .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
@@ -263,7 +272,7 @@ pub fn iso_fusion(
                 SGN_COLOR
             );
 
-            log::debug!("debug: processing {file:?} with cmd: {cmd:?}...");
+            log::debug!("DEBUG: processing {file:?} with cmd: {cmd:?}...");
             jobs.push(Job::from(cmd));
         } else {
             let cmd = format!(
@@ -274,7 +283,7 @@ pub fn iso_fusion(
                 prefix.display(),
             );
 
-            log::debug!("debug: processing {file:?} with cmd: {cmd:?}...");
+            log::debug!("DEBUG: processing {file:?} with cmd: {cmd:?}...");
             jobs.push(Job::from(cmd));
         }
 
@@ -289,6 +298,198 @@ pub fn iso_fusion(
     }
 
     return jobs;
+}
+
+/// Synchronize read IDs across all BED files in a directory by replacing them with sequential numbers.
+///
+/// This function processes all BED files in the given directory, replacing the read IDs
+/// with sequentially numbered IDs (R1, R2, R3, etc.) to ensure unique identifiers across
+/// all files. Files are processed per chromosome and can optionally include rejected reads.
+///
+/// # Arguments
+/// * `input_dir` - Directory containing BED files to process
+/// * `keep_rejected` - Whether to include files with rejected reads in processing
+///
+/// # Panics
+/// Panics if files cannot be opened, read, written, or renamed during processing
+///
+/// # Example
+/// ```
+/// sync_ids("/path/to/bed/files", true);
+/// ```
+pub fn __sync_ids<P: AsRef<Path> + Debug + Copy>(input_dir: P, keep_rejected: bool) {
+    log::info!("INFO: start synchronizing read IDs in {input_dir:?}...");
+
+    // INFO: chrX -> [chrX_all.aligned.accept.bed, chrX_all.aligned.singletons.bed, Option<reject>]
+    let chroms = __collect_pairs(input_dir, keep_rejected);
+    for (chr, files) in chroms {
+        log::debug!("DEBUG: synchronizing read IDs for {chr:?} in {files:?}...");
+        let mut counter = 0usize;
+
+        for file in files {
+            log::debug!("DEBUG: processing file {file:?}...");
+            let reader = BufReader::new(
+                std::fs::File::open(&file)
+                    .unwrap_or_else(|e| panic!("ERROR: could not open file {:?} -> {e}", &file)),
+            );
+
+            let tmp = file.with_extension("tmp");
+            log::debug!("DEBUG: using temporary file {tmp:?}...");
+
+            let mut writer = std::fs::File::create(&tmp).unwrap_or_else(|e| {
+                panic!("ERROR: could not create temporary file {:?} -> {e}", &tmp)
+            });
+
+            for (i, line) in reader.lines().enumerate() {
+                let mut l = line.unwrap_or_else(|e| {
+                    panic!("ERROR: could not read line {} in {:?} -> {e}", i + 1, &file)
+                });
+
+                // INFO: replace R<number> with R<counter>
+                l = __rename_id(&l, i + 1);
+                writeln!(writer, "{}", l).unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: could not write line {} to temporary file {:?} -> {e}",
+                        i + 1,
+                        &tmp
+                    )
+                });
+                counter += 1;
+            }
+
+            log::debug!("DEBUG: synchronized {counter} read IDs in {tmp:?}, now renaming from {tmp:?} to {file:?}...");
+            std::fs::rename(&tmp, &file).unwrap_or_else(|e| {
+                panic!(
+                    "ERROR: could not rename temporary file {:?} to {:?} -> {e}",
+                    tmp, file
+                )
+            });
+        }
+    }
+}
+
+/// Collect and group BED files by chromosome for synchronization processing.
+///
+/// Scans the input directory for BED files and groups them by chromosome name.
+/// Files are expected to follow the naming pattern: `chrX_all.aligned.*.bed`
+/// where X is the chromosome identifier.
+///
+/// # Arguments
+/// * `input_dir` - Directory to scan for BED files
+/// * `keep_rejected` - Whether to include files containing rejected reads
+///
+/// # Returns
+/// HashMap mapping chromosome names to vectors of file paths
+///
+/// # Panics
+/// Panics if the directory cannot be read or file names cannot be parsed
+///
+/// # Example
+/// ```
+/// let chrom_files = __collect_pairs("/path/to/files", false);
+/// ```
+pub fn __collect_pairs<P: AsRef<Path> + Debug + Copy>(
+    input_dir: P,
+    keep_rejected: bool,
+) -> HashMap<String, Vec<PathBuf>> {
+    // INFO: input_dir would have per-chr .bed files with polya suffixes
+    let mut chroms = HashMap::new();
+    for file in std::fs::read_dir(input_dir)
+        .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
+        .flatten()
+        .filter(|entry| {
+            entry
+                .path()
+                .file_name()
+                .and_then(|ext| ext.to_str())
+                .map(|name| name.ends_with(BED))
+                .unwrap_or(false)
+        })
+    {
+        if file
+            .path()
+            .file_name()
+            .and_then(|ext| ext.to_str())
+            .unwrap()
+            .ends_with(ALN_POLYA_REJECT)
+            && !keep_rejected
+        {
+            continue;
+        }
+
+        // WARN: will need to change for the corrected minimap step suffix!
+        let query = file.path();
+
+        if !std::path::Path::new(&query).exists() {
+            log::warn!("WARN: {} does not exist, skipping...", query.display());
+            continue;
+        }
+
+        // INFO: file stem should now be 'chrX_all.aligned.accept'
+        let chr = query
+            .file_stem()
+            .unwrap_or_else(|| panic!("ERROR: could not get file name from {:?}", query))
+            .to_str()
+            .unwrap_or_else(|| panic!("ERROR: could not convert file name to str"))
+            .split("_all")
+            .next()
+            .unwrap_or_else(|| panic!("ERROR: could not get chromosome from {:?}", query));
+
+        // INFO: chrX -> [chrX_all.aligned.accept.bed, chrX_all.aligned.singletons.bed]
+        chroms
+            .entry(chr.to_string())
+            .or_insert(Vec::new())
+            .push(query.clone());
+    }
+
+    log::debug!("DEBUG: collected chroms -> {chroms:?}");
+    chroms
+}
+
+/// Rename the read ID in a BED file line with a sequential identifier.
+///
+/// Replaces the original read name in the fourth column of a BED line
+/// with a formatted sequential ID while preserving any suffix after
+/// the first underscore in the original read name.
+///
+/// # Arguments
+/// * `line` - The BED file line to process
+/// * `new_id` - The sequential ID number to use (will be formatted as "R{new_id}")
+///
+/// # Returns
+/// Modified line with updated read ID, or original line if format is unexpected
+///
+/// # Example
+/// ```
+/// let modified = __rename_id("chr1\t100\t200\toriginal_read_extra\t0\t+", 42);
+/// // Returns: "chr1\t100\t200\tR42_extra\t0\t+"
+/// ```
+fn __rename_id(line: &str, new_id: usize) -> String {
+    // INFO: find 3rd tab (before the read name column)
+    let mut tabs = line.match_indices('\t');
+    let third_tab = tabs.nth(2).map(|(i, _)| i);
+
+    if let Some(start) = third_tab {
+        // INFO: find the next tab after the read name
+        let end = line[start + 1..]
+            .find('\t')
+            .map(|j| start + 1 + j)
+            .unwrap_or(line.len());
+
+        let read_name = &line[start + 1..end];
+
+        // INFO: find the first underscore in the read name
+        if let Some(pos) = read_name.find('_') {
+            let mut out = String::with_capacity(line.len() + 8);
+            out.push_str(&line[..start + 1]); // INFO: keep up to and including 3rd tab
+            out.push_str(&format!("R{}", new_id));
+            out.push_str(&read_name[pos..]); // INFO: append rest
+            out.push_str(&line[end..]); // INFO: append the rest of the BED line
+            return out;
+        }
+    }
+
+    line.to_string()
 }
 
 /// Aggregate fusions from all categories into a single file.
