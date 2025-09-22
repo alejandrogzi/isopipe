@@ -915,21 +915,11 @@ pub fn polish(
                 panic!("ERROR: could not convert chr name to str -> {subdir:?}")
             });
 
-        // INFO: aparent is only ran per-seqs_free-{chr} -> not running isotools on seqs_fusions!
-        let apa = if let Some(file) = merge_aparent(step_output_dir.join(chr), "tmp") {
-            file
-        } else {
-            log::warn!(
-                "WARN: could not find any APARENT output for {chr:?} in {} -> skipping isotools polish for this chr!",
-                step_output_dir.join(chr).display()
-            );
-            continue;
-        };
-
         // INFO: again, we only want to run isotools on {chr}/seqs_free
         let bed = subdir.join("seqs_free").join(format!("{}.reads.bed", chr));
         let outdir = step_output_dir.join(chr);
 
+        // WARN: not asserting existence because iso-nmd will create a file either way
         let nmd = subdir.join("*/*nmd.bed"); // INFO: move nmds from free/fusions
         let preds = subdir.join("*/*predictions*tsv"); // INFO: move predictions from free/fusions
 
@@ -945,57 +935,28 @@ pub fn polish(
             step_output_dir.join(chr).join("predictions.tsv").display(),
         );
 
-        if fsn.exists() {
-            cleaning += &format!(
-                " && cp {} {}",
-                fsn.display(),
-                step_output_dir.join(chr).join("fusions.bed").display()
-            );
-        }
-
-        if reads.exists() {
-            cleaning += &format!(
-                " && cp {} {}",
-                reads.display(),
-                step_output_dir.join(chr).join("raw_reads.bed").display()
-            );
-        }
-
-        // INFO: subdirs should have then -> nmd.bed, fusions.bed, raw_reads.bed
+        // INFO: subdirs should have then -> nmd.bed, Option<fusions.bed>, Option<raw_reads.bed>
+        // INFO: nmd is assumed to exist either way -> otherwise would be catched by dir deleting cmd above
         // INFO: an optionally -> {chr}.predictions.seqs_fusions.tsv, {chr}.predictions.seqs_free.tsv
         let mut decisions = format!(
-            "source {} && {} --reads {} --predictions {} --introns {} --descriptor {} --outdir {} && {} --reads {} --predictions {} --name nmd.bed --nmd --outdir {}",
+            "source {} && {} --reads {} --predictions {} --name nmd.bed --nmd --outdir {}",
             TAI_VENV,
-            PRETTY_PY,
-            step_output_dir.join(chr).join("raw_reads.bed").display(),
-            step_output_dir
-                .join(chr)
-                .join(format!("predictions.tsv"))
-                .display(),
-            step_output_dir
-                .join(chr)
-                .join("reference_introns.tsv")
-                .display(),
-            step_output_dir
-                .join(chr)
-                .join("global_descriptor.tsv")
-                .display(),
-            step_output_dir
-                .join(chr)
-                .display(),
             PRETTY_PY,
             step_output_dir.join(chr).join("nmd.bed").display(),
             step_output_dir
                 .join(chr)
                 .join(format!("predictions.tsv"))
                 .display(),
-            step_output_dir
-                .join(chr)
-                .display(),
-
+            step_output_dir.join(chr).display(),
         );
 
         if fsn.exists() {
+            cleaning += &format!(
+                " && cp {} {}",
+                fsn.display(),
+                step_output_dir.join(chr).join("fusions.bed").display()
+            );
+
             decisions += &format!(
                 "  && {} --reads {} --predictions {} --name fusions.bed --outdir {}",
                 PRETTY_PY,
@@ -1011,6 +972,52 @@ pub fn polish(
                 "WARN: {:?} does not exist, skipping...",
                 step_output_dir.join(chr).join("fusions.bed")
             );
+        }
+
+        // INFO: aparent is only ran per-seqs_free-{chr} -> not running isotools on seqs_fusions!
+        let apa = if let Some(file) = merge_aparent(step_output_dir.join(chr), "tmp") {
+            file
+        } else {
+            log::warn!(
+                "WARN: could not find any APARENT output for {chr:?} in {} -> skipping isotools polish for this chr!",
+                step_output_dir.join(chr).display()
+            );
+
+            // INFO: still need to execute decision on nmd and Option<fusions> + cleaning
+            let cmd = format!("{} && {}", cleaning, decisions);
+            log::debug!("DEBUG: executing non-APARENT + non-raw_reads dir: {cmd}");
+
+            jobs.push(Job::from(cmd));
+            continue;
+        };
+
+        if reads.exists() {
+            cleaning += &format!(
+                " && cp {} {}",
+                reads.display(),
+                step_output_dir.join(chr).join("raw_reads.bed").display()
+            );
+
+            let cmd = format!(
+                " && {} --reads {} --predictions {} --introns {} --descriptor {} --outdir {}",
+                PRETTY_PY,
+                step_output_dir.join(chr).join("raw_reads.bed").display(),
+                step_output_dir
+                    .join(chr)
+                    .join(format!("predictions.tsv"))
+                    .display(),
+                step_output_dir
+                    .join(chr)
+                    .join("reference_introns.tsv")
+                    .display(),
+                step_output_dir
+                    .join(chr)
+                    .join("global_descriptor.tsv")
+                    .display(),
+                step_output_dir.join(chr).display(),
+            );
+
+            decisions += &cmd;
         }
 
         let mut cmd = format!(
