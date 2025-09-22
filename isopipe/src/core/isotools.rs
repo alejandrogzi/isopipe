@@ -868,6 +868,14 @@ pub fn polish(
             if suffix == "seqs_free" {
                 let bed = seqs_dir.join(format!("{chr}.reads.bed"));
 
+                if !bed.exists() {
+                    log::warn!(
+                        "WARN: could not find {} -> skipping APARENT for {chr:?}!",
+                        bed.display()
+                    );
+                    continue;
+                }
+
                 let apa_jobs = iso_polya_aparent(
                     step_output_dir,
                     &bed.to_str().unwrap().to_string(),
