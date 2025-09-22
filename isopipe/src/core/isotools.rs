@@ -8,7 +8,7 @@ use packbed::par_reader;
 use std::{
     collections::HashMap,
     fmt::Debug,
-    fs::remove_dir,
+    fs::remove_dir_all,
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
 };
@@ -1072,7 +1072,8 @@ fn merge_aparent(outdir: PathBuf, _prefix: &str) -> Option<PathBuf> {
             "WARN: could not find any .bed files in {:?} to merge for APARENT -> will erase this dir!",
             assets
         );
-        remove_dir(&outdir).unwrap_or_else(|e| panic!("ERROR: {e} -> could not remove {outdir:?}"));
+        remove_dir_all(&outdir)
+            .unwrap_or_else(|e| panic!("ERROR: {e} -> could not remove {outdir:?}"));
 
         return None;
     }
@@ -1096,7 +1097,7 @@ fn merge_aparent(outdir: PathBuf, _prefix: &str) -> Option<PathBuf> {
         }
     }
 
-    remove_dir(&assets).unwrap_or_else(|e| panic!("ERROR: {e} -> could not remove {assets:?}"));
+    remove_dir_all(&assets).unwrap_or_else(|e| panic!("ERROR: {e} -> could not remove {assets:?}"));
 
     log::info!("SUCCESS: APPARENT finished successfully!");
     return Some(bed_dest);
