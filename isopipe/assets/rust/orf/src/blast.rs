@@ -35,7 +35,11 @@ pub mod indexed;
 const ORF_PEP: &str = "orfs.pep.fa";
 const RESULT: &str = "dmd.result";
 const HEADER_REGEX: &str = r"\[(\d+)-(\d+)\]\(([+-])\)";
-pub const VENV: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tai/.venv/bin/activate");
+// pub const VENV: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tai/.venv/bin/activate");
+pub const VENV: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "../../py/orfipy/.venv/bin/activate"
+);
 
 /// Runs a complete BLAST analysis pipeline, including ORF prediction, deduplication,
 /// and alignment against a DIAMOND database.
