@@ -16,7 +16,6 @@ dependencies = [
     "pandas >=0.24.2",
     "h5py",
     "scikit-learn ==1.4.1.post1",
-    "orfipy >= 0.0.4",
     "joblib >=1.0.0",
 ]
 

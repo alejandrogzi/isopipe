@@ -44,8 +44,14 @@ echo "INFO: [5/7] Building extract..."
 cd ../../extract
 cargo build --release
 
+echo "INFO: [6/7] Building orfipy + venv"
+cd ../py/orfipy
+uv venv
+source .venv/bin/activate
+uv pip install "."
+
 echo "INFO: [6/7] Returning to repo root..."
-cd ../../../
+cd ../../../../
 
 echo "INFO: [7/7] Running test..."
 echo "INFO: Configuration completed successfully!"

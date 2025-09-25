@@ -16,5 +16,7 @@ test:
 	@isopipe/target/release/isopipe --help >/dev/null && echo 'INFO: isopipe installed!' || (echo "ERROR: isopipe run failed!" && exit 1)
 	@../isotools/isotools/target/release/isotools --help >/dev/null && echo 'INFO: isopipe installed!' || (echo "ERROR: isotools build failed!" && exit 1)
 	@isopipe/assets/rust/orf/target/release/orf --help >/dev/null && echo 'INFO: orf installed!' || (echo "ERROR: orf build failed!" && exit 1)
-	@test -f isopipe/assets/rust/orf/tai/.venv/bin/python || (echo "ERROR: Python venv missing!" && exit 1)
+	@test -f isopipe/assets/rust/orf/tai/.venv/bin/python || (echo "ERROR: ORF Python venv missing!" && exit 1)
+	@test -f isopipe/assets/py/orfipy/.venv/bin/python || (echo "ERROR: orfipy Python venv missing!" && exit 1)
+	@isopipe/assets/py/orfipy/.venv/bin/orfipy --version >/dev/null && echo 'INFO: orfipy installed!' || (echo "ERROR: orfipy installation failed!" && exit 1)
 	@echo "INFO: All tests passed! You can run the pipeline with: isopipe --help"
