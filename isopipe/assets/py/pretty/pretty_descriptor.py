@@ -24,6 +24,7 @@ from pretty_consts import (
     REF_INTRONS_COLUMNS,
     REFERENCE_INTRON_ALL_COLUMNS,
     REFERENCE_INTRON_ADD_COLUMNS,
+    REFERENCE_INTRON_ADD_COLUMNS_WITH_SPLICEAI,
     # Intron retention analysis
     DESCRIPTOR_COLUMNS_TO_VECTOR,
     INTRON_METADATA_COLUMNS_FROM_DESCRIPTOR,
@@ -638,6 +639,7 @@ def get_retention_submodules(
             INTRON_MOD_RETENTION_SUBMOD_RENAME,
             RETENTION_HTML_COL,
             extensible_data,
+            REFERENCE_INTRON_ADD_COLUMNS,
         ),
         parse_retention_submodule(
             global_descriptor,
@@ -645,6 +647,7 @@ def get_retention_submodules(
             INTRON_MOD_RETAINS_RT_SUBMOD_RENAME,
             RETAINS_RT_HTML_COL,
             extensible_data,
+            REFERENCE_INTRON_ADD_COLUMNS_WITH_SPLICEAI,
         ),
         parse_retention_submodule(
             global_descriptor,
@@ -652,6 +655,7 @@ def get_retention_submodules(
             INTRON_MOD_HAS_RT_SUBMOD_RENAME,
             HAS_RT_HTML_COL,
             extensible_data,
+            REFERENCE_INTRON_ADD_COLUMNS_WITH_SPLICEAI,
         ),
     ]
 
@@ -806,6 +810,7 @@ def parse_retention_submodule(
     rename_schema: Dict[str, str],
     html_column_name: str,
     extensible_data: Optional[Dict[str, Any]] = None,
+    extensible_data_cols: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
     Parse a specific retention submodule and generate HTML representation.
@@ -838,13 +843,16 @@ def parse_retention_submodule(
     ... )
     """
     df = global_descriptor[columns].rename(columns=rename_schema)
-    return df_to_nested_html_rows(df, html_column_name, extensible_data)
+    return df_to_nested_html_rows(
+        df, html_column_name, extensible_data, extensible_data_cols
+    )
 
 
 def df_to_nested_html_rows(
     df: pd.DataFrame,
     output_col_name: str,
     extensible_data: Optional[Dict[str, Any]] = None,
+    extensible_data_cols: Optional[List[str]] = None,
 ) -> pd.DataFrame:
     """
     Convert DataFrame rows to nested HTML table representations.
@@ -875,7 +883,7 @@ def df_to_nested_html_rows(
             RETENTION_NESTED_HINT_COLUMN,
             RETENTION_NESTED_EXCLUDE,
             extensible_data,
-            REFERENCE_INTRON_ADD_COLUMNS,
+            extensible_data_cols,
         )
         for row in df.itertuples(index=False, name=None)
     ]

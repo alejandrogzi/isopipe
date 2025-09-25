@@ -58,6 +58,22 @@ REFERENCE_INTRON_ALL_COLUMNS = [
     "support",
 ]
 
+REFERENCE_INTRON_ADD_COLUMNS_WITH_SPLICEAI = [
+    "strand",
+    "seen",
+    "spanned",
+    "splice_ai_donor",
+    "splice_ai_acceptor",
+    "max_ent_donor",
+    "max_ent_acceptor",
+    "donor_sequence",
+    "acceptor_sequence",
+    "donor_context",
+    "acceptor_context",
+    "is_toga_supported",
+    "is_nag_intron",
+]
+
 REFERENCE_INTRON_ADD_COLUMNS = [
     "strand",
     "seen",
