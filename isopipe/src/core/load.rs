@@ -131,23 +131,34 @@ pub fn load(
     );
 
     // INFO: each .bed in step11_load should be converted into bigBed
-    for bed in std::fs::read_dir(&step_output_dir.join("bed"))
+    for bed in std::fs::read_dir(step_output_dir.join("bed"))
         .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", step_output_dir))
         .flatten()
         .filter(|e| e.path().is_file())
     {
         let input = bed.path();
 
+        // INFO: pass.bed
+        let basename = input
+            .file_name()
+            .unwrap_or_else(|| panic!("ERROR: could not get file name from {bed:?}"))
+            .to_string_lossy()
+            .to_string();
+
         let bind = input.with_extension("bb");
         let bb = bind
             .file_name()
             .unwrap_or_else(|| panic!("ERROR: could not get file name from {bed:?}"));
 
+        // INFO: modifying bed file in-place with collapsed -> takes new schema
         let mut cmd = format!(
-            "{BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+25 {} {} {}",
+            "{COLLAPSE} --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
             input.display(),
+            step_output_dir.display(), // INFO: creates collapse/ by default
+            basename.clone(), // INFO: e.g pass.bed
+            step_output_dir.join("collapsed").join(basename).display(), // INFO: collapsed/pass.bed
             chrom_sizes,
-            step_output_dir.join("bb").join(bb).display()
+            step_output_dir.join("bb").join(bb).display() // INFO: bb/pass.bb
         );
 
         if upload {

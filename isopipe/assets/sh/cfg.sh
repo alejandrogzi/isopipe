@@ -17,20 +17,20 @@ check_command() {
     echo "INFO: '$1' is installed."
 }
 
-echo "INFO: [1/7] Checking dependencies..."
+echo "INFO: [1/9] Checking dependencies..."
 check_command cargo
 check_command rustc
 check_command uv
 
-echo "INFO: [2/7] Building isopipe and installing it locally..."
+echo "INFO: [2/9] Building isopipe and installing it locally..."
 cd isopipe
 cargo build --release && cargo install --path .
 
-echo "INFO: [3/7] Building isotools..."
+echo "INFO: [3/9] Building isotools..."
 cd ../isotools/isotools
 cargo build --release
 
-echo "INFO: [4/7] Building orf + setting up Python env..."
+echo "INFO: [4/9] Building orf + setting up Python env..."
 cd ../../isopipe/assets/rust/orf
 cargo build --release
 
@@ -40,18 +40,22 @@ uv venv
 source .venv/bin/activate
 uv pip install ".[cpu]"
 
-echo "INFO: [5/7] Building extract..."
+echo "INFO: [5/9] Building extract..."
 cd ../../extract
 cargo build --release
 
-echo "INFO: [6/7] Building orfipy + venv"
+echo "INFO: [6/9] Building collapse..."
+cd ../collapse
+cargo build --release
+
+echo "INFO: [7/9] Building orfipy + venv"
 cd ../py/orfipy
 uv venv
 source .venv/bin/activate
 uv pip install "."
 
-echo "INFO: [6/7] Returning to repo root..."
+echo "INFO: [8/9] Returning to repo root..."
 cd ../../../../
 
-echo "INFO: [7/7] Running test..."
+echo "INFO: [9/9] Running test..."
 echo "INFO: Configuration completed successfully!"

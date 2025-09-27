@@ -144,6 +144,10 @@ pub const APARENT_PY: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../isotools/isotools/iso-polya/assets/run_aparent.py"
 );
+pub const COLLAPSE: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/rust/collapse/target/release/collapse"
+);
 
 // collections
 pub const SPECIAL_PARAMETER: &[&str] = &["secondary"];

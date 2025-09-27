@@ -40,4 +40,5 @@ table isopipe
     string    TAG_strong_nmd;             "Strong NMD prediction"
     string    TAG_weak_nmd;               "Weak NMD prediction"
     string    TAG_unique_tai;               "Unique translationAi prediction"
+    string    collapsed;               "Collapsed read names"
 )
