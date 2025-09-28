@@ -772,7 +772,6 @@ pub fn polish(
     executor: &mut ParallelExecutor,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
-    let mut inner_jobs = Vec::new();
 
     let args = config.get_step_args(
         step,
@@ -797,7 +796,6 @@ pub fn polish(
     }
 
     let twobit = config.get_step_custom_fields(step, vec![GENOME])[0].clone();
-    let mem = CHUNK_SIZE as f32 * RAM_PER_SITE; // INFO: will be converted to MB by executor
 
     // INFO: cleaning input_dir to avoid calling cmds on empty files/dirs
     let _clean = format!(
@@ -813,95 +811,8 @@ pub fn polish(
         .output()
         .unwrap_or_else(|e| panic!("ERROR: Failed to clean input directory -> {e}"));
 
-    // INFO: path would look like: {step_nmd}/{chr} -> looping for each chr
-    for entry in std::fs::read_dir(input_dir)
-        .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
-        .flatten()
-        .filter(|e| e.path().is_dir())
-    {
-        let subdir = entry.path(); // INFO: {chr}
-
-        let chr =
-            subdir.file_name().unwrap().to_str().unwrap_or_else(|| {
-                panic!("ERROR: could not convert chr name to str -> {subdir:?}")
-            });
-
-        // INFO: {chr}/seqs_{suffix}
-        for seqs in std::fs::read_dir(&subdir)
-            .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", subdir))
-            .flatten()
-            .filter(|e| e.path().is_dir())
-        {
-            let seqs_dir = seqs.path();
-            let suffix = seqs_dir
-                .file_name()
-                .unwrap_or_else(|| panic!("ERROR: could not get file name from {:?}", seqs_dir))
-                .to_str()
-                .unwrap_or_else(|| panic!("ERROR: could not convert file name to str"));
-
-            let beds = format!("find {} -type f -name '{}' -print0 | xargs -0 cat > {} && find {} -type f -empty -name '{}' -delete",
-                seqs_dir.display(),
-                "tmp*reads.bed",
-                seqs_dir.join(format!("{chr}.reads.bed")).display(),
-                seqs_dir.display(),
-                "*reads.bed"
-            );
-
-            let nmds = format!("find {} -type f -name '{}' -print0 | xargs -0 cat > {} && find {} -type f -empty -name '{}' -delete",
-                seqs_dir.display(),
-                "tmp*nmd.bed",
-                seqs_dir.join(format!("{chr}.nmd.bed")).display(),
-                seqs_dir.display(),
-                "*nmd.bed"
-            );
-
-            let cat = format!("{beds} && {nmds}");
-            log::debug!("DEBUG: concatenating bed files with cmd: {cat}");
-
-            std::process::Command::new("bash")
-                .arg("-c")
-                .arg(cat)
-                .current_dir(&seqs_dir)
-                .output()
-                .expect("ERROR: Failed to concatenate bed files");
-
-            if suffix == "seqs_free" {
-                let bed = seqs_dir.join(format!("{chr}.reads.bed"));
-
-                if !bed.exists() {
-                    log::warn!(
-                        "WARN: could not find {} -> skipping APARENT for {chr:?}!",
-                        bed.display()
-                    );
-                    continue;
-                }
-
-                let apa_jobs = iso_polya_aparent(
-                    step_output_dir,
-                    &bed.to_str().unwrap().to_string(),
-                    &twobit,
-                    chr,
-                );
-
-                log::debug!("DEBUG: APARENT jobs for {chr:?} -> {:?}", apa_jobs.len());
-                inner_jobs.extend(apa_jobs);
-            }
-        }
-    }
-
-    log::info!("INFO [STEP 10a]: Pre-processing completed -> Running APARENT...");
-
-    executor.add_jobs(inner_jobs).and_send(
-        config,
-        "aparent",
-        step_output_dir.clone(),
-        1,
-        mem as u32,
-        None,
-        None,
-    );
-
-    log::info!("INFO [STEP 10b]: Pre-processing completed -> Polishing...");
+    // INFO: looping again to run polish with merged aparent
+    __pre_polish(input_dir, step_output_dir, executor, config, &twobit);
 
     // INFO: looping again to run polish with merged aparent -> per-chr
     for entry in std::fs::read_dir(input_dir)
@@ -1046,7 +957,130 @@ pub fn polish(
         jobs.push(Job::from(cmd));
     }
 
-    return jobs;
+    jobs
+}
+
+/// Pre-polish input read files to run isotools polish
+/// on the raw reads and APARENT output
+///
+/// # Arguments
+///
+/// * `input_dir` - The input directory
+/// * `step_output_dir` - The output directory
+/// * `executor` - The parallel executor
+/// * `config` - The configuration
+/// * `twobit` - The twobit file
+///
+/// # Example
+///
+/// ```rust, no_run
+/// let input_dir = PathBuf::from("/path/to/input_dir");
+/// let step_output_dir = PathBuf::from("/path/to/step_output_dir");
+/// let executor = ParallelExecutor::new();
+/// let config = Config::new();
+/// let twobit = String::from("/path/to/twobit");
+///
+/// __pre_polish(&input_dir, &step_output_dir, &executor, &config, &twobit);
+/// ```
+fn __pre_polish<P: AsRef<Path> + Debug + Copy>(
+    input_dir: P,
+    step_output_dir: &PathBuf,
+    executor: &mut ParallelExecutor,
+    config: &Config,
+    twobit: &String,
+) {
+    let mem = CHUNK_SIZE as f32 * RAM_PER_SITE; // INFO: will be converted to MB by executor
+    let mut inner_jobs = Vec::new();
+
+    // INFO: path would look like: {step_nmd}/{chr} -> looping for each chr
+    for entry in std::fs::read_dir(input_dir)
+        .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", input_dir))
+        .flatten()
+        .filter(|e| e.path().is_dir())
+    {
+        let subdir = entry.path(); // INFO: {chr}
+
+        let chr =
+            subdir.file_name().unwrap().to_str().unwrap_or_else(|| {
+                panic!("ERROR: could not convert chr name to str -> {subdir:?}")
+            });
+
+        // INFO: {chr}/seqs_{suffix}
+        for seqs in std::fs::read_dir(&subdir)
+            .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", subdir))
+            .flatten()
+            .filter(|e| e.path().is_dir())
+        {
+            let seqs_dir = seqs.path();
+            let suffix = seqs_dir
+                .file_name()
+                .unwrap_or_else(|| panic!("ERROR: could not get file name from {:?}", seqs_dir))
+                .to_str()
+                .unwrap_or_else(|| panic!("ERROR: could not convert file name to str"));
+
+            let beds = format!("find {} -type f -name '{}' -print0 | xargs -0 cat > {} && find {} -type f -empty -name '{}' -delete",
+                seqs_dir.display(),
+                "tmp*reads.bed",
+                seqs_dir.join(format!("{chr}.reads.bed")).display(),
+                seqs_dir.display(),
+                "*reads.bed"
+            );
+
+            let nmds = format!("find {} -type f -name '{}' -print0 | xargs -0 cat > {} && find {} -type f -empty -name '{}' -delete",
+                seqs_dir.display(),
+                "tmp*nmd.bed",
+                seqs_dir.join(format!("{chr}.nmd.bed")).display(),
+                seqs_dir.display(),
+                "*nmd.bed"
+            );
+
+            let cat = format!("{beds} && {nmds}");
+            log::debug!("DEBUG: concatenating bed files with cmd: {cat}");
+
+            std::process::Command::new("bash")
+                .arg("-c")
+                .arg(cat)
+                .current_dir(&seqs_dir)
+                .output()
+                .expect("ERROR: Failed to concatenate bed files");
+
+            if suffix == "seqs_free" {
+                let bed = seqs_dir.join(format!("{chr}.reads.bed"));
+
+                if !bed.exists() {
+                    log::warn!(
+                        "WARN: could not find {} -> skipping APARENT for {chr:?}!",
+                        bed.display()
+                    );
+                    continue;
+                }
+
+                let apa_jobs = iso_polya_aparent(
+                    step_output_dir,
+                    &bed.to_str().unwrap().to_string(),
+                    &twobit,
+                    chr,
+                );
+
+                log::debug!("DEBUG: APARENT jobs for {chr:?} -> {:?}", apa_jobs.len());
+                inner_jobs.extend(apa_jobs);
+            }
+        }
+    }
+
+    log::info!("INFO [STEP 10a]: Pre-processing completed -> Running APARENT...");
+
+    executor.add_jobs(inner_jobs).and_send(
+        config,
+        "aparent",
+        step_output_dir.clone(),
+        1,
+        mem as u32,
+        None,
+        None,
+    );
+
+    log::info!("INFO [STEP 10b]: Pre-processing completed -> Polishing...");
 }
 
 /// Merge chunks of APARENT data
@@ -1072,9 +1106,8 @@ fn merge_aparent(outdir: PathBuf, _prefix: &str) -> Option<PathBuf> {
     {
         let path = entry.path();
         if let Some(ext) = path.extension() {
-            match ext.to_str() {
-                Some("bed") => beds.push(path),
-                _ => {}
+            if let Some("bed") = ext.to_str() {
+                beds.push(path);
             }
         }
     }
@@ -1097,25 +1130,26 @@ fn merge_aparent(outdir: PathBuf, _prefix: &str) -> Option<PathBuf> {
     write_bed(bed_dest.clone(), bed);
 
     log::info!("INFO: Merged chunks and cleaning...");
-    for entry in std::fs::read_dir(&assets).expect("ERROR: Failed to read assets directory") {
-        if let Ok(entry) = entry {
-            let path = entry.path();
-            if path
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .starts_with("tmp")
-            {
-                let _ = std::fs::remove_file(path);
-            }
+    for entry in std::fs::read_dir(&assets)
+        .expect("ERROR: Failed to read assets directory")
+        .flatten()
+    {
+        let path = entry.path();
+        if path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .starts_with("tmp")
+        {
+            let _ = std::fs::remove_file(path);
         }
     }
 
     remove_dir_all(&assets).unwrap_or_else(|e| panic!("ERROR: {e} -> could not remove {assets:?}"));
 
     log::info!("SUCCESS: APPARENT finished successfully!");
-    return Some(bed_dest);
+    Some(bed_dest)
 }
 
 /// Run isotools iso-split
@@ -1187,7 +1221,7 @@ pub fn iso_split(
 
     split_reads(entries, &chunks, &outdir, executor, config, step, input_dir);
 
-    return outdir;
+    outdir
 }
 
 /// Generic processor for a collection of input
@@ -1240,18 +1274,13 @@ fn split_reads(
             .unwrap_or_else(|| panic!("ERROR: could not build prefix for {:?}", file));
 
         let cmd = format!(
-            "{} {} {} {} {} {} {} {} {} {} {}",
+            "{} --file {} --chunks {} --outdir {} --suffix {} --threads {}",
             isotools!(ISO_SPLIT).display(),
-            "--file".to_string(),
-            file.display().to_string(),
-            "--chunks".to_string(),
-            chunks.to_string(),
-            "--outdir".to_string(),
-            outdir.clone().display().to_string(),
-            "--suffix".to_string(),
+            file.display(),
+            chunks,
+            outdir.clone().display(),
             suffix.to_string_lossy(),
-            "--threads".to_string(),
-            format!("{}", threads),
+            threads,
         );
 
         jobs.push(Job::from(cmd));
