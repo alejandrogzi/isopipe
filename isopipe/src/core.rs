@@ -1,4 +1,4 @@
-use crate::{config::*, executor::manager::ParallelExecutor};
+use crate::{cli::TagArgs, config::*, executor::manager::ParallelExecutor};
 use std::path::PathBuf;
 
 pub mod ccs;
@@ -101,4 +101,9 @@ pub fn run_step(
     executor
         .add_jobs(jobs)
         .execute(config, step, global_output_dir.clone(), None);
+}
+
+pub fn __tags(_args: TagArgs) {
+    log::info!("INFO: isopipe tag mode, this is current tag schema:");
+    println!("{}", crate::consts::TAG_SCHEMA);
 }

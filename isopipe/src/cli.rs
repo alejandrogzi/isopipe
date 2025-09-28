@@ -52,6 +52,12 @@ pub enum SubArgs {
         #[command(flatten)]
         args: WriteArgs,
     },
+
+    #[command(name = "tag")]
+    Tag {
+        #[command(flatten)]
+        args: TagArgs,
+    },
 }
 
 /// Run the pipeline from start to finish
@@ -289,8 +295,6 @@ impl StepArgs {
     }
 }
 
-// impl ArgCheck for StepArgs {}
-
 /// Write commands to a .sh file
 /// with parameters specified in --config
 ///
@@ -330,4 +334,27 @@ pub struct WriteArgs {
         num_args = 1..,
     )]
     pub cmd: Vec<String>,
+}
+
+/// Show tags used by the pipeline
+///
+/// # Arguments
+///
+/// * `show` - Show the current tag schema
+///
+/// # Example
+///
+/// ```bash,no_run
+/// isopipe tag
+/// ```
+#[derive(Debug, Parser, Clone)]
+pub struct TagArgs {
+    #[arg(
+        short = 'S',
+        long = "show",
+        help = "Show the current tag schema",
+        value_name = "FLAG",
+        action = clap::ArgAction::SetTrue,
+    )]
+    pub show: bool,
 }

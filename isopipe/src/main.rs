@@ -4,12 +4,11 @@ use simple_logger::init_with_level;
 
 use isopipe::{
     cli::{Args, SubArgs},
-    core::run,
+    core::{__tags, run},
     executor::manager::ParallelManager,
 };
 
 #[allow(unused_variables)]
-
 fn main() {
     let start = std::time::Instant::now();
     let args: Args = Args::parse();
@@ -55,14 +54,8 @@ fn main() {
                 std::process::exit(1);
             });
         }
-        SubArgs::Write { args } => {
-            todo!()
-
-            // write(args).unwrap_or_else(|e| {
-            //     error!("{}", e);
-            //     std::process::exit(1);
-            // });
-        }
+        SubArgs::Write { args } => todo!(),
+        SubArgs::Tag { args } => __tags(args),
     }
 
     let elapsed = start.elapsed();

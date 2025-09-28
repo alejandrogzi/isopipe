@@ -195,3 +195,20 @@ pub const COLOR_SCHEMA: &[(&str, &str)] = &[
     ("truncation.bed", "102,86,61"),     // INFO: brown
     ("fusions.bed", "128,60,171"),       // INFO: purple
 ];
+
+// tag schema
+pub const TAG_SCHEMA: &str = r#"
+    FC = amount of bp clipped from 5' end
+    TC = amount of bp clipped from 3' end
+    PA = polyA non-clipped length
+    PR = polyA length (all bp)
+    IY = percent mapping identity read-genome
+    SG = singleton marker
+    OR = open-reading-frame number of read
+    NE = nested open-reading-frame number of read
+    UT = unique open-reading-frame TranslationAi prediction
+    FK = fake fusion marker
+    RW = review read marker
+    SN = strong NMD marker
+    WN = weak NMD marker
+"#;
