@@ -25,9 +25,10 @@ use log;
 use once_cell::sync::Lazy;
 use rayon::prelude::*;
 
+use crate::cli::CollapseMode;
 use crate::{
     cli::RunMode,
-    record::{BinKey, Queue, Record},
+    record::{BinKey, Queue, QueueState, Record},
 };
 
 pub const MAGIC: &[u8; 5] = b"C0IDX";
@@ -68,9 +69,11 @@ static NEXT_CHROM_ID: AtomicU32 = AtomicU32::new(1);
 /// ```
 pub fn unpack<P: AsRef<Path> + Debug + Sync + Send>(
     files: Vec<P>,
+    mode: CollapseMode,
+    merge: bool,
 ) -> Result<HashMap<BinKey, Queue>, Box<dyn std::error::Error>> {
     let contents = par_reader(files)?;
-    let tracks = par_parse_tracks(&contents)?;
+    let tracks = par_parse_tracks(&contents, mode, merge)?;
 
     Ok(tracks)
 }
@@ -116,23 +119,101 @@ pub fn unpack<P: AsRef<Path> + Debug + Sync + Send>(
 /// let tracks = par_parse_tracks(bed_content)?;
 /// assert!(tracks.len() > 0);
 /// ```
-fn par_parse_tracks(contents: &str) -> Result<HashMap<BinKey, Queue>, Box<dyn std::error::Error>> {
+fn par_parse_tracks(
+    contents: &str,
+    mode: CollapseMode,
+    merge: bool,
+) -> Result<HashMap<BinKey, Queue>, Box<dyn std::error::Error>> {
     let tracks = contents
         .par_lines()
         .filter(|row| !row.starts_with("#"))
-        .filter_map(|line| Record::parse(line).ok())
+        .filter_map(|line| Record::parse(line, &mode).ok())
         .fold(HashMap::new, |mut acc, record| {
             // INFO: if record not in tracks, create a new queue
             acc.entry(record.key)
                 .and_modify(|queue: &mut Queue| {
                     queue.count += 1;
                     queue.reads.push(record.read.clone());
+
+                    // INFO: the next block will only happend when collapse_mode is
+                    // equal to 'gapped-cds'. The 'exon' and 'transcript' mode will
+                    // require an exact BinKey match. The 'cds' mode sets both bounds
+                    // to 0 and thus will always fall in the third case.
+
+                    // INFO: update queue bounds, three cases:
+                    // 1. if one bound is greater but the other less -> QueueState::Perturbed
+                    // and we need to merge
+                    //
+                    // Example:
+                    //
+                    // read1: xxxxXXX----XXX--XXXXXXxxxx
+                    //        ^^                        ^^^^
+                    // read2:   xxXXX----XXX--XXXXXXxxxxxxxx
+                    //
+                    // or its reverse.
+                    //
+                    // Here, if merge flag is on, we need to update bounds to min and max,
+                    // respectively. After that, we use the updated bounds to create an
+                    // artificial read that joins both, replacing the line and updating the
+                    // name in that artificial line with the tag ::AR (artificial). Note that
+                    // we also need to update queue.reads with the replaced header.
+                    if (record.bounds.0 > queue.bounds.0 && record.bounds.1 > queue.bounds.1)
+                        || (record.bounds.0 < queue.bounds.0 && record.bounds.1 < queue.bounds.1)
+                    {
+                        queue.state = QueueState::Perturbed;
+                        queue.bounds = (
+                            record.bounds.0.min(queue.bounds.0),
+                            record.bounds.1.max(queue.bounds.1),
+                        );
+
+                        // INFO: not necessary to update header or rep_line, updating reads is enough
+                        queue.reads.push(record.read.clone());
+
+                        queue.count += 1;
+                        if merge {
+                            // INFO: accounting for the current header that will also be part of queue
+                            queue.count += 1;
+                            queue.reads.push(queue.header.clone());
+                        }
+                    }
+                    // 2. if one of both bounds is greater and the other is either equal or
+                    // also greater -> QueueState::Unperturbed, replace current line
+                    //
+                    // Example:
+                    //
+                    // read1: xxxxXXXXX----XXXX----XXXXXxxxx
+                    //        ^^                           |
+                    // read2:   xxXXXXX----XXXX----XXXXXxxxx
+                    //
+                    // or its reverse
+                    else if record.bounds.0 <= queue.bounds.0 && record.bounds.1 >= queue.bounds.1
+                    {
+                        // INFO: in the case the read was already perturbed, makes
+                        // sense to change the state because the new read bounds are
+                        // outwards the already updated perturbed bounds
+                        queue.state = QueueState::Unperturbed;
+
+                        queue.bounds = record.bounds;
+                        queue.rep_line = record.line.clone();
+                        queue.count += 1;
+
+                        // INFO: update queue.reads with current read being replaced
+                        queue.reads.push(record.read.clone());
+
+                        // INFO: update header
+                        queue.header = record.read.clone();
+                    }
+                    // 3. if both bounds are equal or less -> state remains the same
+                    else {
+                    }
                 })
                 .or_insert(Queue {
                     reads: vec![],
                     count: 0,
                     rep_line: record.line,
                     header: record.read,
+                    bounds: record.bounds,
+                    state: QueueState::Unperturbed,
                 });
 
             acc
@@ -142,10 +223,7 @@ fn par_parse_tracks(contents: &str) -> Result<HashMap<BinKey, Queue>, Box<dyn st
             for (key, right_queue) in right {
                 left.entry(key)
                     .and_modify(|left_queue| {
-                        left_queue.count += right_queue.count + 1; // INFO: accounts for right header
-
-                        left_queue.reads.extend(right_queue.reads.clone());
-                        left_queue.reads.push(right_queue.header.clone()); // INFO: accounts for right header
+                        __compare_queue(left_queue, &right_queue, merge);
                     })
                     .or_insert(right_queue);
             }
@@ -154,6 +232,68 @@ fn par_parse_tracks(contents: &str) -> Result<HashMap<BinKey, Queue>, Box<dyn st
         });
 
     Ok(tracks)
+}
+
+/// Compares two `Queue` instances and updates the first one with the second one.
+///
+/// This function compares two `Queue` instances and updates the first one with the second one.
+/// It accounts for the right `Queue` instance's header and updates the left `Queue` instance
+/// with perturbed bounds, header, and read information.
+///
+/// # Arguments
+///
+/// * `left` - A mutable reference to the left `Queue` instance
+/// * `right` - A reference to the right `Queue` instance
+/// * `merge` - A boolean flag indicating whether to merge the right `Queue` instance
+///
+/// # Example
+///
+/// ```rust, ignore
+/// let mut left = Queue::default();
+/// let right = Queue::default();
+/// __compare_queue(&mut left, &right, false);
+/// ```
+///
+/// See [`par_parse_tracks`] for descriptions of each branch
+fn __compare_queue(left: &mut Queue, right: &Queue, merge: bool) {
+    // INFO: +1 accounts either for left or right
+    left.count += right.count + 1;
+
+    // INFO: accounting for right header
+    left.reads.extend(right.reads.clone());
+
+    if (right.bounds.0 > left.bounds.0 && right.bounds.1 > left.bounds.1)
+        || (right.bounds.0 < left.bounds.0 && right.bounds.1 < left.bounds.1)
+    {
+        left.state = QueueState::Perturbed;
+        left.bounds = (
+            right.bounds.0.min(left.bounds.0),
+            right.bounds.1.max(left.bounds.1),
+        );
+        left.reads.push(left.header.clone()); // INFO: sending left header to queue
+        left.header = right.header.clone();
+
+        if merge {
+            // INFO: accounting for the current header that will also be part of queue
+            left.count += 1;
+            left.reads.push(left.header.clone()); // INFO: sending right header to queue
+        }
+    } else if right.bounds.0 <= left.bounds.0 && right.bounds.1 >= left.bounds.1 {
+        // INFO: in the case the read was already perturbed, makes
+        // sense to change the state because the new read bounds are
+        // outwards the already updated perturbed bounds
+        left.state = QueueState::Unperturbed;
+
+        // WARN: not adding +1 because we already do it at the beginning
+        left.bounds = right.bounds;
+        left.rep_line = right.rep_line.clone();
+
+        // INFO: update queue.reads with current read being replaced
+        left.reads.push(left.header.clone());
+        left.header = right.header.clone();
+    } else {
+        left.reads.push(right.header.clone()); // INFO: accounts for right header
+    }
 }
 
 /// Reads the entire contents of a file into a string.
@@ -337,12 +477,20 @@ pub fn __write_collapsed<P: AsRef<Path> + Debug>(
     tracks: HashMap<BinKey, Queue>,
     mode: RunMode,
     output: P,
+    merge: bool,
 ) {
     log::info!("INFO: Writing collapsed file");
     let mut writer = BufWriter::new(
         File::create(&output)
             .unwrap_or_else(|e| panic!("ERROR: Could not create file {:?} -> {e}", output)),
     );
+
+    let lines = tracks.len();
+    let mut artificial = 0;
+
+    if merge {
+        log::warn!("WARN: Merge mode activated, will create artificial reads!");
+    }
 
     for (_, queue) in tracks {
         match mode {
@@ -362,26 +510,257 @@ pub fn __write_collapsed<P: AsRef<Path> + Debug>(
                 let line = std::str::from_utf8(&queue.rep_line)
                     .unwrap_or_else(|e| panic!("ERROR: Could not convert rep_line to utf8 -> {e}"));
 
-                let collapsed = format!("{}\t{}", line, tail);
+                match queue.state {
+                    QueueState::Unperturbed => {
+                        let collapsed = format!("{}\t{}", line, tail);
+                        __write_line(&mut writer, &collapsed);
+                    }
+                    QueueState::Perturbed => {
+                        if merge {
+                            log::debug!(
+                                "DEBUG: Perturbed state, writing artificial read -> {queue:?}"
+                            );
 
-                writeln!(writer, "{}", collapsed)
-                    .unwrap_or_else(|e| panic!("ERROR: Could not write to collapsed file -> {e}"));
+                            artificial += 1;
+                            let mut parts = line.split("\t").collect::<Vec<_>>();
+
+                            let old_start = parts[1]
+                                .parse::<u32>()
+                                .unwrap_or_else(|e| panic!("ERROR: Could not parse start -> {e}"));
+                            let old_end = parts[2]
+                                .parse::<u32>()
+                                .unwrap_or_else(|e| panic!("ERROR: Could not parse end -> {e}"));
+
+                            let new_start = format!("{}", queue.bounds.0);
+                            let new_end = format!("{}", queue.bounds.1);
+                            let new_name = format!("{}#AR", parts[3]);
+
+                            parts[1] = new_start.as_str();
+                            parts[2] = new_end.as_str();
+                            parts[3] = new_name.as_str();
+
+                            let (new_sizes, new_starts) = update_blocks(
+                                &mut parts,
+                                old_start,
+                                old_end,
+                                queue.bounds.0,
+                                queue.bounds.1,
+                            );
+
+                            parts[10] = new_sizes.as_str();
+                            parts[11] = new_starts.as_str();
+
+                            let collapsed = parts.join("\t");
+                            __write_line(&mut writer, &collapsed);
+                        } else {
+                            // INFO: just write the line, no merge
+                            let collapsed = format!("{}\t{}", line, tail);
+                            __write_line(&mut writer, &collapsed);
+                        }
+                    }
+                }
             }
             RunMode::Index => {
                 // INFO: no extra column
                 let line = std::str::from_utf8(&queue.rep_line)
                     .unwrap_or_else(|e| panic!("ERROR: Could not convert rep_line to utf8 -> {e}"));
 
-                writeln!(writer, "{}", line)
-                    .unwrap_or_else(|e| panic!("ERROR: Could not write to collapsed file -> {e}"));
+                match queue.state {
+                    QueueState::Unperturbed => {
+                        __write_line(&mut writer, line);
+                    }
+                    QueueState::Perturbed => {
+                        if merge {
+                            log::debug!(
+                                "DEBUG: Perturbed state, writing artificial read -> {queue:?}"
+                            );
+
+                            artificial += 1;
+                            let mut parts = line.split("\t").collect::<Vec<_>>();
+
+                            let old_start = parts[1]
+                                .parse::<u32>()
+                                .unwrap_or_else(|e| panic!("ERROR: Could not parse start -> {e}"));
+                            let old_end = parts[2]
+                                .parse::<u32>()
+                                .unwrap_or_else(|e| panic!("ERROR: Could not parse end -> {e}"));
+
+                            let new_start = format!("{}", queue.bounds.0);
+                            let new_end = format!("{}", queue.bounds.1);
+                            let new_name = format!("{}#AR", parts[3]);
+
+                            parts[1] = new_start.as_str();
+                            parts[2] = new_end.as_str();
+                            parts[3] = new_name.as_str();
+
+                            let (new_sizes, new_starts) = update_blocks(
+                                &mut parts,
+                                old_start,
+                                old_end,
+                                queue.bounds.0,
+                                queue.bounds.1,
+                            );
+
+                            parts[10] = new_sizes.as_str();
+                            parts[11] = new_starts.as_str();
+
+                            let collapsed = parts.join("\t");
+                            __write_line(&mut writer, &collapsed);
+                        } else {
+                            // INFO: just write the line, no merge
+                            __write_line(&mut writer, line);
+                        }
+                    }
+                }
             }
         }
     }
 
-    log::info!(
-        "INFO: Wrote {} lines to collapsed file",
-        writer.buffer().lines().count()
-    );
+    log::info!("INFO: Wrote {} lines to collapsed file", lines);
+
+    if merge {
+        log::warn!(
+            "WARN: Merge mode activated, wrote {} artificial reads",
+            artificial
+        );
+    }
+}
+
+/// Writes a line to a file.
+///
+/// This function writes a line to a file using a buffered writer.
+///
+/// # Arguments
+///
+/// * `writer` - A reference to a `BufWriter` instance
+/// * `line` - A string slice containing the line to write
+///
+/// # Panics
+///
+/// Panics if there is an error writing to the file.
+fn __write_line(writer: &mut BufWriter<File>, line: &str) {
+    writeln!(writer, "{}", line)
+        .unwrap_or_else(|e| panic!("ERROR: Could not write to collapsed file -> {e}"));
+}
+
+/// Updates block sizes and starts for a BED12 line.
+///
+/// This function updates the block sizes and starts for a BED12 line
+/// based on the new bounds and the old bounds. It accounts for the
+/// following cases:
+///
+/// 1. Extended at start: The first block size is increased by the difference
+///    between the new start and the old start.
+/// 2. Trimmed at start: The first block size is decreased by the difference
+///    between the new start and the old start.
+/// 3. Extended at end: The last block size is increased by the difference
+///    between the new end and the old end.
+/// 4. Trimmed at end: The last block size is decreased by the difference
+///    between the new end and the old end.
+/// 5. Adjusted exon starts: The exon starts are adjusted based on the
+///    difference between the new start and the old start.
+///
+/// # Arguments
+///
+/// * `parts` - A mutable reference to a vector of strings representing the BED12 line
+/// * `old_start` - The old start position
+/// * `old_end` - The old end position
+/// * `new_start` - The new start position
+/// * `new_end` - The new end position
+///
+/// # Returns
+///
+/// A tuple containing the updated block sizes and starts as strings
+///
+/// # Example
+///
+/// ```rust, ignore
+/// let mut parts = line.split("\t").collect::<Vec<_>>();
+/// let old_start = parts[1]
+///     .parse::<u32>()
+///     .unwrap_or_else(|e| panic!("ERROR: Could not parse start -> {e}"));
+/// let old_end = parts[2]
+///     .parse::<u32>()
+///     .unwrap_or_else(|e| panic!("ERROR: Could not parse end -> {e}"));
+///
+/// let new_start = format!("{}", queue.bounds.0);
+/// let new_end = format!("{}", queue.bounds.1);
+/// let new_name = format!("{}#AR", parts[3]);
+///
+/// let (new_sizes, new_starts) = update_blocks(
+///     &mut parts,
+///     old_start,
+///     old_end,
+///     queue.bounds.0,
+///     queue.bounds.1,
+/// );
+///
+/// parts[10] = new_sizes.as_str();
+/// parts[11] = new_starts.as_str();
+/// ```
+fn update_blocks<'a>(
+    parts: &mut Vec<&'a str>,
+    old_start: u32,
+    old_end: u32,
+    new_start: u32,
+    new_end: u32,
+) -> (String, String) {
+    // Parse block sizes and starts
+    let block_sizes: Vec<u32> = parts[10]
+        .split(',')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.parse().unwrap())
+        .collect();
+    let block_starts: Vec<u32> = parts[11]
+        .split(',')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.parse().unwrap())
+        .collect();
+
+    let mut new_block_sizes = block_sizes.clone();
+    let mut new_block_starts = block_starts.clone();
+
+    let start_diff = (new_start as i64 - old_start as i64).abs() as u32;
+
+    if new_start < old_start {
+        // INFO: Extended at start
+        new_block_sizes[0] += start_diff;
+        new_block_starts[0] = 0;
+    } else {
+        // INFO: Trimmed at start
+        new_block_sizes[0] -= start_diff;
+        new_block_starts[0] = 0;
+    }
+
+    // INFO: Adjust all exon starts after the first one
+    let first_exon_delta = new_start as i64 - old_start as i64;
+    for i in 1..new_block_starts.len() {
+        new_block_starts[i] = (block_starts[i] as i64 - first_exon_delta) as u32;
+    }
+
+    // INFO: Adjust last exon
+    let last_idx = new_block_sizes.len() - 1;
+    let end_diff = (new_end as i64 - old_end as i64).abs() as u32;
+    if new_end > old_end {
+        // INFO: Extended at end
+        new_block_sizes[last_idx] += end_diff;
+    } else {
+        // INFO: Trimmed at end
+        new_block_sizes[last_idx] -= end_diff;
+    }
+
+    let new_sizes_str = new_block_sizes
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let new_starts_str = new_block_starts
+        .iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+
+    (new_sizes_str, new_starts_str)
 }
 
 /// Writes a binary index file containing genomic tracks data.
@@ -555,10 +934,7 @@ pub fn __write_index<P: AsRef<Path> + Debug>(tracks: &HashMap<BinKey, Queue>, ou
         }
     }
 
-    log::info!(
-        "INFO: Wrote {} lines to index file",
-        writer.buffer().lines().count()
-    );
+    log::info!("INFO: Wrote {} lines to index file", num_records);
 }
 
 /// Reads and reconstructs genomic tracks data from a binary index file.
@@ -708,6 +1084,8 @@ pub fn read_index<P: AsRef<Path>>(input: P) -> io::Result<HashMap<BinKey, Queue>
             reads,
             count,
             rep_line,
+            state: QueueState::Unperturbed,
+            bounds: (0, 0), // INFO: placeholder bounds for now
         };
 
         map.insert(key, queue);

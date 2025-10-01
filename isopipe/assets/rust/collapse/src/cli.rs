@@ -13,7 +13,7 @@
 //! rows are grouped together. The deduplicated entries are held in memory alongside
 //! their corresponding read identifier queues [maintaining original order for reconstruction].
 
-use clap::{self, ArgAction, ArgGroup, Parser};
+use clap::{self, ArgAction, ArgGroup, Parser, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -88,6 +88,24 @@ pub struct RunArgs {
         action = ArgAction::SetTrue,
     )]
     pub extend: bool,
+
+    #[arg(
+        short = 'c',
+        long = "collapse-mode",
+        help = "Mode to collapse reads. Affects the way the binnary key is processed and thus any equivalence",
+        value_name = "COLLAPSE_MODE",
+        default_value = "transcript"
+    )]
+    pub collapse_mode: CollapseMode,
+
+    #[arg(
+        short = 'M',
+        long = "merge",
+        help = "Flag to activate merging on perturbed queues and create artificial reads",
+        value_name = "FLAG",
+        action = ArgAction::SetTrue,
+    )]
+    pub merge: bool,
 
     #[arg(
         short = 'o',
@@ -203,6 +221,32 @@ impl ReadMode {
             ReadMode::Expand
         } else {
             ReadMode::Lookup
+        }
+    }
+}
+
+#[derive(Parser, Debug, Clone, ValueEnum, Copy)]
+pub enum CollapseMode {
+    #[clap(name = "exon")]
+    Exon, // INFO: cds_start, cds_end are 0
+    #[clap(name = "cds")]
+    Coding, // INFO: tx_start, tx_end are 0
+    #[clap(name = "transcript")]
+    Transcript, // INFO: cannonical
+    #[clap(name = "gapped-cds")]
+    GappedCoding, // INFO: tx_start, tx_end are 0, all gaps preserved
+}
+
+impl std::str::FromStr for CollapseMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "exon" => Ok(CollapseMode::Exon),
+            "cds" => Ok(CollapseMode::Coding),
+            "transcript" => Ok(CollapseMode::Transcript),
+            "gapped-cds" => Ok(CollapseMode::GappedCoding),
+            _ => Err(format!("Invalid collapse mode: {s}")),
         }
     }
 }

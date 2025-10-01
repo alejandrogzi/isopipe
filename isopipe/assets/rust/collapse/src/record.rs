@@ -16,7 +16,7 @@
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
-use crate::utils::intern_chromosome;
+use crate::{cli::CollapseMode, utils::intern_chromosome};
 
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -31,6 +31,8 @@ pub struct Record {
     pub read: Vec<u8>,
     /// Original line as bytes
     pub line: Vec<u8>,
+    /// Record bounds (start, end)
+    pub bounds: (u32, u32),
 }
 
 impl Record {
@@ -75,7 +77,7 @@ impl Record {
     /// assert_eq!(record.key.start, 1000);
     /// assert_eq!(record.key.end, 2000);
     /// ```
-    pub fn parse(line: &str) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn parse(line: &str, mode: &CollapseMode) -> Result<Self, Box<dyn std::error::Error>> {
         if line.is_empty() {
             return Err("ERROR: Empty line".into());
         }
@@ -203,9 +205,19 @@ impl Record {
             .collect::<Vec<(u32, u32)>>();
 
         Ok(Self {
-            key: BinKey::from_parts(chrom, start, end, strand, thick_start, thick_end, gaps),
+            key: BinKey::from_parts(
+                chrom,
+                start,
+                end,
+                strand,
+                thick_start,
+                thick_end,
+                gaps,
+                mode,
+            ),
             read: name.as_bytes().to_vec(),
             line: line.as_bytes().to_vec(),
+            bounds: (start, end),
         })
     }
 }
@@ -270,16 +282,77 @@ impl BinKey {
     /// ```
     pub fn from_parts(
         chrom: &str,
-        start: u32,
-        end: u32,
+        mut start: u32,
+        mut end: u32,
         strand: u8,
-        thick_start: u32,
-        thick_end: u32,
+        mut thick_start: u32,
+        mut thick_end: u32,
         mut gaps: Vec<(u32, u32)>,
+        mode: &CollapseMode,
     ) -> Self {
-        // INFO: clamp gaps into [start, end]
-        // INFO: also drop any intron that is invalid (start >= end or outside transcript)
-        gaps.retain(|&(s, e)| s < e && s >= start && e <= end);
+        match mode {
+            CollapseMode::Exon => {
+                // INFO: ignores CDS and only performs exon coord matching
+                //
+                // read1: xxxxXXXX---XXXX----XXXXxxxx
+                //          ^^||||           |^^^
+                // read2: xxXXXXXX---XXXX----Xxxxxxxx
+                //
+                // Here, indenpendently of how thick blocks are definde, exon
+                // coords will be used for matching. Note that gaps (introns) are
+                // also taking into account.
+
+                thick_start = 0;
+                thick_end = 0;
+            }
+            CollapseMode::Coding => {
+                // INFO: ignores transcription start and end, performs CDS coord matching
+                //
+                // read1: xxx---xxxXXXX---XXXX---XXXXx
+                //                |^^^^
+                // read2:         xXXXX---XXXX---XXXXx
+                //
+                // its negative variant:
+                //
+                // read1: xxxxXXXX---XXXX----XXXXxxxx
+                //          ^^||||           ||||
+                // read2: xxXXXXXX---XXXX----XXXXxxxx <- even gaps match, CDS does not
+                //
+                // Here, independently of exonic start and end, CDS and gaps will be
+                // used for matching. Note that UTR structure will be completely ignored
+                // in this category. Also, note that gaps are reduced within CDS bounds.
+
+                start = thick_start;
+                end = thick_end;
+
+                // INFO: clamp gaps into [start, end]
+                // INFO: also drop any intron that is invalid (start >= end or outside transcript)
+                gaps.retain(|&(s, e)| s < e && s >= start && e <= end);
+            }
+            CollapseMode::GappedCoding => {
+                // INFO: ignores exonic start and end but preserves all gaps
+                //
+                // read1: xxxxxxxx--xxXXXX---XXX---XXXxx--xxx
+                //            ||||||||||||||||||||||||||||||
+                // read2:     xxx--xxXXXX---XXX---XXXxx--xxx
+                // read3:      xx--xxXXXX---XXX---XXXxx--xxx
+                // read4:       x--xxXXXX---XXX---XXXxx--xxx
+                //
+                // but excludes the following cases:
+                //
+                // read1: xx--xxxxXXXX---XXXX----XXXXxxxx
+                //          **  ^^||||***||||****|^^^
+                // read2: xx--xxXXXXXX---XXXX----Xxxxxxxx <- gaps match but not CDS
+                //
+                // read1: xxxxxxXXXXX----XXXX---XXXXXxxxx
+                //          ^^^||||||||||||||||||||||||||
+                // read2: xx---xXXXXX----XXXX---XXXXXxxxx <- CDS match but not gaps
+
+                start = thick_start;
+                end = thick_end;
+            }
+            CollapseMode::Transcript => {} // INFO: do nothing, all info is already in
+        }
 
         // INFO: static indexing of chromosomes -> {chr: 1, chr2: 2, ...}
         let chrom_id = intern_chromosome(chrom);
@@ -503,6 +576,10 @@ pub struct Queue {
     pub rep_line: Vec<u8>,
     /// Header information for this queue
     pub header: Vec<u8>,
+    /// Queue bounds (start, end)
+    pub bounds: (u32, u32),
+    /// Queue state
+    pub state: QueueState,
 }
 
 impl std::fmt::Display for Queue {
@@ -567,9 +644,17 @@ impl std::fmt::Display for Queue {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QueueState {
+    Unperturbed,
+    Perturbed,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const MODE: CollapseMode = CollapseMode::Transcript;
 
     #[test]
     fn test_binkey_equality() {
@@ -581,6 +666,7 @@ mod tests {
             150,
             250,
             vec![(100, 200), (300, 400)],
+            &MODE,
         );
 
         assert_eq!(key.chrom_id, 1);
@@ -601,6 +687,7 @@ mod tests {
             150,
             250,
             vec![(100, 200), (300, 400)],
+            &MODE,
         );
 
         assert_eq!(key.fingerprint, key2.fingerprint);
@@ -618,6 +705,7 @@ mod tests {
             150,
             250,
             vec![(100, 200), (300, 400)],
+            &MODE,
         );
 
         let bytes = key.to_bytes_canonical();
@@ -634,6 +722,7 @@ mod tests {
             150,
             250,
             vec![(100, 200), (300, 400)],
+            &MODE,
         );
 
         let bytes = key.to_bytes_canonical();
