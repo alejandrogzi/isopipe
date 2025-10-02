@@ -47,6 +47,7 @@ struct isoClassDataBB
     char* TAG_strong_nmd;               // Strong NMD prediction
     char* TAG_weak_nmd;                 // Weak NMD prediction
     char* TAG_unique_tai;               // Unique translationAi prediction
+    char* collapsed;                    // Collapsed read names
 };
 
 

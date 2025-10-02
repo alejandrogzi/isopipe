@@ -46,6 +46,7 @@ struct isoClassDataBB *isoClassDataBBLoad(char **row, bits16 fieldCount)
     ret->TAG_strong_nmd = cloneString(row[23]);
     ret->TAG_weak_nmd = cloneString(row[24]);
     ret->TAG_unique_tai = cloneString(row[25]);
+    ret->collapsed = cloneString(row[26]);
     return ret;
 }
 
@@ -97,12 +98,15 @@ printf("<h4>Overall classification</h4>\n"
        "  <li>Intrapriming status: %s</li>\n"
        "  <li>Truncation status: %s</li>\n"
        "  <li>ORF prediction score: %s</li>\n"
+       "  <li>Collapsed read names: %s</li>\n"
        "</ul><br>\n",
        info->R_read_status,
        info->R_read_intron_status,
        info->P_read_status,
        info->T_read_status,
-       info->O_read_orf_score);
+       info->O_read_orf_score
+       info->collapsed);
+);
 
 htmlHorizontalLine();
 
