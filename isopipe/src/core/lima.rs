@@ -1,5 +1,5 @@
 use crate::{config::*, consts::*, executor::job::Job};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Run lima
 ///
@@ -25,7 +25,7 @@ pub fn lima(
     step: &PipelineStep,
     config: &Config,
     input_dir: &PathBuf,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
 
@@ -71,5 +71,5 @@ pub fn lima(
 
     log::info!("INFO [STEP 2]: Pre-processing completed -> Running...");
 
-    return jobs;
+    jobs
 }

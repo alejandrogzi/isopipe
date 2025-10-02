@@ -5,7 +5,7 @@ use crate::{
     executor::{job::Job, manager::ParallelExecutor},
 };
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Merge BAM files in a directory using samtools
 /// and index the merged BAMs
@@ -124,13 +124,15 @@ fn scan_groups(input_dir: &PathBuf) -> HashMap<String, Vec<PathBuf>> {
             .to_string_lossy()
             .split(".")
             .nth(1)
-            .expect(&format!(
-                "ERROR: Failed to get basename from {}",
-                entry.path().display()
-            ))
+            .unwrap_or_else(|| {
+                panic!(
+                    "ERROR: Failed to get basename from {}",
+                    entry.path().display()
+                )
+            })
             .to_string();
 
-        groups.entry(basename).or_insert(Vec::new()).push(bam);
+        groups.entry(basename).or_default().push(bam);
     }
 
     groups
@@ -150,7 +152,7 @@ fn scan_groups(input_dir: &PathBuf) -> HashMap<String, Vec<PathBuf>> {
 /// ```rust, no_run
 /// samtools::index(PathBuf::from("example.bam"), &config, &mut executor, &PathBuf::from("output"));
 /// ```
-pub fn index(config: &Config, input_dir: &PathBuf, executor: &mut ParallelExecutor) {
+pub fn index(config: &Config, input_dir: &Path, executor: &mut ParallelExecutor) {
     log::info!("INFO [SAMTOOLS]: Generating .bai indexes for BAM files...",);
 
     let mut jobs = Vec::new();
@@ -192,7 +194,7 @@ pub fn index(config: &Config, input_dir: &PathBuf, executor: &mut ParallelExecut
     executor.add_jobs(jobs).and_send(
         config,
         "index",
-        input_dir.clone(),
+        input_dir.to_path_buf(),
         1,
         8,
         Some(package),

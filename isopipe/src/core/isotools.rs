@@ -37,11 +37,12 @@ use crate::{executor::manager::ParallelExecutor, isotools};
 /// A `Vec<Job>`: A vector containing `Job` objects, where each `Job` represents a command to be
 /// executed by the pipeline. These commands are generated based on the `tmp_predictions.bed`
 /// files found in the input directory structure.
+#[allow(clippy::map_entry)]
 pub fn iso_nmd(
     step: &PipelineStep,
     config: &Config,
     input_dir: &PathBuf,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
 ) -> Vec<Job> {
     let _mode = ParallelMode::from_str(&config.get_step_custom_field(step, PARALLEL_MODE));
     let mut jobs = Vec::new();
@@ -91,10 +92,12 @@ pub fn iso_nmd(
 
             let chr_outdir = step_output_dir.join(chr).join(suffix);
 
-            std::fs::create_dir_all(&chr_outdir).expect(&format!(
-                "ERROR: Failed to create directory {}",
-                chr_outdir.display()
-            ));
+            std::fs::create_dir_all(&chr_outdir).unwrap_or_else(|e| {
+                panic!(
+                    "ERROR: Failed to create directory -> {} -> {e}",
+                    chr_outdir.display()
+                )
+            });
 
             for file in std::fs::read_dir(&chunked_dir)
                 .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", chunked_dir))
@@ -111,15 +114,17 @@ pub fn iso_nmd(
 
                         predictions
                             .entry(format!("{}.{}", chr, suffix))
-                            .or_insert_with(|| Vec::new())
+                            .or_insert_with(Vec::new)
                             .push(prediction.clone());
 
+                        let prefix =
+                            format!("tmp_{}", chunked_dir.file_name().unwrap().to_str().unwrap());
                         let mut cmd = format!(
                             "{} --ref {} --outdir {} --prefix {}",
                             isotools!(ISO_NMD).display(),
                             file.display(),
                             chr_outdir.display(),
-                            format!("tmp_{}", chunked_dir.file_name().unwrap().to_str().unwrap()),
+                            prefix,
                         );
 
                         // INFO: if out_predictions does not have a key, set it and do in-place cleaning
@@ -165,7 +170,7 @@ pub fn iso_nmd(
                 log::debug!(
                     "DEBUG: merging predictions for {childs:?} for {suffix:?} in {entry:?} -> {target:?}"
                 );
-                cat(&childs, &target).unwrap_or_else(|e| {
+                cat(childs, target).unwrap_or_else(|e| {
                     panic!("ERROR: could not concatenate predictions for {childs:?} to {target:?} -> {e}")
                 });
             }
@@ -197,7 +202,7 @@ pub fn iso_fusion(
     step: &PipelineStep,
     config: &Config,
     input_dir: &PathBuf,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
 ) -> Vec<Job> {
     let mut non_cannonical = true;
     let mut jobs = Vec::new();
@@ -250,10 +255,12 @@ pub fn iso_fusion(
                 .unwrap_or_else(|| panic!("ERROR: could not build prefix for {:?}", file.path())),
         );
 
-        std::fs::create_dir_all(&prefix).expect(&format!(
-            "ERROR: Failed to create directory {}",
-            prefix.display()
-        ));
+        std::fs::create_dir_all(&prefix).unwrap_or_else(|e| {
+            panic!(
+                "ERROR: Failed to create directory -> {} -> {e}",
+                prefix.display()
+            )
+        });
 
         if file
             .path()
@@ -297,7 +304,7 @@ pub fn iso_fusion(
         return nc_jobs;
     }
 
-    return jobs;
+    jobs
 }
 
 /// Synchronize read IDs across all BED files in a directory by replacing them with sequential numbers.
@@ -620,7 +627,7 @@ pub fn agg_fusions(
 /// ```
 fn __build_non_cannonical_fusions(
     input_dir: &PathBuf,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
     refs: String,
 ) -> Vec<Job> {
     log::warn!(
@@ -646,10 +653,12 @@ fn __build_non_cannonical_fusions(
         let query = entry.path();
         let prefix = step_output_dir.join(format!("reads_{}", idx));
 
-        std::fs::create_dir_all(&prefix).expect(&format!(
-            "ERROR: Failed to create directory {}",
-            prefix.display()
-        ));
+        std::fs::create_dir_all(&prefix).unwrap_or_else(|e| {
+            panic!(
+                "ERROR: Failed to create directory -> {} -> {e}",
+                prefix.display()
+            )
+        });
 
         let cmd = format!(
             "{} --ref {} --query {} --prefix {}",
@@ -676,7 +685,7 @@ fn __build_non_cannonical_fusions(
         );
     }
 
-    return jobs;
+    jobs
 }
 
 /// Run iso-polya aparent
@@ -700,29 +709,26 @@ fn __build_non_cannonical_fusions(
 ///
 /// iso_polya_aparent(&executor, &config, &input_dir, &step_output_dir, &step);
 /// ```
-fn iso_polya_aparent(
-    step_output_dir: &PathBuf,
-    bed: &String,
-    twobit: &String,
-    prefix: &str,
-) -> Vec<Job> {
+fn iso_polya_aparent(step_output_dir: &Path, bed: &str, twobit: &str, prefix: &str) -> Vec<Job> {
     log::info!("INFO [STEP 10a]: Pre-processing for APARENT...");
 
     let mut jobs = Vec::new();
 
     let outdir = step_output_dir.join(prefix);
 
-    std::fs::create_dir_all(&outdir).expect(&format!(
-        "ERROR: Failed to create directory {}",
-        outdir.display()
-    ));
+    std::fs::create_dir_all(&outdir).unwrap_or_else(|e| {
+        panic!(
+            "ERROR: Failed to create directory -> {} -> {e}",
+            outdir.display()
+        )
+    });
 
     let args = vec![
         String::from("aparent"),
         String::from("--bed"),
-        bed.clone(),
+        bed.to_string(),
         String::from("--twobit"),
-        twobit.clone(),
+        twobit.to_string(),
         String::from("--outdir"),
         outdir.display().to_string(),
     ];
@@ -768,7 +774,7 @@ pub fn polish(
     step: &PipelineStep,
     config: &Config,
     input_dir: &PathBuf,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
     executor: &mut ParallelExecutor,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
@@ -854,10 +860,7 @@ pub fn polish(
             TAI_VENV,
             PRETTY_PY,
             step_output_dir.join(chr).join("nmd.bed").display(),
-            step_output_dir
-                .join(chr)
-                .join(format!("predictions.tsv"))
-                .display(),
+            step_output_dir.join(chr).join("predictions.tsv").display(),
             step_output_dir.join(chr).display(),
         );
 
@@ -872,10 +875,7 @@ pub fn polish(
                 "  && {} --reads {} --predictions {} --name fusions.bed --outdir {}",
                 PRETTY_PY,
                 step_output_dir.join(chr).join("fusions.bed").display(),
-                step_output_dir
-                    .join(chr)
-                    .join(format!("predictions.tsv"))
-                    .display(),
+                step_output_dir.join(chr).join("predictions.tsv").display(),
                 step_output_dir.join(chr).display()
             )
         } else {
@@ -913,10 +913,7 @@ pub fn polish(
                 " && {} --reads {} --predictions {} --introns {} --descriptor {} --outdir {}",
                 PRETTY_PY,
                 step_output_dir.join(chr).join("raw_reads.bed").display(),
-                step_output_dir
-                    .join(chr)
-                    .join(format!("predictions.tsv"))
-                    .display(),
+                step_output_dir.join(chr).join("predictions.tsv").display(),
                 step_output_dir
                     .join(chr)
                     .join("reference_introns.tsv")
@@ -984,10 +981,10 @@ pub fn polish(
 /// ```
 fn __pre_polish<P: AsRef<Path> + Debug + Copy>(
     input_dir: P,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
     executor: &mut ParallelExecutor,
     config: &Config,
-    twobit: &String,
+    twobit: &str,
 ) {
     let mem = CHUNK_SIZE as f32 * RAM_PER_SITE; // INFO: will be converted to MB by executor
     let mut inner_jobs = Vec::new();
@@ -1055,12 +1052,8 @@ fn __pre_polish<P: AsRef<Path> + Debug + Copy>(
                     continue;
                 }
 
-                let apa_jobs = iso_polya_aparent(
-                    step_output_dir,
-                    &bed.to_str().unwrap().to_string(),
-                    &twobit,
-                    chr,
-                );
+                let apa_jobs =
+                    iso_polya_aparent(step_output_dir, bed.to_str().unwrap(), twobit, chr);
 
                 log::debug!("DEBUG: APARENT jobs for {chr:?} -> {:?}", apa_jobs.len());
                 inner_jobs.extend(apa_jobs);
@@ -1073,7 +1066,7 @@ fn __pre_polish<P: AsRef<Path> + Debug + Copy>(
     executor.add_jobs(inner_jobs).and_send(
         config,
         "aparent",
-        step_output_dir.clone(),
+        step_output_dir.to_path_buf(),
         1,
         mem as u32,
         None,
@@ -1171,7 +1164,7 @@ pub fn iso_split(
     step: &PipelineStep,
     config: &Config,
     input_dir: &PathBuf,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
     executor: &mut ParallelExecutor,
 ) -> PathBuf {
     log::info!(
@@ -1235,11 +1228,11 @@ pub fn iso_split(
 fn split_reads(
     files: Vec<PathBuf>,
     chunks: &usize,
-    outdir: &PathBuf,
+    outdir: &Path,
     executor: &mut ParallelExecutor,
     config: &Config,
     step: &PipelineStep,
-    input_dir: &PathBuf,
+    input_dir: &Path,
 ) {
     log::info!(
         "INFO [ISO-SPLIT]: Running iso-split on {} files!",
@@ -1278,7 +1271,7 @@ fn split_reads(
             isotools!(ISO_SPLIT).display(),
             file.display(),
             chunks,
-            outdir.clone().display(),
+            outdir.display(),
             suffix.to_string_lossy(),
             threads,
         );
@@ -1289,7 +1282,7 @@ fn split_reads(
     executor.add_jobs(jobs).and_send(
         config,
         "iso-split",
-        input_dir.clone(),
+        input_dir.to_path_buf(),
         global_threads,
         8,
         Some(config.get_package_from_step(step)),

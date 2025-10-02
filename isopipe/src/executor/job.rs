@@ -125,7 +125,39 @@ impl Job {
         self
     }
 
+    /// Get the command string
+    ///
+    /// # Example
+    ///
+    /// ```rust, no_run
+    /// use isopipe::executor::job::Job;
+    ///
+    /// let job = Job::new()
+    ///     .task(PipelineStep::Ccs)
+    ///     .arg("input.bam")
+    ///     .arg("output.bam")
+    ///     .arg("chunks");
+    ///
+    /// assert_eq!(job.cmd(), "ccs input.bam output.bam chunks");
+    /// ```
     pub fn cmd(&self) -> &str {
         &self.cmd
+    }
+}
+
+/// Implement Default for Job
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use isopipe::executor::job::Job;
+///
+/// let job = Job::default();
+///
+/// assert_eq!(job.cmd, "");
+/// ```
+impl Default for Job {
+    fn default() -> Self {
+        Self::new()
     }
 }

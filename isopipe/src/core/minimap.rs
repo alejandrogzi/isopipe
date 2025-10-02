@@ -3,7 +3,7 @@ use crate::{config::*, consts::*, executor::job::Job};
 use std::{
     fs::{create_dir_all, File},
     io::BufWriter,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 use twobit::{convert, TwoBitFile};
 
@@ -37,7 +37,7 @@ pub fn minimap2(
     step: &PipelineStep,
     config: &Config,
     input_dir: &PathBuf,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
     executor: &mut crate::core::ParallelExecutor,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
@@ -60,8 +60,8 @@ pub fn minimap2(
 
     let genome_index = index_genome(step, config, step_output_dir, executor);
 
-    let _ = create_dir_all(&step_output_dir.join(SAM));
-    let _ = create_dir_all(&step_output_dir.join(BAM));
+    let _ = create_dir_all(step_output_dir.join(SAM));
+    let _ = create_dir_all(step_output_dir.join(BAM));
 
     for entry in std::fs::read_dir(input_dir)
         .expect("ERROR: failed to read input directory")
@@ -104,8 +104,8 @@ pub fn minimap2(
         let job = Job::new()
             .task(*step)
             .arg(&args)
-            .arg(&format!("-o {}", sam.display()))
-            .arg(&genome_index.display())
+            .arg(format!("-o {}", sam.display()))
+            .arg(genome_index.display())
             .arg(entry.display())
             .arg(compression);
 
@@ -130,7 +130,7 @@ pub fn minimap2(
 
     log::info!("INFO [STEP 5]: Pre-processing completed -> Running...");
 
-    return jobs;
+    jobs
 }
 
 /// Creates a FASTA file from a 2bit file in-place
@@ -147,17 +147,19 @@ pub fn minimap2(
 /// let fasta = twobit_to_fa(genome);
 /// assert_eq!(fasta, "path/to/genome.fa");
 /// ```
-fn twobit_to_fa(genome: String, step_output_dir: &PathBuf) -> String {
-    let mut twobit =
-        TwoBitFile::open(&genome).expect(&format!("ERROR: Failed to open 2bit file -> {}", genome));
+fn twobit_to_fa(genome: String, step_output_dir: &Path) -> String {
+    let mut twobit = TwoBitFile::open(&genome)
+        .unwrap_or_else(|e| panic!("ERROR: Failed to open 2bit file -> {} -> {e}", genome));
     let fasta = step_output_dir.join(GENOME_FA);
 
-    let mut writer = BufWriter::new(File::create(&fasta).expect(&format!(
-        "ERROR: Failed to create FASTA file -> {}",
-        fasta.display()
-    )));
+    let mut writer = BufWriter::new(File::create(&fasta).unwrap_or_else(|e| {
+        panic!(
+            "ERROR: Failed to create FASTA file -> {} -> {e}",
+            fasta.display()
+        )
+    }));
 
-    let _ = convert::fasta::to_fasta(&mut twobit, &mut writer)
+    convert::fasta::to_fasta(&mut twobit, &mut writer)
         .unwrap_or_else(|e| panic!("ERROR: Failed to convert {} to FASTA -> {e}", genome));
 
     fasta.display().to_string()
@@ -179,19 +181,17 @@ fn twobit_to_fa(genome: String, step_output_dir: &PathBuf) -> String {
 /// let genome = get_genome(&config, &step);
 /// assert_eq!(genome, "path/to/genome.fa");
 /// ```
-fn get_genome(config: &Config, step: &PipelineStep, step_output_dir: &PathBuf) -> String {
+fn get_genome(config: &Config, step: &PipelineStep, step_output_dir: &Path) -> String {
     let fields = config.get_step_custom_fields(step, vec![GENOME]);
     let file = fields
-        .get(0)
-        .expect(format!("ERROR: {} field not found!", GENOME).as_str());
+        .first()
+        .unwrap_or_else(|| panic!("ERROR: {} field not found!", GENOME));
 
-    let genome = if file.ends_with(TWOBIT) {
+    if file.ends_with(TWOBIT) {
         twobit_to_fa(file.clone(), step_output_dir)
     } else {
         file.to_string()
-    };
-
-    genome
+    }
 }
 
 /// Builds a list of non-canonical files
@@ -214,7 +214,7 @@ fn get_genome(config: &Config, step: &PipelineStep, step_output_dir: &PathBuf) -
 /// ```
 fn build_non_cannonical(
     input_dir: &PathBuf,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
     step: &PipelineStep,
     args: String,
     genome: PathBuf,
@@ -269,8 +269,8 @@ fn build_non_cannonical(
         let job = Job::new()
             .task(*step)
             .arg(&args)
-            .arg(&format!("-o {}", sam.display()))
-            .arg(&genome.display())
+            .arg(format!("-o {}", sam.display()))
+            .arg(genome.display())
             .arg(entry.display())
             .arg(compression);
 
@@ -316,7 +316,7 @@ fn build_non_cannonical(
 pub fn index_genome(
     step: &PipelineStep,
     config: &Config,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
     executor: &mut crate::core::ParallelExecutor,
 ) -> PathBuf {
     // INFO: genome -> step_output_dir.join("genome.fa")
@@ -335,12 +335,12 @@ pub fn index_genome(
         .and_send(
             config,
             &step.to_unique_str(),
-            step_output_dir.clone(),
+            step_output_dir.to_path_buf(),
             8,
             20,
             Some(package),
             Some("minimizer"),
         );
 
-    return index;
+    index
 }

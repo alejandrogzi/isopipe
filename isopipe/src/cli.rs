@@ -243,10 +243,14 @@ impl StepArgs {
         let from = validate_step(parse_step(&self.from)?, max_step, "from")?;
         let to = validate_step(parse_step(&self.to)?, max_step, "to")?;
 
-        if from > to {
-            return Err("ERROR: --from must be less than --to".into());
-        } else if from == to {
-            return Err("ERROR: --from must not be equal to --to".into());
+        match from.cmp(&to) {
+            std::cmp::Ordering::Less => (),
+            std::cmp::Ordering::Equal => {
+                return Err("ERROR: --from must not be equal to --to".into())
+            }
+            std::cmp::Ordering::Greater => {
+                return Err("ERROR: --from must be less than --to".into())
+            }
         }
 
         if let Some(only) = &self.only {

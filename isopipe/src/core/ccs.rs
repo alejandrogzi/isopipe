@@ -4,7 +4,7 @@ use crate::{
     core::pbindex,
     executor::{job::Job, manager::ParallelExecutor},
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Run ccs
 ///
@@ -32,7 +32,7 @@ pub fn ccs(
     step: &PipelineStep,
     config: &Config,
     input_dir: &PathBuf,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
     prefix: String,
     executor: &mut ParallelExecutor,
 ) -> Vec<Job> {
@@ -47,7 +47,7 @@ pub fn ccs(
         ],
     );
 
-    for (_, entry) in std::fs::read_dir(input_dir)
+    for entry in std::fs::read_dir(input_dir)
         .expect("Failed to read assets directory")
         .flatten()
         .filter(|entry| {
@@ -58,7 +58,6 @@ pub fn ccs(
                 .map(|ext| ext.eq_ignore_ascii_case(BAM))
                 .unwrap_or(false)
         })
-        .enumerate()
     {
         let chunk_size = fields[0]
             .parse::<usize>()
@@ -72,10 +71,9 @@ pub fn ccs(
                 "{}.{}.ccs.{}.bam",
                 prefix,
                 bam.file_stem()
-                    .expect(&format!(
-                        "ERROR: failed to get name from bam: {}",
-                        bam.display()
-                    ))
+                    .unwrap_or_else(|| {
+                        panic!("ERROR: failed to get name from bam: {}", bam.display())
+                    })
                     .to_string_lossy(),
                 chunk_idx
             ));
@@ -117,10 +115,10 @@ pub fn ccs(
     }
 
     if !require_pbi.is_empty() {
-        pbindex::pbindex(require_pbi, &config, executor, step_output_dir);
+        pbindex::pbindex(require_pbi, config, executor, step_output_dir);
     }
 
     log::info!("INFO [STEP 1]: Pre-processing completed -> Running...");
 
-    return jobs;
+    jobs
 }

@@ -3,7 +3,7 @@ use crate::{
     consts::*,
     executor::{job::Job, manager::ParallelExecutor},
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Generates a .pbi for a set of BAM files in parallel
 ///
@@ -23,7 +23,7 @@ pub fn pbindex(
     bams: Vec<PathBuf>,
     config: &Config,
     executor: &mut ParallelExecutor,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
 ) {
     log::info!(
         "INFO [PBINDEX]: Generating .pbi indexes for {} BAM files...",
@@ -43,7 +43,7 @@ pub fn pbindex(
     executor.add_jobs(jobs).and_send(
         config,
         PBINDEX,
-        step_output_dir.clone(),
+        step_output_dir.to_path_buf(),
         1,
         8,
         Some(package),

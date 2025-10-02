@@ -1,5 +1,5 @@
 use crate::{config::*, consts::*, executor::job::Job};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Run isoseq3 refine
 ///
@@ -26,7 +26,7 @@ pub fn refine(
     step: &PipelineStep,
     config: &Config,
     input_dir: &PathBuf,
-    step_output_dir: &PathBuf,
+    step_output_dir: &Path,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
 
@@ -70,7 +70,7 @@ pub fn refine(
 
     log::info!("INFO [STEP 3]: Pre-processing completed -> Running...");
 
-    return jobs;
+    jobs
 }
 
 /// Run isoseq3 cluster
@@ -97,8 +97,8 @@ pub fn refine(
 pub fn cluster(
     step: &PipelineStep,
     config: &Config,
-    input_dir: &PathBuf,
-    step_output_dir: &PathBuf,
+    input_dir: &Path,
+    step_output_dir: &Path,
 ) -> Vec<Job> {
     let refine_fofn = format!("{}/*flnc.{}", input_dir.display(), BAM);
     let all_fofn = format!("{}/{}", step_output_dir.display(), FOFN);
@@ -149,5 +149,5 @@ pub fn cluster(
 
     log::info!("INFO [STEP 4]: Pre-processing completed -> Running...");
 
-    return jobs;
+    jobs
 }

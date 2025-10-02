@@ -236,29 +236,29 @@ impl Config {
 
         for pkg in self.packages.clone().keys() {
             if !steps.iter().any(|&s| {
-                if &pkg == &"isoseq" {
+                if pkg == "isoseq" {
                     return PipelineStep::Refine == s || PipelineStep::Cluster == s;
                 }
 
-                if &pkg == &"isotools" {
+                if pkg == "isotools" {
                     return PipelineStep::Polya == s;
                 }
 
-                if &pkg == &"samtools" {
+                if pkg == "samtools" {
                     return PipelineStep::Lima == s;
                 }
 
-                if &pkg == &"pbccs" || &pkg == &"pbindex" {
+                if pkg == "pbccs" || pkg == "pbindex" {
                     return PipelineStep::Ccs == s;
                 }
 
-                s == PipelineStep::from_str(&pkg)
+                s == PipelineStep::from_str(pkg)
                     .expect("ERROR: Could not parse step from package name!")
             }) {
                 self.packages.remove(pkg);
             }
 
-            if &pkg == &"pbcss" {
+            if pkg == "pbcss" {
                 // WARN: force pbindex if CCS is used
                 if !self.packages.contains_key("pbindex") {
                     self.packages.insert("pbindex".into(), "1.7.0".into());
@@ -621,7 +621,7 @@ impl Config {
     pub fn get_param(&self, step: PipelineStep, key: &str) -> Option<&ParamValue> {
         self.params
             .get(&step)
-            .expect(format!("ERROR: Step {} not found in params!", step).as_str())
+            .unwrap_or_else(|| panic!("ERROR: Step {} not found in params!", step))
             .get(key)
     }
 
@@ -726,7 +726,7 @@ impl Config {
     /// ```
     pub fn get_dir_prefix(&self) -> Result<String, Box<dyn std::error::Error>> {
         if self.global.contains_key("dir_prefix") {
-            return Ok(self
+            Ok(self
                 .global
                 .get("dir_prefix")
                 .unwrap_or_else(|| {
@@ -735,9 +735,9 @@ impl Config {
                     )
                 })
                 .to_string()
-                + "_");
+                + "_")
         } else {
-            return Ok(String::from(""));
+            Ok(String::from(""))
         }
     }
 
@@ -757,9 +757,7 @@ impl Config {
     /// ```
     pub fn get_package_from_step(&self, step: &PipelineStep) -> String {
         match step {
-            PipelineStep::Minimap => {
-                return step.to_str();
-            }
+            PipelineStep::Minimap => step.to_str(),
             _ => {
                 let packages = step.to_pkg_str();
                 let mut loader = String::new();
@@ -768,7 +766,7 @@ impl Config {
                     let version = self
                         .packages
                         .get(package)
-                        .expect(format!("ERROR: Package not found -> {}", package).as_str())
+                        .unwrap_or_else(|| panic!("ERROR: Package not found -> {}", package))
                         .to_string();
 
                     if version.is_empty() {
@@ -838,8 +836,8 @@ impl Config {
         }
 
         match input_dir.is_absolute() {
-            true => return (input_dir, step_output_dir),
-            false => return (global_output_dir.join(input_dir), step_output_dir),
+            true => (input_dir, step_output_dir),
+            false => (global_output_dir.join(input_dir), step_output_dir),
         }
     }
 
@@ -864,9 +862,9 @@ impl Config {
             .into_iter()
             .map(|field| {
                 self.get_param(*step, field)
-                    .expect(
-                        format!("ERROR: {} not found for {} in config.toml!", field, step).as_str(),
-                    )
+                    .unwrap_or_else(|| {
+                        panic!("ERROR: {} not found for {} in config.toml!", field, step)
+                    })
                     .to_string()
             })
             .collect()
@@ -890,7 +888,7 @@ impl Config {
     /// ```
     pub fn get_step_custom_field(&self, step: &PipelineStep, field: &str) -> String {
         self.get_param(*step, field)
-            .expect(format!("ERROR: {} not found for {} in config.toml!", field, step).as_str())
+            .unwrap_or_else(|| panic!("ERROR: {} not found for {} in config.toml!", field, step))
             .to_string()
     }
 
@@ -995,7 +993,7 @@ impl Config {
             package,
             self.packages
                 .get(package)
-                .expect(&format!("ERROR: {} not found in config.packages!", package))
+                .unwrap_or_else(|| panic!("ERROR: {} not found in config.packages!", package))
         )
     }
 }
@@ -1046,6 +1044,7 @@ impl PipelineStep {
     ///
     /// assert_eq!(step, Ok(PipelineStep::Ccs));
     /// ```
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Result<Self, String> {
         match s {
             "ccs" => Ok(Self::Ccs),
@@ -1339,18 +1338,14 @@ impl StepParams {
             .iter()
             .filter(|(key, _)| !exclude.contains(key.as_str()))
             .map(|(key, value)| {
-                let mut argument = if key.len() > 2 {
-                    if SPECIAL_PARAMETER.contains(&key.as_str()) {
+                let mut argument = if SPECIAL_PARAMETER.contains(&key.as_str()) {
+                    if key.len() > 2 {
                         format!("--{}=", key)
                     } else {
-                        format!("--{} ", key)
+                        format!("-{}=", key)
                     }
                 } else {
-                    if SPECIAL_PARAMETER.contains(&key.as_str()) {
-                        format!("-{}=", key)
-                    } else {
-                        format!("-{} ", key)
-                    }
+                    format!("--{} ", key)
                 };
 
                 match value {
@@ -1444,6 +1439,7 @@ impl ParamValue {
     ///
     /// assert_eq!(value.to_string(), "string");
     /// ```
+    #[allow(clippy::inherent_to_string_shadow_display)]
     pub fn to_string(&self) -> String {
         match self {
             ParamValue::Str(s) => s.clone(),
@@ -1561,6 +1557,7 @@ pub enum ParallelMode {
 }
 
 impl ParallelMode {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Self {
         match s {
             "chr" => ParallelMode::Chromosome,
@@ -1804,7 +1801,7 @@ pub fn shell(cmd: String, log_msg: &str, tool: &str, silent: bool) {
         .arg("-c")
         .arg(cmd.clone())
         .output()
-        .expect(&format!("ERROR: Failed to execute process -> {}", cmd));
+        .unwrap_or_else(|e| panic!("ERROR: Failed to execute process -> {} -> {e}", cmd));
 
     if output.status.success() {
         if !silent {
@@ -1870,7 +1867,6 @@ pub fn remove_any<P: AsRef<Path>>(path: P) {
 /// # Arguments
 /// * `dir` - Directory to clean.
 /// * `extension` - Extension to keep (e.g., `"txt"` or `".txt"`).
-///                 If `extension` starts with `.`, it will be stripped.
 pub fn depure<P: AsRef<Path>>(dir: P, extension: &str) {
     let dir = dir.as_ref();
     if !dir.exists() {
@@ -1916,7 +1912,7 @@ pub fn depure<P: AsRef<Path>>(dir: P, extension: &str) {
 /// let paths = vec!["file1","file2"];
 /// maybe_cat(paths, target);
 /// ```
-pub fn maybe_cat(paths: &Vec<PathBuf>, target: impl AsRef<std::path::Path> + std::fmt::Debug) {
+pub fn maybe_cat(paths: &[PathBuf], target: impl AsRef<std::path::Path> + std::fmt::Debug) {
     if !paths.is_empty() {
         log::info!(
             "INFO [MERGE]: Merging {} files into {:?}...",
@@ -1942,8 +1938,7 @@ pub fn maybe_cat(paths: &Vec<PathBuf>, target: impl AsRef<std::path::Path> + std
 /// # Arguments
 ///
 /// * `dir` - A `PathBuf` representing the directory to scan.
-/// * `extension` - A string slice representing the file extension to filter by
-///                 (e.g., ".bed", ".fasta", ".txt"). This should include the dot.
+/// * `extension` - A string slice representing the file extension to filter by (e.g., ".bed", ".fasta", ".txt"). This should include the dot.
 ///
 /// # Returns
 ///

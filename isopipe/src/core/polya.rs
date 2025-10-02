@@ -3,7 +3,7 @@ use std::{
     collections::HashMap,
     fs::{create_dir_all, File, OpenOptions},
     io::{BufRead, BufReader, BufWriter, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use crate::{config::*, consts::*, executor::job::Job, isotools, rm};
@@ -37,8 +37,8 @@ use crate::{config::*, consts::*, executor::job::Job, isotools, rm};
 pub fn polya(
     step: &PipelineStep,
     config: &Config,
-    input_dir: &PathBuf,
-    step_output_dir: &PathBuf,
+    input_dir: &Path,
+    step_output_dir: &Path,
 ) -> Vec<Job> {
     let binary = isotools!(ISO_POLYA);
     let mut jobs = Vec::new();
@@ -128,7 +128,7 @@ pub fn polya(
 
     log::info!("INFO [STEP 6]: Pre-processing completed -> Running...");
 
-    return jobs;
+    jobs
 }
 
 /// Merges polya .bed results into a single .bed per category.
@@ -208,7 +208,7 @@ pub fn merge(input_dir: &PathBuf, config: &Config, step: &PipelineStep) {
                 file
             );
 
-            let _ = __split_by_chr(group, &input_dir, file);
+            let _ = __split_by_chr(group, input_dir, file);
         }
 
         if !keep_temp {
@@ -234,7 +234,7 @@ pub fn merge(input_dir: &PathBuf, config: &Config, step: &PipelineStep) {
                 .unwrap_or_else(|| panic!("ERROR: could not build suffix for {:?}", bed))
                 .to_string_lossy();
 
-            let sp = __split_by_chr(&vec![bed.clone()], &input_dir, &suffix);
+            let sp = __split_by_chr(&[bed.clone()], input_dir, &suffix);
 
             if let Err(e) = sp {
                 log::error!(
@@ -269,10 +269,8 @@ pub fn merge(input_dir: &PathBuf, config: &Config, step: &PipelineStep) {
 /// # Arguments
 ///
 /// * `files` - A slice of `PathBuf` representing the paths to the input files to be split.
-/// * `dir` - A `PathBuf` representing the directory where the chromosome-specific
-///           output files will be created.
-/// * `suffix` - A string slice that will be appended to the chromosome name to form
-///              the output file names (e.g., `chr1_suffix`).
+/// * `dir` - A `PathBuf` representing the directory where the chromosome-specific output files will be created.
+/// * `suffix` - A string slice that will be appended to the chromosome name to form the output file names (e.g., `chr1_suffix`).
 ///
 /// # Returns
 ///
@@ -332,7 +330,7 @@ pub fn merge(input_dir: &PathBuf, config: &Config, step: &PipelineStep) {
 ///
 /// std::fs::remove_dir_all(temp_output_dir).unwrap();
 /// ```
-pub fn __split_by_chr(files: &[PathBuf], dir: &PathBuf, suffix: &str) -> std::io::Result<()> {
+pub fn __split_by_chr(files: &[PathBuf], dir: &Path, suffix: &str) -> std::io::Result<()> {
     let mut writers: HashMap<String, BufWriter<File>> = HashMap::new();
 
     for path in files {
@@ -403,6 +401,6 @@ pub fn __split_by_chr(files: &[PathBuf], dir: &PathBuf, suffix: &str) -> std::io
             writers.len()
         );
 
-        return Ok(());
+        Ok(())
     }
 }

@@ -1,5 +1,5 @@
 use crate::{cli::TagArgs, config::*, executor::manager::ParallelExecutor};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub mod ccs;
 pub mod isoseq;
@@ -29,7 +29,7 @@ pub fn run(
 pub fn run_step(
     step: &PipelineStep,
     config: &Config,
-    global_output_dir: &PathBuf,
+    global_output_dir: &Path,
     executor: &mut ParallelExecutor,
 ) {
     let prefix = config.get_data_prefix();
@@ -81,7 +81,7 @@ pub fn run_step(
                 executor,
                 &input_dir,
                 &step_output_dir,
-                &global_output_dir,
+                global_output_dir,
             )
         }
         PipelineStep::Nmd => {
@@ -100,7 +100,7 @@ pub fn run_step(
 
     executor
         .add_jobs(jobs)
-        .execute(config, step, global_output_dir.clone(), None);
+        .execute(config, step, global_output_dir.to_path_buf(), None);
 }
 
 pub fn __tags(_args: TagArgs) {

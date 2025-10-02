@@ -8,7 +8,7 @@ use rayon::prelude::*;
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Run ORF prediction on fusion files
 ///
@@ -39,7 +39,7 @@ pub fn orf(
     executor: &mut ParallelExecutor,
     input_dir: &PathBuf,
     step_output_dir: &PathBuf,
-    global_output_dir: &PathBuf,
+    global_output_dir: &Path,
 ) -> Vec<Job> {
     let mut jobs = Vec::new();
     let args = config.get_step_custom_fields(step, vec![GENOME, ORF_MIN_LEN, DATABASE]);
@@ -107,7 +107,7 @@ pub fn orf(
 
     executor
         .add_jobs(jobs)
-        .execute(config, step, global_output_dir.clone(), Some("prep"));
+        .execute(config, step, global_output_dir.to_path_buf(), Some("prep"));
 
     predict(step_output_dir, &mode, &toga_merged)
 }
@@ -146,7 +146,7 @@ pub fn orf(
 /// * If the `toga_merged` path does not exist.
 /// * If required input files (`.bed` alignments, `blast` results, or `tai` results)
 ///   are not found within the expected `chunked_dir` for a `Chromosome` mode job.
-fn predict(step_output_dir: &PathBuf, mode: &ParallelMode, toga_merged: &PathBuf) -> Vec<Job> {
+fn predict(step_output_dir: &PathBuf, mode: &ParallelMode, toga_merged: &Path) -> Vec<Job> {
     let mut jobs = Vec::new();
 
     match mode {
@@ -264,7 +264,7 @@ fn predict(step_output_dir: &PathBuf, mode: &ParallelMode, toga_merged: &PathBuf
         }
     }
 
-    return jobs;
+    jobs
 }
 
 /// Orchestrates the "unbounded" extraction process for a set of BED files,
@@ -305,8 +305,8 @@ fn unbounded_extract(
     config: &Config,
     executor: &mut ParallelExecutor,
     input_dir: &PathBuf,
-    twobit: &PathBuf,
-    step_output_dir: &PathBuf,
+    twobit: &Path,
+    step_output_dir: &Path,
     chunk_size: usize,
 ) {
     let mut jobs = Vec::new();
@@ -398,9 +398,15 @@ fn unbounded_extract(
     }
 
     // INFO: running inner_jobs
-    executor
-        .add_jobs(jobs)
-        .and_send(config, EXTRACT, step_output_dir.clone(), 8, 16, None, None);
+    executor.add_jobs(jobs).and_send(
+        config,
+        EXTRACT,
+        step_output_dir.to_path_buf(),
+        8,
+        16,
+        None,
+        None,
+    );
 }
 
 /// Processes a BED file by extracting sequences, chunking them, and generating
@@ -417,16 +423,16 @@ fn unbounded_extract(
 ///
 /// * `bed` - A `PathBuf` representing the path to the input BED file.
 /// * `twobit` - A `PathBuf` representing the path to the 2bit genome file
-///              used for sequence extraction.
+///used for sequence extraction.
 /// * `step_output_dir` - A `PathBuf` representing the base output directory
-///                       for the current pipeline step. Chunked files will be
-///                       placed within subdirectories of this path.
+///for the current pipeline step. Chunked files will be
+///placed within subdirectories of this path.
 /// * `chunk_size` - An `usize` specifying the desired number of entries per chunk.
 /// * `args` - A reference to a `Vec<String>` containing command-line arguments.
-///            Specifically, `args[1]` is expected to be the `orfipy` executable path,
-///            `args[2]` is the minimum ORF length, and `args[3]` is the BLAST database path.
+///Specifically, `args[1]` is expected to be the `orfipy` executable path,
+///`args[2]` is the minimum ORF length, and `args[3]` is the BLAST database path.
 /// * `jobs` - A mutable reference to a `Vec<Job>` where the generated
-///            `blast` and `tai` jobs will be appended.
+///`blast` and `tai` jobs will be appended.
 ///
 /// # Panics
 ///
@@ -448,12 +454,13 @@ fn unbounded_extract(
 ///     &mut job_list,
 /// );
 /// ```
+#[allow(clippy::doc_lazy_continuation)]
 fn process_bed(
     bed: Option<PathBuf>,
-    twobit: &PathBuf,
+    twobit: &Path,
     step_output_dir: &PathBuf,
     chunk_size: usize,
-    args: &Vec<String>,
+    args: &[String],
     jobs: &mut Vec<Job>,
     mode: &ParallelMode,
 ) {
@@ -492,9 +499,9 @@ fn process_bed(
 /// # Arguments
 ///
 /// * `step_output_dir` - A `PathBuf` pointing to the root directory containing the chunked
-///                       output from a previous step (e.g., `extract`).
+///output from a previous step (e.g., `extract`).
 /// * `args` - A reference to a `Vec<String>` containing command-line arguments,
-///            specifically for `orfipy`'s e-value, minimum ORF length, and database path.
+///specifically for `orfipy`'s e-value, minimum ORF length, and database path.
 /// * `jobs` - A mutable reference to a `Vec<Job>` where the generated BLAST and TAI jobs are stored.
 ///
 /// # Panics
@@ -502,7 +509,8 @@ fn process_bed(
 /// This function will panic if:
 /// - It fails to read the `step_output_dir` or any of its subdirectories.
 /// - It fails to construct a `Job` from the command string.
-fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut Vec<Job>) {
+#[allow(clippy::doc_lazy_continuation)]
+fn parallel_processing(step_output_dir: &PathBuf, args: &[String], jobs: &mut Vec<Job>) {
     let suffixes = vec![REDUCED_BED, FA, INDEX];
 
     // INFO: need to loop again to run blast and tai
@@ -599,7 +607,7 @@ fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut
 /// * `step_output_dir` - A reference to a `PathBuf` representing the base output directory for this step.
 /// * `chunk_size` - The maximum number of records to include in each chunk.
 /// * `args` - A reference to a `Vec<String>` containing command-line arguments for the child processes,
-///            specifically `orfipy`'s e-value, minimum ORF length, and the path to the protein database.
+///specifically `orfipy`'s e-value, minimum ORF length, and the path to the protein database.
 /// * `jobs` - A mutable reference to a `Vec<Job>` where the generated BLAST and TAI jobs are stored.
 ///
 /// # Panics
@@ -609,12 +617,13 @@ fn parallel_processing(step_output_dir: &PathBuf, args: &Vec<String>, jobs: &mut
 /// - It cannot extract the file suffix from the basename.
 /// - It cannot determine the parent directory for a chunked BED file.
 /// - The `bounded_extract` or `Job::from` functions fail.
+#[allow(clippy::doc_lazy_continuation)]
 fn cannonical_processing(
     bed: PathBuf,
-    twobit: &PathBuf,
-    step_output_dir: &PathBuf,
+    twobit: &Path,
+    step_output_dir: &Path,
     chunk_size: usize,
-    args: &Vec<String>,
+    args: &[String],
     jobs: &mut Vec<Job>,
 ) {
     if !bed.exists() || std::fs::metadata(&bed).unwrap().len() == 0 {
@@ -632,7 +641,7 @@ fn cannonical_processing(
         .unwrap_or_else(|| panic!("ERROR: could not get suffix from file -> {:?}", bed));
 
     // INFO: inflection point -> chunking fusion files [2nd chunking step in the pipeline]
-    let paths = bounded_extract(&bed, &twobit, step_output_dir, chunk_size, suffix);
+    let paths = bounded_extract(&bed, twobit, step_output_dir, chunk_size, suffix);
 
     for (chunked_fa, chunked_bed) in paths {
         let chunked_dir = &chunked_bed.parent().unwrap_or_else(|| {
@@ -686,9 +695,9 @@ fn cannonical_processing(
 /// );
 /// ```
 pub fn bounded_extract(
-    reads: &PathBuf,
-    twobit: &PathBuf,
-    step_output_dir: &PathBuf,
+    reads: &Path,
+    twobit: &Path,
+    step_output_dir: &Path,
     chunk_size: usize,
     suffix: &str,
 ) -> Vec<(PathBuf, PathBuf)> {
@@ -705,9 +714,9 @@ pub fn bounded_extract(
         )
     });
 
-    let bed = unpack::<GenePred, _>(vec![reads.clone()], OverlapType::Exon, false)
+    let bed = unpack::<GenePred, _>(vec![reads], OverlapType::Exon, false)
         .unwrap_or_else(|e| panic!("ERROR: could not unpack reads -> {}. {e}", reads.display()));
-    let (genome, _) = get_sequences(twobit.clone()).unwrap_or_else(|| {
+    let (genome, _) = get_sequences(twobit.to_path_buf()).unwrap_or_else(|| {
         panic!(
             "ERROR: could not get sequences from .2bit -> {}",
             twobit.display()
@@ -759,7 +768,7 @@ pub fn bounded_extract(
         })
         .collect();
 
-    return paths;
+    paths
 }
 
 /// Merges TOGA predictions into a single file by invoking the `orf toga` command.
@@ -772,8 +781,7 @@ pub fn bounded_extract(
 ///
 /// * `step_output_dir` - A `PathBuf` representing the output directory for the current pipeline step.
 /// * `config` - A reference to a `Config` struct, used to retrieve the path to TOGA results.
-/// * `step` - A reference to a `PipelineStep` enum, used to identify the current step
-///            and retrieve its custom fields from the `config`.
+/// * `step` - A reference to a `PipelineStep` enum, used to identify the current step and retrieve its custom fields from the `config`.
 ///
 /// # Panics
 ///
@@ -815,7 +823,7 @@ pub fn bounded_extract(
 /// // orf --path /path/to/toga_raw_results --outdir /tmp/pipeline_output/merge_toga_step
 /// __merge_toga(&output_dir, &app_config, &current_step);
 /// ```
-fn __merge_toga(step_output_dir: &PathBuf, config: &Config, step: &PipelineStep) -> PathBuf {
+fn __merge_toga(step_output_dir: &Path, config: &Config, step: &PipelineStep) -> PathBuf {
     let toga = config.get_step_custom_field(step, TOGA);
     let msg = "INFO: Merging TOGA2 predictions -> {toga}";
     let tool = "iso-orf";
@@ -829,7 +837,7 @@ fn __merge_toga(step_output_dir: &PathBuf, config: &Config, step: &PipelineStep)
 
     shell(cmd, msg, tool, false);
 
-    return step_output_dir.join(TOGA).join("toga_merged.tsv");
+    step_output_dir.join(TOGA).join("toga_merged.tsv")
 }
 
 /// Retrieves a return value by matching the file's suffix against a predefined list.
@@ -915,5 +923,5 @@ pub fn get_suffix_from_path<'a>(
         }
     }
 
-    return None;
+    None
 }

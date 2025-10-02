@@ -1,5 +1,5 @@
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 use crate::{
@@ -247,24 +247,28 @@ impl ParallelExecutor {
                     );
 
                     // INFO: looping through dir until find .crashed
-                    for entry in std::fs::read_dir(&dir).expect(&format!(
-                        "ERROR: Failed to read directory {}",
-                        dir.display()
-                    )) {
-                        let entry = entry.expect(&format!(
-                            "ERROR: Failed to read directory entry -> {}",
-                            dir.display(),
-                        ));
+                    for entry in std::fs::read_dir(&dir).unwrap_or_else(|_| {
+                        panic!("ERROR: Failed to read directory {}", dir.display())
+                    }) {
+                        let entry = entry.unwrap_or_else(|_| {
+                            panic!("ERROR: Failed to read directory entry -> {}", dir.display())
+                        });
                         if entry
                             .file_name()
                             .to_str()
-                            .expect(&format!("ERROR: could not get filename -> {:?}", entry))
+                            .unwrap_or_else(|| {
+                                panic!("ERROR: could not get filename -> {:?}", entry)
+                            })
                             .ends_with(".crashed")
                         {
-                            let error = std::fs::read_to_string(entry.path()).expect(&format!(
-                                "ERROR: Failed to read error file -> {}",
-                                entry.path().display()
-                            ));
+                            let error =
+                                std::fs::read_to_string(entry.path()).unwrap_or_else(|_| {
+                                    panic!(
+                                        "ERROR: Failed to read error file -> {}",
+                                        entry.path().display()
+                                    )
+                                });
+
                             log::error!("ERROR: {}", error);
 
                             return;
@@ -274,7 +278,7 @@ impl ParallelExecutor {
                     log::info!("INFO: starting clean run, no .para dir found!")
                 }
             }
-            _ => {}
+            _ => todo!(),
         }
     }
 
@@ -301,6 +305,7 @@ impl ParallelExecutor {
     ///
     /// executor.and_send(&config, step, dir, threads, memory, package);
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn and_send(
         &mut self,
         config: &Config,
@@ -346,11 +351,12 @@ impl ParallelExecutor {
     /// let mut manager = ExecutorManager::new(config);
     /// manager.__para(&config, step, &dir, threads, memory, package);
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn __para(
         &mut self,
         config: &Config,
         step: &str,
-        jobs: &PathBuf,
+        jobs: &Path,
         threads: u32,
         memory: u32,
         package: Option<String>,
@@ -702,7 +708,7 @@ fn __check_manager(manager: &str) {
 /// ```
 pub fn __get_assets_dir() -> PathBuf {
     let assets = std::env::current_dir().expect("Failed to get executable path");
-    return assets.join(ASSETS);
+    assets.join(ASSETS)
 }
 
 /// Clean the .para directory

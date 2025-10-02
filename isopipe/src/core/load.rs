@@ -1,5 +1,5 @@
 use crate::{config::*, consts::*, executor::job::Job};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Load and concatenate decision files, convert to bigBed format, and optionally upload
 ///
@@ -36,7 +36,7 @@ use std::path::PathBuf;
 pub fn load(
     step: &PipelineStep,
     config: &Config,
-    input_dir: &PathBuf,
+    input_dir: &Path,
     step_output_dir: &PathBuf,
     executor: &mut crate::core::ParallelExecutor,
 ) -> Vec<Job> {
@@ -110,7 +110,7 @@ pub fn load(
                 // INFO: gawk -i inplace -F'\t' 'BEGIN{OFS="\t"} {$9="255,0,0"; print}' rt_reads.bed
                 cmd = format!(
                     "{cmd} && gawk -i inplace -F'\\t' 'BEGIN{{OFS=\"\\t\"}} {{$9=\"{}\"; print}}' {}",
-                    get_color(*target),
+                    get_color(target),
                     step_output_dir.join("bed").join(out).display()
                 );
 
