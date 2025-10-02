@@ -6,14 +6,14 @@ __github__ = "https://github.com/alejandrogzi"
 __version__ = "0.0.1"
 
 import argparse
-from os import PathLike
 import logging
-from joblib import load
+from os import PathLike
 from pathlib import Path
-import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
 from typing import List, Union
 
+import pandas as pd
+from joblib import load
+from sklearn.ensemble import RandomForestClassifier
 
 MODEL = "model/model.joblib"
 MODEL_PATH = Path(__file__).parent / MODEL
@@ -130,7 +130,14 @@ def run(args: argparse.Namespace) -> None:
     # if args.overrule:
     #     overrule(table)
 
-    _ = map_to_blocks(table, args.alignments, args.outdir, args.prefix)
+    _ = map_to_blocks(
+        table,
+        args.alignments,
+        args.outdir,
+        args.prefix,
+        args.min_score_max_predictions,
+        args.max_predictions,
+    )
 
 
 def map_to_blocks(
@@ -138,6 +145,8 @@ def map_to_blocks(
     alignments: Union[str, PathLike],
     outdir: Union[str, PathLike],
     prefix: str,
+    min_score_max_predictions: float,
+    max_predictions: int,
 ) -> None:
     """
     Maps prediction results to genomic blocks based on alignment data and saves them.
@@ -181,9 +190,6 @@ def map_to_blocks(
     >>> # # This would create 'test_predictions.tsv' and 'test_predictions.bed'
     >>> # # in the './output' directory.
     """
-    table.to_csv(
-        f"{args.outdir}/{prefix}predictions.tsv", index=False, header=True, sep="\t"
-    )
 
     table = table.copy()
     table["id"] = [id.split("__")[0] for id in table.blast_id]
@@ -206,9 +212,18 @@ def map_to_blocks(
     merged[7] = merged["tai_orf_end"]
     merged[3] += merged["tag"]
 
-    merged = merged.drop(columns=["id", "tai_orf_start", "tai_orf_end", "tag"])
+    table = (
+        table[table["class1_prob"] >= min_score_max_predictions]
+        .sort_values("class1_prob", ascending=False)
+        .groupby("id")
+        .head(max_predictions)
+    )
 
-    merged.to_csv(
+    table.drop(columns=["id", "tag"]).to_csv(
+        f"{args.outdir}/{prefix}predictions.tsv", index=False, header=True, sep="\t"
+    )
+
+    merged.drop(columns=["id", "tai_orf_start", "tai_orf_end", "tag"]).to_csv(
         f"{outdir}/{prefix}predictions.bed", sep="\t", header=False, index=False
     )
 
@@ -581,6 +596,20 @@ def parse() -> argparse.Namespace:
         type=str,
         help="Prefix for the output file name",
         default="",
+    )
+    parser.add_argument(
+        "-mm",
+        "--min-score-max-predictions",
+        type=float,
+        default=0.70,
+        help="Minimum score to keep a prediction(s), controlled by max_predictions",
+    )
+    parser.add_argument(
+        "-mp",
+        "--max-predictions",
+        type=int,
+        default=1,
+        help="Maximum number of predictions to keep per query",
     )
 
     args = parser.parse_args()
