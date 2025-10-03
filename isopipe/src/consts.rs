@@ -70,6 +70,7 @@ pub const ISO_POLYA: &str = "iso-polya";
 pub const ISO_SPLIT: &str = "iso-split";
 pub const ISO_NMD: &str = "iso-nmd";
 pub const ISO_FUSION: &str = "iso-fusion";
+pub const ISO_ORPHAN: &str = "iso-orphan";
 pub const SEGMENT: &str = "segment";
 pub const POLYA_PARTS: &str = "parts";
 pub const SEQS: &str = "seqs";
@@ -213,4 +214,5 @@ pub const TAG_SCHEMA: &str = r#"
     RW = review read marker
     SN = strong NMD marker
     WN = weak NMD marker
+    AR = artificial read produced by merging ends
 "#;

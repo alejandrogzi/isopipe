@@ -1,4 +1,4 @@
-use crate::{config::*, consts::*, executor::job::Job};
+use crate::{config::*, consts::*, executor::job::Job, isotools};
 use std::path::{Path, PathBuf};
 
 /// Load and concatenate decision files, convert to bigBed format, and optionally upload
@@ -33,6 +33,7 @@ use std::path::{Path, PathBuf};
 ///     &mut executor,
 /// );
 /// ```
+#[allow(unused_assignments)]
 pub fn load(
     step: &PipelineStep,
     config: &Config,
@@ -67,6 +68,7 @@ pub fn load(
         .get_step_custom_field(step, UPLOAD_PUBLIC)
         .parse::<bool>()
         .unwrap_or(false);
+    let toga = config.get_step_custom_field(step, TOGA);
 
     let package = config.get_package_from_step(step);
 
@@ -151,15 +153,37 @@ pub fn load(
             .unwrap_or_else(|| panic!("ERROR: could not get file name from {bed:?}"));
 
         // INFO: modifying bed file in-place with collapsed -> takes new schema
-        let mut cmd = format!(
-            "{COLLAPSE} --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
-            input.display(),
-            step_output_dir.display(), // INFO: creates collapse/ by default
-            basename.clone(), // INFO: e.g pass.bed
-            step_output_dir.join("collapsed").join(basename).display(), // INFO: collapsed/pass.bed
-            chrom_sizes,
-            step_output_dir.join("bb").join(bb).display() // INFO: bb/pass.bb
-        );
+        // INFO: if bed is passing category, drop orphans first!
+        let mut cmd = String::new();
+
+        if basename == "pass.bed" {
+            cmd = format!(
+                "{} --bed {} --toga {} --all --outdir {} --name pass && {COLLAPSE} --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
+                // INFO: orphan
+                isotools!(ISO_ORPHAN).display(),
+                input.display(),
+                toga,
+                step_output_dir.display(), // INFO: creates orphans/ by default and orphans/pass_orphan_free.bed + orphans.bed
+                // INFO: collapse
+                step_output_dir.join("orphans").join("pass_orphan_free.bed").display(), // INFO: orphan free output -> pass_orphan_free.bed
+                step_output_dir.display(), // INFO: creates collapse/ by default
+                basename.clone(), // INFO: e.g pass.bed -> will force output to be collapsed/pass.bed
+                // INFO: bigbed
+                step_output_dir.join("collapsed").join(&basename).display(), // INFO: collapsed/pass.bed
+                chrom_sizes,
+                step_output_dir.join("bb").join(bb).display() // INFO: bb/pass.bb
+            );
+        } else {
+            cmd = format!(
+                "{COLLAPSE} --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
+                input.display(),
+                step_output_dir.display(), // INFO: creates collapse/ by default
+                basename.clone(), // INFO: e.g pass.bed
+                step_output_dir.join("collapsed").join(&basename).display(), // INFO: collapsed/pass.bed
+                chrom_sizes,
+                step_output_dir.join("bb").join(bb).display() // INFO: bb/pass.bb
+            );
+        }
 
         if upload {
             let bb_name = format!("HLIsoClassAnnot.{}", bb.to_string_lossy()); // INFO: HLIsoClassAnnot.pass.bb
