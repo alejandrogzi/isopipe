@@ -98,29 +98,28 @@ pub fn polya(
             continue;
         }
 
-        let cmd = if !keep_temp {
-            format!(
-                "{} {} --bam {} {args} --prefix {} --outdir {} --batch {} && rm {} {}.bai",
-                binary.display(),
-                SEGMENT,
-                bam.display(),
-                prefix.to_string_lossy(),
-                &parts.display(),
-                batch + 1,
-                bam.display(),
-                bam.display()
-            )
-        } else {
-            format!(
-                "{} {} --bam {} {args} --prefix {} --outdir {} --batch {}",
-                binary.display(),
-                SEGMENT,
-                bam.display(),
-                prefix.to_string_lossy(),
-                &parts.display(),
-                batch + 1,
-            )
-        };
+        let mut cmd = format!(
+            "{} {} --bam {} {args} --prefix {} --outdir {} --batch {}",
+            binary.display(),
+            SEGMENT,
+            bam.display(),
+            prefix.to_string_lossy(),
+            &parts.display(),
+            batch + 1,
+        );
+
+        if bam
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("")
+            .ends_with("singletons.bam")
+        {
+            cmd = format!("{} --singleton", cmd,); // INFO: SG tag
+        }
+
+        if !keep_temp {
+            cmd = format!("{} && rm {} {}.bai", &cmd, bam.display(), bam.display());
+        }
 
         log::debug!("DEBUG [STEP 6]: running command: {}", cmd);
         jobs.push(Job::from(cmd));
@@ -170,14 +169,14 @@ pub fn merge(input_dir: &PathBuf, config: &Config, step: &PipelineStep) {
         // INFO: partition paths into their respective categories
         let (singletons, accepts, rejections): (Vec<_>, Vec<_>, Vec<_>) = files.into_iter().fold(
             (Vec::new(), Vec::new(), Vec::new()),
-            |(mut s, mut g, mut b), path| {
+            |(mut _s, mut g, mut b), path| {
                 match &path.file_name().unwrap().to_string_lossy() {
-                    p if p.ends_with(BED_SGN_ACCEPT) => s.push(path),
+                    p if p.ends_with(BED_SGN_ACCEPT) => g.push(path), // WARN: since 3/10/25 -> sending singletons to good [they are already with SG]
                     p if p.ends_with(BED_ACCEPT) => g.push(path),
                     p if p.ends_with(BED_REJECT) => b.push(path),
                     _ => {}
                 }
-                (s, g, b)
+                (_s, g, b)
             },
         );
 
@@ -368,8 +367,9 @@ pub fn __split_by_chr(files: &[PathBuf], dir: &Path, suffix: &str) -> std::io::R
                 let outfile = dir.join(format!("{}_{}", &chr, suffix));
                 let file = OpenOptions::new()
                     .create(true)
-                    .write(true)
-                    .truncate(true) // <- overwrite any existing file from previous runs
+                    // .write(true)
+                    .append(true) // <- append to existing file [because SG is now in good]
+                    // .truncate(true) // <- overwrite any existing file from previous runs
                     .open(outfile)
                     .unwrap_or_else(|_| {
                         panic!(
