@@ -133,6 +133,8 @@ genome = ""                # FILL: genome in .fa format or .2bit
 orf_min_len = 30           # minimum ORF length in bp
 parallel_mode = "chr"      # WARN: controls parallelization, "chr" for chromosomes, "all" for all at once [recommended: "chr"]
 keep_temp = "false"        # WARN: keep temporary files, change to "true" to keep them
+max_predictions = 3        # WARN: maximum number of predictions per read above max_pred_threshold
+max_pred_threshold = 0.7   # WARN: maximum prediction score threshold
 
 [params.nmd]
 input_dir = "step8_orf"  # previous step data dir [default]
@@ -149,7 +151,7 @@ output_dir = "step10_polish" # output dir
 memory = 32                  # memory in GB
 num-threads = 8              # --num-threads
 time = "24.h"                # time for each job
-toga = ""                    # FILL: toga query annotation
+toga = ""                    # FILL: toga query annotation, could be multiple!
 genome = ""                  # FILL: genome in .2bit
 bigwig = ""                  # FILL: path to SpliceAI dir
 keep_temp = "false"          # WARN: keep temporary files, change to "true" to keep them

@@ -50,6 +50,8 @@ pub const UPLOAD_PUBLIC: &str = "upload-public";
 pub const USER: &str = "user";
 pub const TARGET: &str = "target";
 pub const WEB: &str = "web";
+pub const MAX_ORF_PREDICTIONS: &str = "max_predictions";
+pub const MAX_ORF_PRED_THRESHOLD: &str = "max_pred_threshold";
 
 // project-wide pub const | names
 pub const ISOPIPE: &str = "isopipe";

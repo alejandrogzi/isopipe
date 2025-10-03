@@ -44,6 +44,15 @@ pub fn orf(
     let mut jobs = Vec::new();
     let args = config.get_step_custom_fields(step, vec![GENOME, ORF_MIN_LEN, DATABASE]);
 
+    let max_predictions = config
+        .get_step_custom_field(step, MAX_ORF_PREDICTIONS)
+        .parse::<usize>()
+        .unwrap_or_else(|e| panic!("ERROR: could not convert max_predictions -> {e}!"));
+    let max_pred_threshold = config
+        .get_step_custom_field(step, MAX_ORF_PRED_THRESHOLD)
+        .parse::<f64>()
+        .unwrap_or_else(|e| panic!("ERROR: could not convert max_pred_threshold -> {e}!"));
+
     let mode = ParallelMode::from_str(&config.get_step_custom_field(step, PARALLEL_MODE));
 
     let keep_temp = config
@@ -109,7 +118,13 @@ pub fn orf(
         .add_jobs(jobs)
         .execute(config, step, global_output_dir.to_path_buf(), Some("prep"));
 
-    predict(step_output_dir, &mode, &toga_merged)
+    predict(
+        step_output_dir,
+        &mode,
+        &toga_merged,
+        max_predictions,
+        max_pred_threshold,
+    )
 }
 
 /// Predicts Open Reading Frames (ORFs)
@@ -146,7 +161,13 @@ pub fn orf(
 /// * If the `toga_merged` path does not exist.
 /// * If required input files (`.bed` alignments, `blast` results, or `tai` results)
 ///   are not found within the expected `chunked_dir` for a `Chromosome` mode job.
-fn predict(step_output_dir: &PathBuf, mode: &ParallelMode, toga_merged: &Path) -> Vec<Job> {
+fn predict(
+    step_output_dir: &PathBuf,
+    mode: &ParallelMode,
+    toga_merged: &Path,
+    max_predictions: usize,
+    max_pred_threshold: f64,
+) -> Vec<Job> {
     let mut jobs = Vec::new();
 
     match mode {
@@ -236,7 +257,7 @@ fn predict(step_output_dir: &PathBuf, mode: &ParallelMode, toga_merged: &Path) -
 
                     let cmd =
                         format!(
-                        "source {} && {} --blast {} --tai {} --toga {} --alignments {} --outdir {} --prefix tmp_",
+                        "source {} && {} --blast {} --tai {} --toga {} --alignments {} --outdir {} --prefix tmp_ --max-predictions {} --min-score-max-predictions {}",
                         TAI_VENV, PREDICT_PY, blast.display(),
                         tai.unwrap_or_else(|| {
                             panic!(
@@ -251,7 +272,9 @@ fn predict(step_output_dir: &PathBuf, mode: &ParallelMode, toga_merged: &Path) -
                                 chunked_dir.display()
                             )
                         }).display(),
-                        chunked_dir.display()
+                        chunked_dir.display(),
+                        max_predictions,
+                        max_pred_threshold
                     );
 
                     jobs.push(Job::from(cmd));
