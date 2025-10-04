@@ -1338,14 +1338,16 @@ impl StepParams {
             .iter()
             .filter(|(key, _)| !exclude.contains(key.as_str()))
             .map(|(key, value)| {
-                let mut argument = if SPECIAL_PARAMETER.contains(&key.as_str()) {
-                    if key.len() > 2 {
+                let mut argument = if key.len() > 2 {
+                    if SPECIAL_PARAMETER.contains(&key.as_str()) {
                         format!("--{}=", key)
                     } else {
-                        format!("-{}=", key)
+                        format!("--{} ", key)
                     }
+                } else if SPECIAL_PARAMETER.contains(&key.as_str()) {
+                    format!("-{}=", key)
                 } else {
-                    format!("--{} ", key)
+                    format!("-{} ", key)
                 };
 
                 match value {
