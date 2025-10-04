@@ -589,13 +589,15 @@ fn parallel_processing(step_output_dir: &PathBuf, args: &[String], jobs: &mut Ve
                 };
             }
 
-            // INFO: if tai results are less than 10 lines, skip the blast job
-            let cmd = format!(
-                "{} && ( [ \"$(wc -l < {})\" -ge 10 ] && {} || true )",
-                tai,
-                chunked_dir.join(TAI).join("*.result").display(),
-                blast
-            );
+            // // INFO: if tai results are less than 10 lines, skip the blast job
+            // let cmd = format!(
+            //     "{} && ( [ \"$(wc -l < {})\" -ge 10 ] && {} || true )",
+            //     tai,
+            //     chunked_dir.join(TAI).join("*.result").display(),
+            //     blast
+            // );
+
+            let cmd = format!("{} && {}", tai, blast);
 
             jobs.push(Job::from(cmd));
         }

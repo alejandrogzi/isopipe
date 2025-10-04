@@ -270,7 +270,7 @@ pub fn iso_fusion(
             .ends_with(ALN_POLYA_SGN)
         {
             let cmd = format!(
-                "{} --ref {} --query {} --prefix {} --tag {} --colorize {} --recover",
+                "{} --ref {} --query {} --prefix {} --tag {} --colorize {} --recover", // INFO: recover is mandatory to recognize real fusioned loci
                 isotools!(ISO_FUSION).display(),
                 refs,
                 query.display(),
