@@ -22,7 +22,7 @@ use rayon::prelude::*;
 
 use std::collections::{HashMap, hash_map::Entry};
 use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::PathBuf;
 
 use crate::cli::{ExtractArgs, SeqMode};
@@ -66,13 +66,25 @@ use crate::cli::{ExtractArgs, SeqMode};
 /// - It fails to create chunk-specific directories or files.
 /// - It fails to write sequences or BED lines to the chunked files.
 /// - A chromosome is missing in the 2bit genome during sequence extraction.
-pub fn extract(args: ExtractArgs) -> Vec<(PathBuf, PathBuf)> {
+pub fn extract(args: ExtractArgs) {
     let mode = ExtractMode::from(args.mode);
 
     log::info!(
         "INFO: Extracting mapped read sequences [{}] from .2bit file...",
         args.bed.display()
     );
+
+    let basename = args
+        .bed
+        .file_stem()
+        .unwrap_or_else(|| panic!("ERROR: could not get basename from {}", args.bed.display()))
+        .to_str()
+        .unwrap_or_else(|| {
+            panic!(
+                "ERROR: could not convert basename to str from {}",
+                args.bed.display()
+            )
+        });
 
     let tmp_dir = args
         .output_dir
@@ -153,7 +165,9 @@ pub fn extract(args: ExtractArgs) -> Vec<(PathBuf, PathBuf)> {
         })
         .collect();
 
-    return paths;
+    if args.join {
+        __join(paths, basename);
+    }
 }
 
 /// An enum representing the mode for sequence extraction.
@@ -694,4 +708,41 @@ pub fn __rev_complement_u8(seq: &mut Vec<u8>) {
     if len % 2 == 1 {
         seq[len / 2] = complement(seq[len / 2]);
     };
+}
+
+/// Joins all chunked FASTA files into a single FASTA file.
+///
+/// This function takes a vector of tuples, where each tuple contains the path to a
+/// chunked FASTA file and its corresponding chunked BED file. It iterates through
+/// the vector, reads each chunked FASTA file, and writes its contents to a new
+/// FASTA file named "joined.fa".
+///
+/// # Arguments
+///
+/// * `chunked` - A vector of tuples, where each tuple contains the path to a
+///               chunked FASTA file and its corresponding chunked BED file.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - It fails to open or read from a chunked FASTA file.
+/// - It fails to write to the "joined.fa" file.
+///
+/// # Example
+///
+/// ```rust, ignore
+/// let chunked = vec![
+///     (PathBuf::from("path/to/chunk_1.fa"), PathBuf::from("path/to/chunk_1.bed")),
+///     (PathBuf::from("path/to/chunk_2.fa"), PathBuf::from("path/to/chunk_2.bed")),
+/// ];
+/// __join(chunked);
+/// ```
+pub fn __join(chunked: Vec<(PathBuf, PathBuf)>, basename: &str) {
+    let mut writer = BufWriter::new(File::create(format!("{}.fa", basename)).unwrap());
+    for (chunked_fa, _chunked_bed) in chunked {
+        let mut reader = BufReader::new(File::open(chunked_fa).unwrap());
+        let mut buf = String::new();
+        reader.read_to_string(&mut buf).unwrap();
+        writeln!(writer, "{}", buf).unwrap();
+    }
 }

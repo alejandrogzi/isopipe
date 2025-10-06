@@ -131,6 +131,15 @@ pub struct ExtractArgs {
         default_value("30000")
     )]
     pub chunk_size: usize,
+
+    #[arg(
+        short = 'J',
+        long = "join",
+        help = "Flag to join all chunked .fa files",
+        value_name = "FLAG",
+        action = ArgAction::SetTrue,
+    )]
+    pub join: bool,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
