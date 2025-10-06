@@ -74,18 +74,6 @@ pub fn extract(args: ExtractArgs) {
         args.bed.display()
     );
 
-    let basename = args
-        .bed
-        .file_stem()
-        .unwrap_or_else(|| panic!("ERROR: could not get basename from {}", args.bed.display()))
-        .to_str()
-        .unwrap_or_else(|| {
-            panic!(
-                "ERROR: could not convert basename to str from {}",
-                args.bed.display()
-            )
-        });
-
     let tmp_dir = args
         .output_dir
         .join(format!("{}_{}", args.dir_prefix, args.suffix));
@@ -166,7 +154,39 @@ pub fn extract(args: ExtractArgs) {
         .collect();
 
     if args.join {
-        __join(paths, basename);
+        let basename = tmp_dir.join(
+            args.bed
+                .with_extension("fa")
+                .file_name()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: could not get basename from {}", args.bed.display())
+                })
+                .to_str()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: could not convert basename to str from {}",
+                        args.bed.display()
+                    )
+                }),
+        );
+
+        __join(&paths, basename);
+
+        // INFO: cleanup chunked dirs
+        log::info!("INFO: removing chunked dirs in {}", tmp_dir.display());
+        for (chunk_fa, _chunk_bed) in paths {
+            std::fs::remove_dir_all(
+                chunk_fa
+                    .parent()
+                    .unwrap_or_else(|| panic!("ERROR: could not get parent dir")),
+            )
+            .unwrap_or_else(|e| {
+                panic!(
+                    "ERROR: could not remove chunked dir {} -> {e}",
+                    chunk_fa.parent().unwrap().display()
+                )
+            });
+        }
     }
 }
 
@@ -737,8 +757,8 @@ pub fn __rev_complement_u8(seq: &mut Vec<u8>) {
 /// ];
 /// __join(chunked);
 /// ```
-pub fn __join(chunked: Vec<(PathBuf, PathBuf)>, basename: &str) {
-    let mut writer = BufWriter::new(File::create(format!("{}.fa", basename)).unwrap());
+pub fn __join(chunked: &Vec<(PathBuf, PathBuf)>, basename: PathBuf) {
+    let mut writer = BufWriter::new(File::create(basename).unwrap());
     for (chunked_fa, _chunked_bed) in chunked {
         let mut reader = BufReader::new(File::open(chunked_fa).unwrap());
         let mut buf = String::new();
