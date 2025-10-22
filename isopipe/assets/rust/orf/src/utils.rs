@@ -13,18 +13,105 @@
 
 use config::{BedColumn, BedColumnValue, bed_to_nested_collection};
 use dashmap::DashMap;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, hash_map::Entry};
 use log::warn;
 use memchr::memchr;
 use memmap2::Mmap;
 use packbed::{reader as bed_reader, record::GenePred};
-use smol_str::SmolStr;
 
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
-use std::str::from_utf8;
+use std::str::{FromStr, from_utf8};
 use std::sync::Arc;
+
+pub const CODON_TABLE: [(&[u8], &str); 64] = [
+    // Phenylalanine (F)
+    (b"TTT", "F"),
+    (b"TTC", "F"),
+    // Leucine (L)
+    (b"TTA", "L"),
+    (b"TTG", "L"),
+    (b"CTA", "L"),
+    (b"CTC", "L"),
+    (b"CTG", "L"),
+    (b"CTT", "L"),
+    // Isoleucine (I)
+    (b"ATT", "I"),
+    (b"ATC", "I"),
+    (b"ATA", "I"),
+    // Methionine (M) - Start codon
+    (b"ATG", "M"),
+    // Valine (V)
+    (b"GTA", "V"),
+    (b"GTC", "V"),
+    (b"GTG", "V"),
+    (b"GTT", "V"),
+    // Serine (S)
+    (b"TCA", "S"),
+    (b"TCC", "S"),
+    (b"TCG", "S"),
+    (b"TCT", "S"),
+    (b"AGT", "S"),
+    (b"AGC", "S"),
+    // Proline (P)
+    (b"CCA", "P"),
+    (b"CCC", "P"),
+    (b"CCG", "P"),
+    (b"CCT", "P"),
+    // Threonine (T)
+    (b"ACA", "T"),
+    (b"ACC", "T"),
+    (b"ACG", "T"),
+    (b"ACT", "T"),
+    // Alanine (A)
+    (b"GCA", "A"),
+    (b"GCC", "A"),
+    (b"GCG", "A"),
+    (b"GCT", "A"),
+    // Tyrosine (Y)
+    (b"TAT", "Y"),
+    (b"TAC", "Y"),
+    // Stop codons (*)
+    (b"TAA", "*"),
+    (b"TAG", "*"),
+    (b"TGA", "*"),
+    // Histidine (H)
+    (b"CAT", "H"),
+    (b"CAC", "H"),
+    // Glutamine (Q)
+    (b"CAA", "Q"),
+    (b"CAG", "Q"),
+    // Asparagine (N)
+    (b"AAT", "N"),
+    (b"AAC", "N"),
+    // Lysine (K)
+    (b"AAA", "K"),
+    (b"AAG", "K"),
+    // Aspartic acid (D)
+    (b"GAT", "D"),
+    (b"GAC", "D"),
+    // Glutamic acid (E)
+    (b"GAA", "E"),
+    (b"GAG", "E"),
+    // Cysteine (C)
+    (b"TGT", "C"),
+    (b"TGC", "C"),
+    // Tryptophan (W)
+    (b"TGG", "W"),
+    // Arginine (R)
+    (b"CGA", "R"),
+    (b"CGC", "R"),
+    (b"CGG", "R"),
+    (b"CGT", "R"),
+    (b"AGA", "R"),
+    (b"AGG", "R"),
+    // Glycine (G)
+    (b"GGA", "G"),
+    (b"GGC", "G"),
+    (b"GGG", "G"),
+    (b"GGT", "G"),
+];
 
 /// Parses a FASTA file into a `HashMap` where keys are sequence headers
 /// and values are the sequences themselves (as `Vec<u8>`).
@@ -82,7 +169,7 @@ use std::sync::Arc;
 /// ```
 pub fn parse_fa<F: AsRef<Path>>(
     f: F,
-) -> Result<HashMap<SmolStr, Vec<u8>>, Box<dyn std::error::Error>> {
+) -> Result<HashMap<OrfRecord, Vec<u8>>, Box<dyn std::error::Error>> {
     let file = File::open(f).unwrap();
     let mmap = unsafe { Mmap::map(&file).unwrap() };
     let data = mmap.as_ref();
@@ -99,15 +186,386 @@ pub fn parse_fa<F: AsRef<Path>>(
         let record = &entry[header_end + 1..];
         let seq = record
             .iter()
-            .filter(|&&b| b != b'\n' && b != b'\r') // Remove newlines and carriage returns
+            .filter(|&&b| b != b'\n' && b != b'\r') // INFO: remove newlines and carriage returns
             .cloned()
             .collect::<Vec<u8>>();
 
-        acc.insert(SmolStr::new(header), seq);
+        acc.insert(OrfRecord::parse(header), seq);
         pos = end;
     }
 
     Ok(acc)
+}
+
+/// An enum representing the type of an ORF
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
+pub enum OrfType {
+    Complete,
+    ThreePartial,
+    FivePartial,
+    FivePartialNested,
+    ThreePartialNested,
+    CompleteNested,
+}
+
+impl std::str::FromStr for OrfType {
+    type Err = Box<dyn std::error::Error>;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "type:complete" => Ok(OrfType::Complete),
+            "type:3-prime-partial" => Ok(OrfType::ThreePartial),
+            "type:5-prime-partial" => Ok(OrfType::FivePartial),
+            "type:5-prime-partial-nested" => Ok(OrfType::FivePartialNested),
+            "type:3-prime-partial-nested" => Ok(OrfType::ThreePartialNested),
+            "type:complete-nested" => Ok(OrfType::CompleteNested),
+            _ => Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Invalid ORF type: {}", s),
+            ))),
+        }
+    }
+}
+
+impl std::fmt::Display for OrfType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OrfType::Complete => write!(f, "CO"),
+            OrfType::ThreePartial => write!(f, "TP"),
+            OrfType::FivePartial => write!(f, "FP"),
+            OrfType::FivePartialNested => write!(f, "FN"),
+            OrfType::ThreePartialNested => write!(f, "TN"),
+            OrfType::CompleteNested => write!(f, "CN"),
+        }
+    }
+}
+
+/// Represents a single ORF record from orfipy
+///
+/// # Fields
+///
+/// * `id` - The ID of the ORF
+/// * `start` - The start position of the ORF
+/// * `end` - The end position of the ORF
+/// * `orf_type` - The type of the ORF
+/// * `frame` - The frame of the ORF
+/// * `start_codon` - The start codon of the ORF
+/// * `stop_codon` - The stop codon of the ORF
+/// * `strand` - The strand of the ORF
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct OrfRecord {
+    pub id: String,
+    pub start: usize,
+    pub end: usize,
+    pub orf_type: OrfType,
+    pub frame: i8,
+    pub start_codon: String,
+    pub stop_codon: String,
+    pub strand: char,
+    pub seq_idx: usize,
+}
+
+/// Splits a header string into its components
+///
+/// # Arguments
+///
+/// * `header` - The header string
+///
+/// # Returns
+///
+/// * `Option<(usize, usize, char)>` - The start, end, and strand of the ORF
+///
+/// # Example
+///
+/// ```rust
+/// let (start, end, strand) = split_coords(coords).unwrap_or_else(|| {
+///     panic!("ERROR: failed to parse coords from line: {}", line);
+/// });
+/// ```
+pub fn split_coords(header: &str) -> Option<(usize, usize, char)> {
+    let mut parts = header.split('-');
+
+    let start = parts
+        .next()
+        .unwrap_or_else(|| {
+            panic!("ERROR: failed to parse ORF start from header: {}", header);
+        })
+        .strip_prefix('[')
+        .unwrap_or_else(|| {
+            panic!(
+                "ERROR: failed to strip prefix from ORF start from header: {}",
+                header
+            );
+        })
+        .parse::<usize>()
+        .unwrap_or_else(|e| {
+            panic!(
+                "ERROR: failed to parse ORF start from header: {} -> {e}",
+                header
+            );
+        });
+
+    parts = parts
+        .next()
+        .unwrap_or_else(|| {
+            panic!("ERROR: failed to parse ORF end from header: {}", header);
+        })
+        .split(']');
+
+    let end = parts
+        .next()
+        .unwrap_or_else(|| {
+            panic!("ERROR: failed to parse ORF end from header: {}", header);
+        })
+        .parse::<usize>()
+        .unwrap_or_else(|e| {
+            panic!(
+                "ERROR: failed to parse ORF end from header: {} -> {e}",
+                header
+            );
+        });
+
+    let strand = parts
+        .next()
+        .unwrap_or_else(|| {
+            panic!("ERROR: failed to parse ORF strand from header: {}", header);
+        })
+        .char_indices()
+        .nth(1)
+        .unwrap_or_else(|| {
+            panic!("ERROR: failed to parse ORF strand from header: {}", header);
+        })
+        .1;
+
+    Some((start, end, strand))
+}
+
+impl OrfRecord {
+    /// Parses an ORF record from a string
+    ///
+    /// # Arguments
+    ///
+    /// * `line` - The string to parse
+    ///
+    /// # Returns
+    ///
+    /// * `Self` - The parsed ORF record
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let record = OrfRecord::parse(line);
+    /// ```
+    pub fn parse(line: &str) -> Self {
+        let mut parts = line.split(' ');
+
+        // WARN: if headers have spaces splitting will fail!
+        // INFO: >ENSMUST00000167914.2_ORF.1 [69-330](+) type:complete length:258 frame:1 start:ATG stop:TGA
+        let (id, coords, orf_type, _, frame, start_codon, stop_codon) = (
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse ORF ID from line: {}", line);
+                })
+                .to_string(),
+            parts.next().unwrap_or_else(|| {
+                panic!(
+                    "ERROR: failed to parse ORF coords from line: {} -> {:?}",
+                    line, parts
+                );
+            }),
+            OrfType::from_str(parts.next().unwrap_or_else(|| {
+                panic!("ERROR: failed to parse ORF type from line: {}", line);
+            }))
+            .unwrap_or_else(|e| {
+                panic!("ERROR: failed to parse ORF type from line: {} -> {e}", line);
+            }),
+            parts.next(), // INFO: length
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse ORF frame from line: {}", line);
+                })
+                .strip_prefix("frame:")
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: failed to strip prefix from ORF frame from line: {}",
+                        line
+                    );
+                })
+                .parse::<i8>()
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: failed to parse ORF frame from line: {} -> {e}",
+                        line
+                    );
+                }),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse ORF start codon from line: {}", line);
+                })
+                .strip_prefix("start:")
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: failed to strip prefix from ORF start codon from line: {}",
+                        line
+                    );
+                })
+                .to_string(),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse ORF stop codon from line: {}", line);
+                })
+                .strip_prefix("stop:")
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: failed to strip prefix from ORF stop codon from line: {}",
+                        line
+                    );
+                })
+                .to_string(),
+        );
+
+        let (start, end, strand) = split_coords(coords).unwrap_or_else(|| {
+            panic!("ERROR: failed to parse coords from line: {}", line);
+        });
+
+        Self {
+            id,
+            start,
+            end,
+            orf_type,
+            frame,
+            start_codon,
+            stop_codon,
+            strand,
+            seq_idx: 0, // INFO: set on the fly
+        }
+    }
+}
+
+/// Splits an ORF record into nested ORF records
+///
+/// # Arguments
+///
+/// * `header` - The header of the ORF record
+/// * `seq` - The sequence of the ORF record
+/// * `seq_length` - The length of the sequence
+/// * `min_len` - The minimum length of the ORF
+/// * `min_percent` - The minimum percentage of the ORF
+/// * `mapper` - The mapper to store the nested ORF records
+/// * `needle` - The needle to match for the nested ORF
+/// * `idx_count` - The index count to increment
+///
+/// # Returns
+///
+/// None
+///
+/// # Example
+///
+/// ```rust
+/// let mapper = HashMap::new();
+/// let needle = b"M";
+/// let idx_count = 0;
+/// __split_record(&header, &seq, seq_length, min_len, min_percent, &mut mapper, &needle, &mut idx_count);
+/// ```
+#[allow(clippy::too_many_arguments)]
+pub fn __split_record(
+    header: &OrfRecord,
+    seq: &[u8],
+    seq_length: usize,
+    min_len: usize,
+    min_percent: f32,
+    mapper: &mut HashMap<HashHead, Vec<OrfRecord>>,
+    needle: &[u8], // b"ATG" or b"M"
+    idx_count: &mut usize,
+) {
+    let mut orf_count = 0;
+
+    for (pos, &aa) in seq.iter().enumerate().skip(1) {
+        // INFO: default needle is 'M' -> start signal
+        if aa == needle[0] {
+            let len_remaining = seq_length - pos;
+            let percent = len_remaining as f32 / seq_length as f32;
+
+            // INFO: we have found a nested ORF -> create a new record
+            // WARN: updating start codons only in non-ATG cases because we are only looking for inner ATGs
+            if len_remaining >= min_len && percent >= min_percent {
+                orf_count += 1;
+                *idx_count += 1;
+
+                let sub_seq = &seq[pos..];
+                let mut nested_header = header.clone();
+
+                nested_header.start += pos * 3;
+                nested_header.id += format!("@{}", orf_count).as_str();
+
+                // INFO: only updating start codon if it is not ATG
+                if header.start_codon != "ATG" {
+                    nested_header.start_codon = "ATG".to_string();
+                }
+
+                nested_header.orf_type = match header.orf_type {
+                    OrfType::Complete => OrfType::CompleteNested,
+                    OrfType::FivePartial => OrfType::FivePartialNested,
+                    OrfType::ThreePartial => OrfType::ThreePartialNested,
+                    _ => unreachable!(),
+                };
+
+                // INFO: subsequence is now a new key in the mapper
+                let mut inner_key = Vec::with_capacity(sub_seq.len());
+                for &b in sub_seq {
+                    if b != b'\n' {
+                        inner_key.push(b);
+                    }
+                }
+
+                let hhead = HashHead::new(inner_key.into());
+                match mapper.entry(hhead) {
+                    Entry::Occupied(mut entry) => {
+                        // INFO: seq exists -> push header to vec
+                        // INFO: seq_idx is inherited from first header
+                        entry.get_mut().push(nested_header.clone());
+                    }
+                    Entry::Vacant(entry) => {
+                        nested_header.seq_idx = *idx_count;
+                        entry.insert(vec![nested_header.clone()]);
+                        *idx_count += 1; // INFO: increment index count
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A HashHead is a tuple of (idx, seq) where idx is the index of the hash
+#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+pub struct HashHead {
+    pub seq: Arc<Vec<u8>>,
+}
+
+impl HashHead {
+    /// Creates a new `HashHead` from an index and a sequence
+    ///
+    /// # Arguments
+    ///
+    /// * `idx` - The index of the hash
+    /// * `seq` - The sequence of the hash
+    ///
+    /// # Returns
+    ///
+    /// A new `HashHead` instance
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let hash_head = HashHead::new(0, Arc::from(vec![b'A', b'T', b'G']));
+    /// ```
+    pub fn new(seq: Arc<Vec<u8>>) -> Self {
+        Self { seq }
+    }
 }
 
 /// Creates an empty index file with a `.dedup.index` extension for a given FASTA file.
@@ -276,7 +734,7 @@ pub fn parse_bed<K: config::BedParser>(
 /// assert!(existing_fasta_writer.is_none()); // Should return None because it exists
 /// fs::remove_file(&new_file_path).unwrap(); // Clean up
 /// ```
-pub fn create_fasta(fasta: &PathBuf, extension: &str) -> Option<BufWriter<File>> {
+pub fn create_fasta(fasta: &Path, extension: &str) -> Option<BufWriter<File>> {
     let file = fasta.with_extension(extension);
     if !file.exists() {
         let writer = BufWriter::new(
@@ -288,6 +746,43 @@ pub fn create_fasta(fasta: &PathBuf, extension: &str) -> Option<BufWriter<File>>
         warn!("WARN: file already exists -> {:?}!", file.display());
 
         // INFO: overwrite existing file
+        std::fs::remove_file(&file).unwrap_or_else(|e| {
+            panic!("ERROR: cannot remove existing file -> {e}");
+        });
+
+        Some(BufWriter::new(File::create(&file).unwrap_or_else(|e| {
+            panic!("ERROR: cannot create file -> {e}")
+        })))
+    }
+}
+
+/// Creates a new file with the given extension if it doesn't exist
+///
+/// # Arguments
+///
+/// * `file` - The path to the file
+/// * `extension` - The extension of the file
+///
+/// # Returns
+///
+/// An `Option` containing a `BufWriter` for the file
+///
+/// # Example
+///
+/// ```rust
+/// let writer = create_file("path/to/file.txt", "txt").unwrap();
+/// ```
+pub fn create_file(file: &Path, extension: &str) -> Option<BufWriter<File>> {
+    let file = file.with_extension(extension);
+    if !file.exists() {
+        let writer = BufWriter::new(
+            File::create(&file).unwrap_or_else(|e| panic!("ERROR: cannot create file -> {e}")),
+        );
+
+        Some(writer)
+    } else {
+        // INFO: overwrite existing fil
+        dbg!("WARN: overwriting existing file -> {:?}", &file);
         std::fs::remove_file(&file).unwrap_or_else(|e| {
             panic!("ERROR: cannot remove existing file -> {e}");
         });
@@ -441,15 +936,11 @@ pub fn get_cds_coords(
 /// Represents a single BLAST alignment record.
 #[derive(Debug, Clone, PartialEq)]
 pub struct BlastRecord {
-    pub blast_id: String,                     // ID of the blast record
-    pub blast_idx_id: u32,                    // Indexed ID of the blast record
-    pub blast_pid: f32,                       // Percentage of identical matches
-    pub blast_e_value: f64,                   // E-value of the match
-    pub blast_offset: i32,                    // Offset in the query sequence where the match starts
-    pub blast_alignment_len: u32,             // Length of the alignment
-    pub percent_aligned: f32,                 // Percentage of the query sequence that is aligned
-    pub coords: Option<(usize, usize, char)>, // Optional CDS relative coords + strand
-    pub orf: u32,                             // Optional ORF nested number [defaults to 0]
+    pub blast_pid: f32,           // Percentage of identical matches
+    pub blast_e_value: f64,       // E-value of the match
+    pub blast_offset: i32,        // Offset in the query sequence where the match starts
+    pub blast_alignment_len: u32, // Length of the alignment
+    pub percent_aligned: f32,     // Percentage of the query sequence that is aligned
 }
 
 impl BlastRecord {
@@ -461,8 +952,7 @@ impl BlastRecord {
     ///
     /// # Arguments
     ///
-    /// * `parts` - A slice of string slices, where each element represents
-    ///             a column from the BLAST output.
+    /// * `parts` - A slice of string slices, where each element represents a column from the BLAST output.
     ///
     /// # Returns
     ///
@@ -488,43 +978,10 @@ impl BlastRecord {
     /// let parts = ["1", "99.0", "500", "0", "100", "1", "100", "1", "100", "1e-10"];
     /// let record = BlastRecord::from_parts(&parts);
     /// ```
-    pub fn from_parts(parts: &[&str], mode: &Mode, regex: &regex::Regex) -> Self {
+    pub fn from_parts(parts: &[&str]) -> Self {
         if parts.len() < 10 {
             panic!("ERROR: not enough parts to create BlastRecord -> {parts:?}");
         }
-
-        let blast_idx_id = match mode {
-            // WARN: with extract indexing qseqid -> 0_ORF.1_[1-10](+)
-            Mode::Indexed => parts[0].split('_').collect::<Vec<&str>>()[0]
-                .parse::<u32>()
-                .unwrap_or_else(|_| {
-                    panic!("ERROR: failed to parse ID from line: {:?}", parts);
-                }),
-            Mode::Raw => parts[0].parse::<u32>().unwrap_or_else(|_| {
-                panic!("ERROR: failed to parse ID from line: {:?}", parts);
-            }),
-        };
-
-        let coords = match mode {
-            // WARN: with extract indexing qseqid -> 0_ORF.1_[1-10](+) or number!
-            Mode::Indexed => split_header(parts[0], regex),
-            Mode::Raw => None,
-        };
-
-        let orf = match mode {
-            // WARN: with extract indexing qseqid -> 0_ORF.1_[1-10](+) OR number!
-            Mode::Indexed => parts[0].split('_').collect::<Vec<&str>>()[1]
-                .strip_prefix("ORF.")
-                .unwrap_or_else(|| {
-                    panic!(
-                        "ERROR: failed to strip prefix from ID from line: {:?}",
-                        parts
-                    );
-                })
-                .parse::<u32>()
-                .unwrap_or(0),
-            Mode::Raw => 0,
-        };
 
         let blast_pid = parts[1].parse::<f32>().unwrap_or_else(|_| {
             panic!("ERROR: failed to parse blast PID from parts: {:?}", parts);
@@ -581,29 +1038,12 @@ impl BlastRecord {
             * 100.0;
 
         Self {
-            blast_id: String::new(), // INFO: set on the fly
-            blast_idx_id,
             blast_pid,
             blast_e_value,
             blast_offset,
             blast_alignment_len,
             percent_aligned,
-            coords,
-            orf,
         }
-    }
-
-    /// Sets the `blast_id` for the `BlastRecord`.
-    ///
-    /// This method is used to assign a specific identifier to the record after
-    /// its initial creation, typically combining information from the original
-    /// sequence and its genomic location.
-    ///
-    /// # Arguments
-    ///
-    /// * `id` - A `String` representing the ID to be set for the record.
-    pub fn set_id(&mut self, id: String) {
-        self.blast_id = id;
     }
 }
 
@@ -631,4 +1071,223 @@ pub fn split_header<'a>(header: &'a str, capture: &regex::Regex) -> Option<(usiz
     let end = caps[2].parse().ok()?;
     let strand = caps[3].chars().next()?;
     Some((start, end, strand))
+}
+
+/// Reads the translationAi output and converts it to a hashmap of `TaiRecord`s
+///
+/// # Arguments
+///
+/// * `tai` - The path to the translationAi output
+///
+/// # Returns
+///
+/// A `HashMap` of `String` and their corresponding `TaiRecord`
+///
+/// # Example
+///
+/// ```rust
+/// let tai = read_tai_table(tai).unwrap();
+/// ```
+pub fn read_tai_table(tai: PathBuf) -> HashMap<String, TaiRecord> {
+    let predictions = bed_reader(tai)
+        .unwrap_or_else(|e| panic!("ERROR: failed to read blast predictions file -> {e}"));
+
+    let mut accumulator = HashMap::new();
+
+    // INFO: chr17 26054102 26060105 0.p3 - 0.011934959 0.9905367 242 2126 ATG TAG 8
+    for line in predictions.lines() {
+        let record = TaiRecord::parse(line);
+        let cannonical_id =
+            record.id.split(".p").next().unwrap_or_else(|| {
+                panic!("ERRROR: failed to parse cannonical ID from line: {}", line)
+            }); // INFO: ENSMUST00000176751.2.p3 -> ENSMUST00000176751.2
+        let key = format!("{}:{}-{}", cannonical_id, record.start, record.end); // INFO: ENSMUST00000176751.2:26054102-26060105
+        accumulator.insert(key, record);
+    }
+
+    accumulator
+}
+
+/// A struct representing a translationAi record
+#[derive(Debug, Clone)]
+pub struct TaiRecord {
+    pub chr: String,
+    pub start: usize,
+    pub end: usize,
+    pub id: String,
+    pub strand: char,
+    pub start_score: f32,
+    pub stop_score: f32,
+    pub relative_orf_start: usize,
+    pub relative_orf_end: usize,
+    pub start_codon: String,
+    pub stop_codon: String,
+    pub inner_stops: usize,
+    pub aa: String,
+}
+
+impl TaiRecord {
+    pub fn parse(line: &str) -> Self {
+        let mut parts = line.split('\t');
+
+        let (
+            chr,
+            start,
+            end,
+            id,
+            strand,
+            start_score,
+            stop_score,
+            relative_orf_start,
+            relative_orf_end,
+            start_codon,
+            stop_codon,
+            inner_stops,
+            aa,
+        ) = (
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse tai chr from line: {}", line);
+                })
+                .to_string(),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse tai start from line: {}", line);
+                })
+                .parse::<usize>()
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: failed to parse tai start from line: {} -> {e}",
+                        line
+                    );
+                }),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse tai end from line: {}", line);
+                })
+                .parse::<usize>()
+                .unwrap_or_else(|e| {
+                    panic!("ERROR: failed to parse tai end from line: {} -> {e}", line);
+                }),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse tai id from line: {}", line);
+                })
+                .to_string(),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse tai strand from line: {}", line);
+                })
+                .chars()
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse tai strand from line: {}", line);
+                }),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse tai start score from line: {}", line);
+                })
+                .parse::<f32>()
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: failed to parse tai start score from line: {} -> {e}",
+                        line
+                    );
+                }),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse tai stop score from line: {}", line);
+                })
+                .parse::<f32>()
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: failed to parse tai stop score from line: {} -> {e}",
+                        line
+                    );
+                }),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: failed to parse relative orf start from line: {}",
+                        line
+                    );
+                })
+                .parse::<usize>()
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: failed to parse relative orf start from line: {} -> {e}",
+                        line
+                    );
+                }),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: failed to parse relative orf end from line: {}",
+                        line
+                    );
+                })
+                .parse::<usize>()
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: failed to parse relative orf end from line: {} -> {e}",
+                        line
+                    );
+                }),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse start codon from line: {}", line);
+                })
+                .to_string(),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse stop codon from line: {}", line);
+                })
+                .to_string(),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse inner stops from line: {}", line);
+                })
+                .parse::<usize>()
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: failed to parse inner stops from line: {} -> {e}",
+                        line
+                    );
+                }),
+            parts
+                .next()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: failed to parse aa from line: {}", line);
+                })
+                .to_string(),
+        );
+
+        Self {
+            chr,
+            start,
+            end,
+            id,
+            strand,
+            start_score,
+            stop_score,
+            relative_orf_start,
+            relative_orf_end,
+            start_codon,
+            stop_codon,
+            inner_stops,
+            aa,
+        }
+    }
 }

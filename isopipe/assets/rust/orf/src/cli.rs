@@ -47,11 +47,11 @@ pub enum Commands {
     /// Run ORF detection using TranslationAi
     Tai(TaiArgs),
 
-    /// Merge diamond and translationAi results
-    Merge(MergeArgs),
-
     /// Read and merge TOGA results
     Toga(TogaArgs),
+
+    /// Run RNAsamba on a set of reads
+    Samba(SambaArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -83,10 +83,10 @@ pub struct CommonArgs {
     #[arg(
         short = 'i',
         long = "index",
-        required = false,
+        required = true,
         help = "Path to .index file produced by extract step"
     )]
-    pub index: Option<PathBuf>,
+    pub index: PathBuf,
 }
 
 #[derive(Debug, Parser)]
@@ -125,6 +125,14 @@ pub struct BlastArgs {
         help = "Pattern to subsequence [aa/nt]"
     )]
     pub pattern: String,
+
+    #[arg(
+        short = 'T',
+        long = "tai",
+        required = false,
+        help = "Path to TranslationAI results file"
+    )]
+    pub tai: Option<PathBuf>,
 }
 
 #[derive(Debug, Parser)]
@@ -139,49 +147,6 @@ pub struct TaiArgs {
         help = "TranslationAI threshold"
     )]
     pub threshold: String,
-}
-
-#[derive(Debug, Parser)]
-pub struct MergeArgs {
-    #[arg(
-        short = 'b',
-        long = "blast",
-        required = true,
-        help = "Path to BLAST results file"
-    )]
-    pub blast: PathBuf,
-
-    #[arg(
-        short = 'T',
-        long = "tai",
-        required = true,
-        help = "Path to TranslationAI results file"
-    )]
-    pub tai: PathBuf,
-
-    #[arg(
-        short = 't',
-        long = "toga",
-        required = true,
-        help = "Path to TOGA merged file"
-    )]
-    pub toga: PathBuf,
-
-    #[arg(
-        short = 'a',
-        long = "alignments",
-        required = true,
-        help = "Path to .bed file"
-    )]
-    pub alignments: PathBuf,
-
-    #[arg(
-        short = 'o',
-        long = "outdir",
-        default_value = ".",
-        help = "Output directory"
-    )]
-    pub outdir: PathBuf,
 }
 
 #[derive(Debug, Parser)]
@@ -201,4 +166,39 @@ pub struct TogaArgs {
         help = "Output directory"
     )]
     pub outdir: PathBuf,
+}
+
+#[derive(Debug, Parser)]
+pub struct SambaArgs {
+    #[arg(
+        short = 'f',
+        long = "fasta",
+        required = true,
+        help = "Path to .fa file"
+    )]
+    pub fasta: PathBuf,
+
+    #[arg(
+        short = 'o',
+        long = "outdir",
+        default_value = ".",
+        help = "Output directory"
+    )]
+    pub outdir: PathBuf,
+
+    #[arg(
+        short = 'i',
+        long = "index",
+        required = true,
+        help = "Path to .index file produced by extract step"
+    )]
+    pub index: PathBuf,
+
+    #[arg(
+        short = 'w',
+        long = "weights",
+        required = false,
+        help = "Path to model weights file"
+    )]
+    pub weights: Option<PathBuf>,
 }

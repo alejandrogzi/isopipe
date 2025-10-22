@@ -1,3 +1,5 @@
+//! [DEPRECATED]
+
 //! Core module for detecting open reading frames in a query set of reads
 //! Alejandro Gonzales-Irribarren, 2025
 //!
@@ -11,7 +13,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{bed_to_struct_collection, get_progress_bar, Strand};
+use config::{Strand, bed_to_struct_collection, get_progress_bar};
 use dashmap::DashMap;
 use flate2::read::MultiGzDecoder;
 use hashbrown::HashSet;

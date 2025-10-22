@@ -76,27 +76,25 @@
 //!   --threshold 0.05
 //! ```
 //!
-//! ### `merge`
+//! ### `samba`
 //!
-//! Consolidates the results obtained from the `blast` and `tai` commands, optionally incorporating TOGA results.
+//! Performs ORF detection utilizing the RNASamba model.
 //!
 //! #### Arguments
 //!
-//! * `-b`, `--blast <PATH>`: Required. Path to the BLAST results file.
-//! * `-T`, `--tai <PATH>`: Required. Path to the TranslationAI results file.
-//! * `-t`, `--toga <PATH>`: Required. Path to the TOGA merged results file.
-//! * `-a`, `--alignments <PATH>`: Required. Path to the original alignment BED file.
-//! * `-o`, `--outdir <DIR>`: Output directory for the merged results. Defaults to the current directory (`.`).
+//! * `--fasta <PATH>`: Required. Path to the input FASTA file.
+//! * `--alignments <PATH>`: Required. Path to the input BED file.
+//! * `--outdir <DIR>`: Output directory for results. Defaults to the current directory (`.`).
+//! * `-w`, `--weights <PATH>`: Path to the RNAsamba weights file. Defaults to downloading the weights from the GitHub repository.
 //!
 //! #### Example
 //!
 //! ```bash
-//! orf merge \
-//!   --blast /path/to/blast_results/blast.out \
-//!   --tai /path/to/tai_results/tai.out \
-//!   --toga /path/to/toga_results/toga_merged.tsv \
+//! orf samba \
+//!   --fasta /path/to/reads.fasta \
 //!   --alignments /path/to/alignments.bed \
-//!   --outdir /path/to/final_results
+//!   --outdir /path/to/samba_results \
+//!   --weights /path/to/weights.hdf5
 //! ```
 //!
 //! ### `toga`
@@ -118,7 +116,7 @@
 
 pub mod blast;
 pub mod cli;
-pub mod merge;
+pub mod samba;
 pub mod tai;
 pub mod toga;
 pub mod utils;

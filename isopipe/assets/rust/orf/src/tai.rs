@@ -11,35 +11,30 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{bed_to_struct_collection, BedColumn, BedColumnValue, SCALE};
+use config::{BedColumnValue, SCALE, Strand, bed_to_struct_collection};
 use dashmap::{DashMap, DashSet};
 use hashbrown::HashMap;
 use isopipe::config::depure;
 use log::warn;
-use packbed::{
-    reader as bed_reader,
-    record::{Bed6, GenePred},
-};
+use memchr::memchr;
+use memmap2::Mmap;
+use packbed::{reader as bed_reader, record::GenePred};
 use rayon::prelude::*;
-use smol_str::ToSmolStr;
+use smol_str::{SmolStr, ToSmolStr};
 
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::str::from_utf8;
 
 use crate::{cli::TaiArgs, utils::*};
 
 const PREDICTIONS: &str = "predictions";
-const RESULT: &str = "tai.result";
 pub const TAI_VENV: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tai/.venv/bin/activate");
 
-const COLUMNS: &[BedColumn] = &[
-    BedColumn::Chrom,
-    BedColumn::Start,
-    BedColumn::End,
-    BedColumn::Name,
-    BedColumn::Strand,
-];
+pub const START_CODON: &str = "ATG";
+pub const STOP_CODONS: [&str; 3] = ["TAA", "TAG", "TGA"];
+pub const STOP_CODONS_BYTES: [&[u8]; 3] = [b"TAA", b"TAG", b"TGA"];
 
 /// Runs Translation AI on a set of query reads
 ///
@@ -93,19 +88,22 @@ const COLUMNS: &[BedColumn] = &[
 /// run_tai(args);
 /// ```
 pub fn run_tai(args: TaiArgs) {
-    let mode = Mode::from(&args.common.index);
-
     let dir = args.common.outdir.join("tai");
     std::fs::create_dir_all(&dir)
         .unwrap_or_else(|e| panic!("ERROR: could not create directory -> {e}!"));
 
-    let (fasta, index) = refmt(
-        &args.common.fasta,
-        &args.common.alignments,
-        &dir,
-        &mode,
-        &args.common.index,
+    let index = args.common.index;
+    let records = flatten_dashmap(
+        bed_to_struct_collection::<GenePred>(
+            bed_reader(&args.common.alignments)
+                .unwrap_or_else(|e| panic!("ERROR: failed to read BED file -> {e}"))
+                .into(),
+            config::BedColumn::Name,
+        )
+        .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}")),
     );
+
+    let (fasta, sequences) = refmt(&args.common.fasta, &records, &dir);
 
     let cmd = format!(
         "source {} && translationai -I {} -t {},{} -O {}",
@@ -122,8 +120,15 @@ pub fn run_tai(args: TaiArgs) {
         .status()
         .unwrap_or_else(|e| panic!("ERROR: failed to execute orfipy command -> {e}"));
 
-    unroll_tai(index, fasta, &args.common.alignments, &mode);
+    let predictions = bed_reader(fasta.with_extension(PREDICTIONS))
+        .unwrap_or_else(|e| panic!("ERROR: failed to read predictions file -> {e}"));
 
+    let writer = BufWriter::new(
+        File::create(fasta.with_extension("result"))
+            .unwrap_or_else(|e| panic!("ERROR: cannot create index from sequences -> {e}")),
+    );
+
+    unroll_tai(index, predictions, records, writer, sequences);
     isopipe::depure!(dir, "result");
 }
 
@@ -193,31 +198,275 @@ pub fn run_tai(args: TaiArgs) {
 /// std::fs::remove_file(&final_predictions_path.with_extension(RESULT)).unwrap();
 /// std::fs::remove_file(&alignments_path).unwrap();
 /// ```
-fn unroll_tai(index: PathBuf, fasta: PathBuf, alignments: &PathBuf, mode: &Mode) {
-    // INFO: predictions in fmt -> id st,sp,st_score,sp_score ...
-    let predictions = bed_reader(fasta.with_extension(PREDICTIONS))
-        .unwrap_or_else(|e| panic!("ERROR: failed to read predictions file -> {e}"));
-
-    let output = fasta.with_extension(RESULT);
-    let writer = BufWriter::new(
-        File::create(&output)
-            .unwrap_or_else(|e| panic!("ERROR: cannot create index from sequences -> {e}")),
-    );
+#[allow(unused_assignments)]
+fn unroll_tai(
+    index: PathBuf,
+    predictions: String,
+    mut records: HashMap<String, GenePred>,
+    mut writer: BufWriter<File>,
+    sequences: HashMap<smol_str::SmolStr, Vec<u8>>,
+) {
+    let chr = get_chr_from_path(&index);
+    let index = extract::read::read_index(&index, &chr);
 
     let accumulator = DashSet::new();
 
-    let records = bed_to_struct_collection::<GenePred>(
-        bed_reader(alignments)
-            .unwrap_or_else(|e| panic!("ERROR: failed to read BED file -> {e}"))
-            .into(),
-        config::BedColumn::Name,
-    )
-    .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}"));
+    for line in predictions.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
 
-    match mode {
-        Mode::Raw => cannonical(predictions, records, index, accumulator, writer),
-        Mode::Indexed => indexed(predictions, records, index, accumulator, writer),
+        // INFO: >chr6:128352418-128362107(+)(ENSMUST00000100926.4)(0, 0,)
+        // INFO: >chr16:91343975-91360783 +) R9834_chr16__FC37#TC0#PA0#PR0#IY887) 0, 0,)
+        // INFO: >chr16:91343975-91360783 +) 0) 0, 0,) -> if extract mode on!
+        let mut id = parts
+            .first()
+            .unwrap_or_else(|| {
+                panic!("ERROR: ID not found in line: {}", line);
+            })
+            .to_string();
+
+        // INFO: ENSMUST00000100926.4
+        // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887
+        // INFO: 0 -> if extract mode on!
+        id = id.split("(").collect::<Vec<&str>>()[2]
+            .split(")")
+            .collect::<Vec<&str>>()[0]
+            .to_string();
+
+        let u_id = id
+            .parse::<u32>()
+            .unwrap_or_else(|e| panic!("ERROR: could parse ID to u32 -> {id}. {e}"));
+
+        // INFO: unpacking index reference -> queries
+        let queries = index
+            .get(&u_id)
+            .unwrap_or_else(|| panic!("ERROR: could not find index match for id {id}"));
+
+        for (orf_idx, orf) in parts.iter().skip(1).enumerate() {
+            // INFO: 13190,13667,0.6413461491465569,0.921319767832756
+            let orf_parts: Vec<&str> = orf.split(',').collect();
+            if orf_parts.len() < 2 {
+                panic!("ERROR: ORF does not have enough parts to parse: {}", orf);
+            }
+
+            let start = orf_parts[0].parse::<u64>().unwrap_or_else(|_| {
+                panic!("ERROR: failed to parse start position from ORF: {}", orf);
+            });
+            let mut stop = orf_parts[1].parse::<u64>().unwrap_or_else(|_| {
+                panic!("ERROR: failed to parse stop position from ORF: {}", orf);
+            }); // INFO: stop is inclusive, so we add 3 to include the stop codon
+            let start_score = orf_parts[2].parse::<f32>().unwrap_or_else(|_| {
+                panic!("ERROR: failed to parse start position from ORF: {}", orf);
+            });
+            let stop_score = orf_parts[3].parse::<f32>().unwrap_or_else(|_| {
+                panic!("ERROR: failed to parse stop position from ORF: {}", orf);
+            });
+
+            if start > stop {
+                panic!(
+                    "ERROR: start position is greater than stop position in ORF: {}",
+                    orf
+                );
+            }
+
+            // INFO: retrieving the reference gene prediction record
+            let record = records.get_mut(&id).unwrap_or_else(|| {
+                panic!("ERROR: id not found in BED, this is a bug -> {}!", id);
+            });
+
+            let strand = record.strand.clone();
+
+            let (mut orf_start, mut orf_end) = record.map_absolute_cds(start, stop);
+
+            // WARN: skipping unreliable ORFs for the current alignment
+            if orf_start == 0 && orf_end == 0 {
+                continue;
+            }
+
+            let mut stop_codon = "";
+
+            // INFO: before adding up we need to check the stop codon to see if its a real one or not
+            let sequence = sequences.get(&id.to_smolstr()).unwrap_or_else(|| {
+                panic!("ERROR: sequence not found for {id:?}");
+            });
+            let mut orf_sequence = sequence.clone();
+
+            let start_codon =
+                from_utf8(&sequence[start as usize..(start + 3) as usize])
+                    .unwrap_or_else(|e| {
+                        panic!("ERROR: failed to parse start codon -> {e} -> {sequence:?} from {id:?} using {orf_start:?}");
+                    });
+
+            __check_start_codon(start_codon, &id, start);
+
+            // INFO: stop is inclusive, so we add 3 to include the stop codon
+            match strand.as_str() {
+                // WARN: some weird cases where the tool predicts a non-stopped ORF:
+                // WARN: R146001_manual_scaffold_1.p1    102     2199
+                // WARN: sizes -> 144,117,332,112,120,117,138,78,66,270,246,137,79,156,87 = 2199
+                // WARN: record -> manual_scaffold_1 189532046 189543938 R146001 60 + 189532148 189543941
+                // WARN: would be out-of-bounds if we add +3 in this case
+                "+" => {
+                    if orf_end + 3 > record.end {
+                        dbg!("WARN: translationAi predicted a non-stop ORF: {orf:?} for {gp:?}");
+                        // orf_end = record.end
+                        stop_codon =
+                            from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
+                                .unwrap_or_else(|e| {
+                                    panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
+                                });
+                        dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
+
+                        orf_sequence = sequence[start as usize..stop as usize].to_vec();
+                    } else {
+                        stop_codon =
+                            from_utf8(&sequence[(stop) as usize..(stop + 3) as usize])
+                                .unwrap_or_else(|e| {
+                                    panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
+                                });
+
+                        if !STOP_CODONS.contains(&stop_codon) {
+                            // WARN: if stop_codon is not cannonical this is probably a case where the tool is wrong
+                            dbg!(
+                                "WARN: stop codon is not TAA, TAG, or TGA -> {:?} from {:?} using {:?}",
+                                stop_codon,
+                                &id,
+                                stop
+                            );
+
+                            // INFO: taking stop as last base and going back 2 nt to capture last codon
+                            stop_codon =
+                                from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
+                                    .unwrap_or_else(|e| {
+                                        panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
+                                    });
+
+                            dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
+                            orf_sequence = sequence[start as usize..stop as usize].to_vec();
+                        } else {
+                            // INFO: stop_codon is cannonical so we can safely add 3 to the end
+                            orf_end += 3;
+                            orf_sequence = sequence[start as usize..(stop + 3) as usize].to_vec();
+                            stop += 3;
+                        }
+                    }
+                }
+                "-" => {
+                    if orf_start - 3 < config::SCALE - record.end {
+                        dbg!("WARN: translationAi predicted a non-stop ORF: {orf:?} for {gp:?}");
+                        // orf_start = config::SCALE - record.end
+                        stop_codon =
+                            from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
+                                .unwrap_or_else(|e| {
+                                    panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
+                                });
+                        dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
+                        orf_sequence = sequence[start as usize..stop as usize].to_vec();
+                    } else {
+                        stop_codon =
+                            from_utf8(&sequence[(stop) as usize..(stop + 3) as usize])
+                                .unwrap_or_else(|e| {
+                                    panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
+                                });
+
+                        if !STOP_CODONS.contains(&stop_codon) {
+                            // WARN: if stop_codon is not cannonical this is probably a case where the tool is wrong
+                            dbg!(
+                                "WARN: stop codon is not TAA, TAG, or TGA -> {:?} from {:?} using {:?}",
+                                stop_codon,
+                                &id,
+                                stop
+                            );
+
+                            // INFO: taking stop as last base and going back 2 nt to capture last codon
+                            stop_codon =
+                                from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
+                                    .unwrap_or_else(|e| {
+                                        panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
+                                    });
+
+                            dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
+                            orf_sequence = sequence[start as usize..stop as usize].to_vec();
+                        } else {
+                            // INFO: stop_codon is cannonical so we can safely add 3 to the end
+                            orf_start -= 3;
+                            orf_sequence = sequence[start as usize..(stop + 3) as usize].to_vec();
+                            stop += 3;
+                        }
+                    }
+                }
+                _ => panic!("ERROR: unexpected strand value: {}", strand),
+            }
+
+            let pep = translate(&orf_sequence);
+            let inner_stops = scan_stops(orf_sequence);
+
+            // INFO: queries are the orfs in the current record
+            for query in queries {
+                let query_id = format!("{}.p{}", query, orf_idx + 1);
+                let query_line = format!(
+                    "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    record.chrom,
+                    orf_start,
+                    orf_end,
+                    query_id,
+                    strand,
+                    start_score,
+                    stop_score,
+                    start,
+                    stop,
+                    start_codon,
+                    stop_codon,
+                    inner_stops,
+                    pep
+                );
+
+                accumulator.insert(query_line);
+            }
+        }
     }
+
+    accumulator.into_iter().for_each(|line| {
+        writeln!(writer, "{}", line).unwrap();
+    });
+}
+
+/// Flattens a `DashMap` into a `HashMap`.
+///
+/// # Arguments
+///
+/// * `original` - The `DashMap` to flatten.
+///
+/// # Returns
+///
+/// A `HashMap` containing the flattened `DashMap`.
+///
+/// # Example
+///
+/// ```rust
+/// use std::path::PathBuf;
+/// use std::fs::File;
+/// use std::io::BufWriter;
+///
+/// let original = DashMap::new();
+/// let mut inner_map = HashMap::new();
+/// inner_map.insert("key".to_string(), GenePred::default());
+/// original.insert("id".to_string(), inner_map);
+///
+/// let result = flatten_dashmap(original);
+/// ```
+fn flatten_dashmap(
+    original: DashMap<String, HashMap<String, GenePred>>,
+) -> HashMap<String, GenePred> {
+    let mut result = HashMap::new();
+    let read_only = original;
+
+    for (_, inner_map) in read_only {
+        for (key, value) in inner_map {
+            result.insert(key, value);
+        }
+    }
+
+    result
 }
 
 /// Processes TAI (Translation AI) predictions in a "canonical" mode, which is used
@@ -269,14 +518,15 @@ fn unroll_tai(index: PathBuf, fasta: PathBuf, alignments: &PathBuf, mode: &Mode)
 /// // Calling the function would look like this:
 /// // cannonical(predictions, records, index_path, accumulator, writer);
 /// ```
-fn cannonical(
+#[deprecated(note = "Functionality replaced by extract indexing")]
+fn _cannonical(
     predictions: String,
     records: DashMap<String, HashMap<String, GenePred>>,
     index: PathBuf,
     accumulator: DashSet<String>,
     mut writer: BufWriter<File>,
 ) {
-    let index = read_tai_index(&index);
+    let index = _read_tai_index(&index);
 
     // INFO: inflate results!
     predictions
@@ -344,7 +594,7 @@ fn cannonical(
                     );
                 });
 
-                let (mut orf_start, mut orf_end) = gp.map_absolute_cds(start as u64, stop as u64);
+                let (mut orf_start, mut orf_end) = gp.map_absolute_cds(start, stop);
 
                 // WARN: skipping unreliable ORFs for the current alignment
                 if orf_start == 0 && orf_end == 0 {
@@ -487,12 +737,15 @@ fn cannonical(
 /// // Calling the function would look like this:
 /// // indexed(predictions, records, index_path, accumulator, writer);
 /// ```
-fn indexed(
+#[allow(unused_assignments)]
+#[deprecated(note = "Functionality replaced by extract indexing")]
+fn _indexed(
     predictions: String,
     records: DashMap<String, HashMap<String, GenePred>>,
     index: PathBuf,
     accumulator: DashSet<String>,
     mut writer: BufWriter<File>,
+    sequences: HashMap<smol_str::SmolStr, Vec<u8>>,
 ) {
     let chr = get_chr_from_path(&index);
     let index = extract::read::read_index(&index, &chr);
@@ -532,7 +785,7 @@ fn indexed(
                 let start = orf_parts[0].parse::<u64>().unwrap_or_else(|_| {
                     panic!("ERROR: failed to parse start position from ORF: {}", orf);
                 });
-                let stop = orf_parts[1].parse::<u64>().unwrap_or_else(|_| {
+                let mut stop = orf_parts[1].parse::<u64>().unwrap_or_else(|_| {
                     panic!("ERROR: failed to parse stop position from ORF: {}", orf);
                 });
                 let start_score = orf_parts[2].parse::<f32>().unwrap_or_else(|_| {
@@ -564,7 +817,7 @@ fn indexed(
                     );
                 });
 
-                let (mut orf_start, mut orf_end) = gp.map_absolute_cds(start as u64, stop as u64);
+                let (mut orf_start, mut orf_end) = gp.map_absolute_cds(start, stop);
 
                 // WARN: skipping unreliable ORFs for the current alignment
                 if orf_start == 0 && orf_end == 0 {
@@ -575,6 +828,24 @@ fn indexed(
                     );
                     continue;
                 }
+
+                let mut stop_codon = "";
+
+                // INFO: before adding up we need to check the stop codon to see if its a real one or not
+                let sequence = sequences
+                    .get(&cannonical_id.to_smolstr())
+                    .unwrap_or_else(|| {
+                        panic!("ERROR: sequence not found for {cannonical_id:?}");
+                    });
+                let mut orf_sequence = sequence.clone();
+
+                let start_codon =
+                    std::str::from_utf8(&sequence[start as usize..(start + 3) as usize])
+                        .unwrap_or_else(|e| {
+                            panic!("ERROR: failed to parse start codon -> {e} -> {sequence:?} from {cannonical_id:?} using {orf_start:?}");
+                        });
+
+                __check_start_codon(start_codon, &cannonical_id, start);
 
                 // INFO: stop is inclusive, so we add 3 to include the stop codon
                 match strand.as_str() {
@@ -591,9 +862,47 @@ fn indexed(
                                 because {orf_end} + 3 > {}",
                                 gp.end,
                             );
-                            orf_end = gp.end
+                            // orf_end = gp.end
+
+                                stop_codon =
+                                    std::str::from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
+                                        .unwrap_or_else(|e| {
+                                            panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {cannonical_id:?} using {orf_end:?}");
+                                        });
+
+                                log::debug!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
+                                orf_sequence = sequence[start as usize..stop as usize].to_vec();
                         } else {
-                            orf_end += 3
+                            stop_codon =
+                                std::str::from_utf8(&sequence[(stop) as usize..(stop + 3) as usize])
+                                    .unwrap_or_else(|e| {
+                                        panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {cannonical_id:?} using {orf_end:?}");
+                                    });
+
+                            if !STOP_CODONS.contains(&stop_codon) {
+                                // WARN: if stop_codon is not cannonical this is probably a case where the tool is wrong
+                                log::debug!(
+                                    "WARN: stop codon is not TAA, TAG, or TGA -> {:?} from {:?} using {:?}",
+                                    stop_codon,
+                                    &cannonical_id,
+                                    stop
+                                );
+
+                                // INFO: taking stop as last base and going back 2 nt to capture last codon
+                                stop_codon =
+                                    std::str::from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
+                                        .unwrap_or_else(|e| {
+                                            panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {cannonical_id:?} using {orf_end:?}");
+                                        });
+
+                                dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
+                                orf_sequence = sequence[start as usize..stop as usize].to_vec();
+                            } else {
+                                // INFO: stop_codon is cannonical so we can safely add 3 to the end
+                                orf_end += 3;
+                                orf_sequence = sequence[start as usize..(stop + 3) as usize].to_vec();
+                                stop += 3;
+                            }
                         }
                     }
                     "-" => {
@@ -605,28 +914,73 @@ fn indexed(
                                 because {orf_start} - 3 < {}",
                                 SCALE - gp.end
                             );
-                            orf_start = SCALE - gp.end
+                            // orf_start = SCALE - gp.end
+
+                                stop_codon =
+                                    std::str::from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
+                                        .unwrap_or_else(|e| {
+                                            panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {cannonical_id:?} using {orf_end:?}");
+                                        });
+                                log::debug!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
+                                orf_sequence = sequence[start as usize..stop as usize].to_vec();
                         } else {
-                            orf_start -= 3;
+                            // orf_start -= 3;
+                            stop_codon =
+                                std::str::from_utf8(&sequence[(stop) as usize..(stop + 3) as usize])
+                                    .unwrap_or_else(|e| {
+                                        panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {cannonical_id:?} using {orf_end:?}");
+                                    });
+
+                            if !STOP_CODONS.contains(&stop_codon) {
+                                // WARN: if stop_codon is not cannonical this is probably a case where the tool is wrong
+                                log::debug!(
+                                    "WARN: stop codon is not TAA, TAG, or TGA -> {:?} from {:?} using {:?}",
+                                    stop_codon,
+                                    &cannonical_id,
+                                    stop
+                                );
+
+                                // INFO: taking stop as last base and going back 2 nt to capture last codon
+                                stop_codon =
+                                    std::str::from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
+                                        .unwrap_or_else(|e| {
+                                            panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {cannonical_id:?} using {orf_end:?}");
+                                        });
+
+                                log::debug!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
+                                orf_sequence = sequence[start as usize..stop as usize].to_vec();
+                            } else {
+                                // INFO: stop_codon is cannonical so we can safely add 3 to the end
+                                orf_start -= 3;
+                                orf_sequence = sequence[start as usize..(stop + 3) as usize].to_vec();
+                                stop += 3;
+                            }
                         }
                     }
                     _ => panic!("ERROR: unexpected strand value: {}", strand),
                 }
 
+                let pep = translate(&orf_sequence);
+                let inner_stops = scan_stops(orf_sequence);
+
                 // INFO: queries are the orfs in the current record
                 for query in queries {
                     let query_id = format!("{}.p{}", query, orf_idx + 1);
                     let query_line = format!(
-                        "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-                        query_id,
+                        "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        gp.chrom,
                         start,
                         stop,
+                        query_id,
+                        strand,
                         start_score,
                         stop_score,
-                        strand,
                         orf_start,
                         orf_end,
-                        gp.chrom
+                        start_codon,
+                        stop_codon,
+                        inner_stops,
+                        pep
                     );
 
                     accumulator.insert(query_line);
@@ -637,6 +991,131 @@ fn indexed(
     accumulator.into_iter().for_each(|line| {
         writeln!(writer, "{}", line).unwrap();
     });
+}
+
+/// Translates a sequence into amino acids.
+///
+/// # Arguments
+///
+/// * `sequence` - The sequence to translate.
+///
+/// # Returns
+///
+/// The translated sequence as a string.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - A codon is not a valid codon.
+///
+/// # Example
+///
+/// ```rust
+/// let sequence = vec![b'A', b'T', b'G', b'C'];
+///
+/// let aa = translate(&sequence);
+/// ```
+fn translate(sequence: &[u8]) -> String {
+    let mut aa = String::new();
+    for codon in sequence.chunks(3) {
+        let amino_acid = translate_codon(codon);
+
+        if amino_acid == "X" {
+            panic!(
+                "ERROR: codon -> {:?} is not a valid codon from sequence -> {:?}!",
+                from_utf8(codon).unwrap(),
+                from_utf8(sequence).unwrap()
+            );
+        }
+        aa.push_str(amino_acid);
+    }
+    aa
+}
+
+/// Translates a codon into an amino acid.
+///
+/// # Arguments
+///
+/// * `codon` - The codon to translate.
+///
+/// # Returns
+///
+/// The amino acid corresponding to the given codon.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - The codon is not a valid codon.
+///
+/// # Example
+///
+/// ```rust
+/// let codon = vec![b'A', b'T', b'G'];
+///
+/// let amino_acid = translate_codon(codon);
+/// ```
+fn translate_codon(codon: &[u8]) -> &'static str {
+    for (table_codon, amino_acid) in &CODON_TABLE {
+        if codon == *table_codon {
+            return amino_acid;
+        }
+    }
+
+    "X" // INFO: unknown codon
+}
+
+/// Scans a sequence for stop codons
+///
+/// This function scans a sequence for stop codons by checking if the windows
+/// of size 3 contain any of the expected stop codons (TAA, TAG, or TGA).
+/// The function returns the number of stop codons found.
+///
+/// # Arguments
+///
+/// * `sequence` - A `Vec<u8>` containing the sequence to scan.
+///
+/// # Returns
+///
+/// A `usize` representing the number of stop codons found.
+fn scan_stops(sequence: Vec<u8>) -> usize {
+    sequence
+        .windows(3)
+        .enumerate()
+        .filter(|(idx, window)| idx % 3 == 0 && STOP_CODONS_BYTES.contains(window))
+        .count()
+}
+
+/// Checks if the start codon is correct
+///
+/// This function checks if the start codon is correct by comparing it to the
+/// expected value of ATG. If the start codon is not ATG, a warning is logged.
+///
+/// # Arguments
+///
+/// * `start_codon` - A `String` slice containing the start codon.
+/// * `id` - A `String` slice containing the ID of the sequence.
+/// * `orf_start` - A `u64` representing the start position of the ORF.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - The start codon is not long enough.
+/// - The start codon is not ATG.
+fn __check_start_codon(start_codon: &str, id: &str, orf_start: u64) {
+    if start_codon.len() < 3 {
+        panic!(
+            "ERROR: start codon is not long enough -> {start_codon:?} from {id:?} using {orf_start:?}"
+        );
+    }
+
+    if start_codon != START_CODON {
+        log::warn!(
+            "WARN: start codon is not ATG -> {:?} from {:?} using {:?}",
+            start_codon,
+            &id,
+            orf_start
+        );
+    }
 }
 
 /// Reformats FASTA headers based on corresponding BED alignment information
@@ -714,14 +1193,11 @@ fn indexed(
 /// ```
 fn refmt(
     fasta: &PathBuf,
-    bed: &PathBuf,
-    outdir: &PathBuf,
-    mode: &Mode,
-    index_path: &Option<PathBuf>,
-) -> (PathBuf, PathBuf) {
-    let records = parse_bed::<Bed6>(bed, COLUMNS.to_vec());
-    let seqs =
-        parse_fa(fasta).unwrap_or_else(|e| panic!("ERROR: failed to parse FASTA file -> {e}"));
+    records: &HashMap<String, GenePred>,
+    outdir: &Path,
+) -> (PathBuf, HashMap<smol_str::SmolStr, Vec<u8>>) {
+    let seqs = fasta_to_hashmap(fasta)
+        .unwrap_or_else(|e| panic!("ERROR: failed to parse FASTA file -> {e}"));
 
     let fmt = outdir.join(format!(
         "{}.fmt.fa",
@@ -729,66 +1205,48 @@ fn refmt(
     ));
     let mut writer = create_fasta(&fmt, "fa")
         .unwrap_or_else(|| panic!("ERROR: could not create file {:?}", fmt));
-    let mut index = create_index(&fmt);
 
-    let accumulator = DashMap::new();
+    // INFO: not using further deduplication (DashMap in HL version) -> seqs are already deduplicated by extract
+    let mut accumulator = Vec::with_capacity(seqs.len());
 
-    records.into_par_iter().for_each(|(chr, rows)| {
-        for (header, values) in rows.iter() {
-            let fmt_header = get_header_from_values(values, header);
-            let seq = seqs.get(&header.clone().to_smolstr()).unwrap_or_else(|| {
-                panic!("ERROR: chromosome from {header} not found in sequences -> {chr}!");
-            });
+    records.into_iter().for_each(|(header, gp)| {
+        let mut start = gp.start;
+        let mut end = gp.end;
 
-            accumulator
-                .entry(seq)
-                .or_insert_with(Vec::new)
-                .push(fmt_header)
-        }
-    });
-
-    // INFO: will write the first header on collection and will point other headers to it
-    accumulator.into_iter().for_each(|(seq, headers)| {
-        writeln!(writer, "{}", &headers[0]).unwrap();
-        writer.write_all(seq).unwrap();
-        writeln!(writer).unwrap();
-
-        match mode {
-            // INFO: nothing bc we already have an index!
-            Mode::Indexed => {}
-            Mode::Raw => {
-                if headers.len() > 1 {
-                    let mut count = 0;
-                    for header in &headers {
-                        let (id, chr) = if let Some((read, chr)) = encode_for_tai(header) {
-                            (read, chr)
-                        } else {
-                            panic!("ERROR: failed to encode header: {}", header);
-                        };
-
-                        // INFO: first record -> chr byte len + chr bytes
-                        // INFO: chr-len chr n_ids id[ref] id1 id2
-                        if count < 1 {
-                            index.write_all(&[chr.len() as u8]).unwrap();
-                            index.write_all(chr.as_bytes()).unwrap();
-
-                            let n_ids = headers.len() as u16;
-                            index.write_all(&n_ids.to_be_bytes()).unwrap();
-                        }
-
-                        index.write_all(&id.to_be_bytes()).unwrap();
-
-                        count += 1;
-                    }
-                }
+        match gp.strand {
+            Strand::Forward => {}
+            Strand::Reverse => {
+                let tmp = start;
+                start = config::SCALE - end;
+                end = config::SCALE - tmp;
             }
         }
+
+        let fmt_header = format!(
+            ">{}:{}-{}({})({})(0, 0,)",
+            gp.chrom, start, end, gp.strand, gp.name
+        );
+
+        let seq = seqs.get(&header.clone().to_smolstr()).unwrap_or_else(|| {
+            panic!("ERROR: {header} not found in sequences {:?}!", seqs);
+        });
+
+        accumulator.push((seq, fmt_header));
     });
 
-    match mode {
-        Mode::Raw => (fmt.clone(), fmt.with_extension("dedup.index")),
-        Mode::Indexed => (fmt.clone(), index_path.as_ref().unwrap().clone()),
-    }
+    accumulator.into_iter().for_each(|(seq, header)| {
+        writeln!(writer, "{}", &header).unwrap_or_else(|e| {
+            panic!("ERROR: failed to write header -> {e}");
+        });
+        writer.write_all(seq).unwrap_or_else(|e| {
+            panic!("ERROR: failed to write sequence -> {e}");
+        });
+        writeln!(writer).unwrap_or_else(|e| {
+            panic!("ERROR: failed to write newline -> {e}");
+        });
+    });
+
+    (fmt.clone(), seqs)
 }
 
 /// Reads a TAI index file into a `HashMap` that maps reference IDs to a list of query IDs.
@@ -865,7 +1323,7 @@ fn refmt(
 /// // Clean up dummy file
 /// std::fs::remove_file(&index_path).unwrap();
 /// ```
-fn read_tai_index(index: &PathBuf) -> HashMap<String, Vec<String>> {
+fn _read_tai_index(index: &PathBuf) -> HashMap<String, Vec<String>> {
     let mut mapper = HashMap::new();
 
     let mut reader = BufReader::new(
@@ -1083,4 +1541,65 @@ fn get_header_from_values(values: &Vec<BedColumnValue>, header: &String) -> Stri
 
     let hdr = format!(">{}:{}-{}({})({})(0, 0,)", chr, start, end, strand, name);
     hdr
+}
+
+/// Parses a FASTA file into a hash map.
+///
+/// # Arguments
+///
+/// * `f` - The path to the FASTA file.
+///
+/// # Returns
+///
+/// A `HashMap<SmolStr, Vec<u8>>` instance containing the parsed FASTA data.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - The FASTA file cannot be read.
+///
+/// # Example
+///
+/// ```rust
+/// use std::path::PathBuf;
+/// use std::fs::File;
+/// use std::io::BufWriter;
+///
+/// let fasta = PathBuf::from("path/to/fasta.fa");
+///
+/// let seqs = parse_fa(&fasta);
+/// ```
+pub fn fasta_to_hashmap<F: AsRef<Path>>(
+    f: F,
+) -> Result<HashMap<SmolStr, Vec<u8>>, Box<dyn std::error::Error>> {
+    let file = File::open(f).unwrap();
+    let mmap = unsafe { Mmap::map(&file).unwrap() };
+    let data = mmap.as_ref();
+
+    let mut acc = HashMap::new();
+    let mut pos = 0;
+
+    while let Some(start) = memchr(b'>', &data[pos..]) {
+        let start = pos + start;
+        let end = memchr(b'>', &data[start + 1..]).map_or(data.len(), |e| start + 1 + e);
+        let entry = &data[start + 1..end];
+        let header_end = memchr(b'\n', entry).unwrap();
+        let header = from_utf8(&entry[..header_end])
+            .unwrap()
+            .trim()
+            .split(' ')
+            .next()
+            .unwrap();
+        let record = &entry[header_end + 1..];
+        let seq = record
+            .iter()
+            .filter(|&&b| b != b'\n' && b != b'\r') // Remove newlines and carriage returns
+            .cloned()
+            .collect::<Vec<u8>>();
+
+        acc.insert(SmolStr::new(header), seq);
+        pos = end;
+    }
+
+    Ok(acc)
 }
