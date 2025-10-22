@@ -313,7 +313,7 @@ pub fn get_table(
                 prediction.start_codon,
                 prediction.stop_codon,
                 prediction.inner_stops,
-                "UT", // INFO: unknown orf_type -> can be guessed with codons but its helpful for tai-only
+                "UN", // INFO: unknown orf_type -> can be guessed with codons but its helpful for tai-only
             );
             table.entry(unique_tai_idx).or_insert(Vec::new()).push(line);
         }
