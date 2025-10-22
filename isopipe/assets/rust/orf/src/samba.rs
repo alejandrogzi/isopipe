@@ -85,7 +85,7 @@ pub fn run_samba(args: SambaArgs) {
             .unwrap(),
     );
     let mut writer = BufWriter::new(
-        File::open(&expanded_output)
+        File::create(&expanded_output)
             .unwrap_or_else(|e| panic!("ERROR: could not open {expanded_output:?} -> {e}!")),
     );
 
