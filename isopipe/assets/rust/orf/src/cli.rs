@@ -87,6 +87,15 @@ pub struct CommonArgs {
         help = "Path to .index file produced by extract step"
     )]
     pub index: PathBuf,
+
+    #[arg(
+        short = 'K',
+        long = "keep-temp",
+        required = false,
+        help = "Keep temporary files",
+        action = clap::ArgAction::SetTrue
+    )]
+    pub keep_temp: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -201,4 +210,13 @@ pub struct SambaArgs {
         help = "Path to model weights file"
     )]
     pub weights: Option<PathBuf>,
+
+    #[arg(
+        short = 'K',
+        long = "keep-temp",
+        required = false,
+        help = "Keep temporary files",
+        action = clap::ArgAction::SetTrue
+    )]
+    pub keep_temp: bool,
 }

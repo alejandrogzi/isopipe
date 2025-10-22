@@ -1408,7 +1408,7 @@ fn _read_tai_index(index: &PathBuf) -> HashMap<String, Vec<String>> {
 /// let malformed_header = ">malformed_header".to_string();
 /// assert!(encode_for_tai(&malformed_header).is_none());
 /// ```
-fn encode_for_tai(header: &String) -> Option<(u16, &str)> {
+fn _encode_for_tai(header: &String) -> Option<(u16, &str)> {
     // INFO: ">chr16:45612921-45619040(+)(R6713_chr16__FC48#TC40#PA0#PR0#IY876)(0, 0,)",
     // INFO: 6713 16
     let parts: Vec<&str> = header.split('(').collect();
@@ -1492,7 +1492,7 @@ fn encode_for_tai(header: &String) -> Option<(u16, &str)> {
 /// // For '-' strand, start and end are transformed: start = SCALE - original_end, end = SCALE - original_start
 /// assert_eq!(formatted_minus, ">chr2:800-900(-)(geneB)(0, 0,)");
 /// ```
-fn get_header_from_values(values: &Vec<BedColumnValue>, header: &String) -> String {
+fn _get_header_from_values(values: &Vec<BedColumnValue>, header: &String) -> String {
     let chr = values[0].as_str().unwrap_or_else(|| {
         panic!(
             "ERROR: start position not found for header: {} - {:?}",

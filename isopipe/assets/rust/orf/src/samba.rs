@@ -30,9 +30,19 @@ pub fn run_samba(args: SambaArgs) {
 
     let weights = args.weights.unwrap_or_else(|| {
         let weights = dir.join("full_length_weights.hdf5");
+
         log::info!("INFO: downloading weights from {WEIGHTS}");
-        std::fs::copy(WEIGHTS, &weights)
-            .unwrap_or_else(|e| panic!("ERROR: could not download weights from {WEIGHTS} -> {e}!"));
+        let cmd = format!(
+            "wget {WEIGHTS} -O {weights}",
+            WEIGHTS = WEIGHTS,
+            weights = weights.display()
+        );
+
+        std::process::Command::new("bash")
+            .arg("-c")
+            .arg(&cmd)
+            .status()
+            .unwrap_or_else(|e| panic!("ERROR: could not run command -> {cmd} -> {e}!"));
 
         weights
     });
@@ -40,18 +50,22 @@ pub fn run_samba(args: SambaArgs) {
     let output = dir.join(args.fasta.with_extension("rnasamba.tsv"));
 
     let cmd = format!(
-        "rnasaamba classify {output} {input} {weights}",
+        "rnasamba classify {output} {input} {weights}",
         output = output.display(),
         input = args.fasta.display(),
         weights = weights.display()
     );
 
     log::info!("INFO: running command -> {cmd}");
-    std::process::Command::new("bash")
+    let status = std::process::Command::new("bash")
         .arg("-c")
         .arg(&cmd)
         .status()
         .unwrap_or_else(|e| panic!("ERROR: could not run command -> {cmd} -> {e}!"));
+
+    if !status.success() {
+        panic!("ERROR: command failed -> {cmd}");
+    }
 
     let chr = get_chr_from_path(&args.index);
     let index = extract::read::read_index(&args.index, &chr);
@@ -97,5 +111,9 @@ pub fn run_samba(args: SambaArgs) {
                 )
             });
         }
+    }
+
+    if !args.keep_temp {
+        isopipe::config::remove_any(&output);
     }
 }

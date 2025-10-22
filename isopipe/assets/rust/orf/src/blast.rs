@@ -76,10 +76,12 @@ pub fn run_blast(args: BlastArgs) {
 
     let index = args.common.index;
 
-    let table = get_table(orfs, records, &index, &dir, args.tai);
-    __run_diamond(table, &args.database, &dir);
+    let table = get_table(orfs, records, &index, dir, args.tai);
+    __run_diamond(table, &args.database, dir);
 
-    isopipe::depure!(dir, "result");
+    if !args.common.keep_temp {
+        isopipe::depure!(dir, "result");
+    }
 }
 
 /// Gets the table of ORF records and their corresponding lines
@@ -138,12 +140,24 @@ pub fn get_table(
         for record in records {
             unique_tai_idx += 1;
 
-            let record_extract_id = record.id.split("_ORF").next().unwrap_or_else(|| {
+            let mut id_parts = record.id.split("_ORF.");
+            let record_extract_id = id_parts.next().unwrap_or_else(|| {
                 panic!(
                     "ERROR: failed to parse cannonical ID from header: {}",
                     record.id
                 );
             });
+
+            // INFO: now id_parts holds ORF number + nested; eg. 0_.ORF.1@2 -> 1@2 -> OR1#NE2
+            let tags = format!(
+                "__OR{}",
+                id_parts
+                    .next()
+                    .unwrap_or_else(|| {
+                        panic!("ERROR: failed to parse tags from header: {}", record.id);
+                    })
+                    .replace("@", "#NE")
+            );
 
             let gp = bed.get_mut(record_extract_id).unwrap_or_else(|| {
                 panic!(
@@ -198,11 +212,12 @@ pub fn get_table(
                     }
 
                     let line = format!(
-                        "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        "{}\t{}\t{}\t{}{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                         gp.chrom,
                         orf_start,
                         orf_end,
-                        id, // INFO: R123_chr12
+                        id,   // INFO: R123_chr12
+                        tags, // #OR1#NE2
                         gp.strand,
                         tai_prediction.start_score,
                         tai_prediction.stop_score,
@@ -227,11 +242,12 @@ pub fn get_table(
 
                     // INFO: orfipy complete or complete-nested -> follow tai fmt + orf_type + strand
                     let line = format!(
-                        "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                        "{}\t{}\t{}\t{}{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                         gp.chrom,
                         orf_start,
                         orf_end,
-                        id, // INFO: R123_chr12
+                        id,   // INFO: R123_chr12
+                        tags, // #OR1#NE2
                         gp.strand,
                         0.0, // INFO: no tai start score
                         0.0, // INFO: no tai stop score
@@ -280,12 +296,15 @@ pub fn get_table(
                 panic!("ERROR: failed to write record to file -> {e} -> {:?}", rc);
             });
 
+            // INFO: R221_chrX.p2 -> R221_chrX__UN2
+            let id = prediction.id.replace(".p", "__UN");
+
             let line = format!(
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
                 prediction.chr,
                 prediction.start,
                 prediction.end,
-                prediction.id,
+                id,
                 prediction.strand,
                 prediction.start_score,
                 prediction.stop_score,
@@ -415,7 +434,7 @@ fn __run_diamond(mut table: HashMap<usize, Vec<String>>, database: &Path, outdir
     let orfs = outdir.join("orf.dedup.pep");
 
     let cmd = format!(
-        "diamond blastp --query {} --db {} --out {} --outfmt 6 qseqid pident qlen slen length qstart qend sstart send evalue --threads 8 --sensitive -e 1e-10",
+        "~/Documents/binaries/diamond blastp --query {} --db {} --out {} --outfmt 6 qseqid pident qlen slen length qstart qend sstart send evalue --threads 8 --sensitive -e 1e-10",
         orfs.display(),
         database.display(),
         diamond.display()
