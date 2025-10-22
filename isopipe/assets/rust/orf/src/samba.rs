@@ -47,7 +47,12 @@ pub fn run_samba(args: SambaArgs) {
         weights
     });
 
-    let output = dir.join(args.fasta.with_extension("rnasamba.tsv"));
+    let output = dir.join(
+        args.fasta
+            .with_extension("tmp.samba.tsv")
+            .file_name()
+            .unwrap(),
+    );
 
     let cmd = format!(
         "rnasamba classify {output} {input} {weights}",
@@ -73,7 +78,12 @@ pub fn run_samba(args: SambaArgs) {
     let scores =
         reader(&output).unwrap_or_else(|e| panic!("ERROR: could not read {output:?} -> {e}!"));
 
-    let expanded_output = dir.join(args.fasta.with_extension("rnasamba.expanded.tsv"));
+    let expanded_output = dir.join(
+        args.fasta
+            .with_extension("rnasamba.tsv")
+            .file_name()
+            .unwrap(),
+    );
     let mut writer = BufWriter::new(
         File::open(&expanded_output)
             .unwrap_or_else(|e| panic!("ERROR: could not open {expanded_output:?} -> {e}!")),
