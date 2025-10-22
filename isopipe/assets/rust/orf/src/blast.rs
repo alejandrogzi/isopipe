@@ -27,7 +27,7 @@ use crate::{blast::core::deduplicate, cli::BlastArgs, utils::*};
 pub mod core;
 
 const ORF_PEP: &str = "orfs.pep.fa";
-const RESULT: &str = "dmd.result";
+const RESULT: &str = "result";
 pub const VENV: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../py/orfipy/.venv/bin/activate"
@@ -110,7 +110,7 @@ pub fn get_table(
     tai: Option<PathBuf>,
 ) -> HashMap<usize, Vec<String>> {
     let chr = get_chr_from_path(index);
-    let index = extract::read::read_index(&index, &chr);
+    let index = extract::read::read_index(index, &chr);
 
     // INFO: sequence index -> vec of constructed lines
     let mut table = HashMap::new();
