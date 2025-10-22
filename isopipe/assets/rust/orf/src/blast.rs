@@ -296,8 +296,8 @@ pub fn get_table(
                 panic!("ERROR: failed to write record to file -> {e} -> {:?}", rc);
             });
 
-            // INFO: R221_chrX.p2 -> R221_chrX__UN2
-            let id = prediction.id.replace(".p", "__UN");
+            // INFO: R221_chrX.p2 -> R221_chrX__UT2
+            let id = prediction.id.replace(".p", "__UT");
 
             let line = format!(
                 "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
@@ -313,7 +313,7 @@ pub fn get_table(
                 prediction.start_codon,
                 prediction.stop_codon,
                 prediction.inner_stops,
-                "UN", // INFO: unknown orf_type -> can be guessed with codons but its helpful for tai-only
+                "UT", // INFO: unknown orf_type -> can be guessed with codons but its helpful for tai-only
             );
             table.entry(unique_tai_idx).or_insert(Vec::new()).push(line);
         }
