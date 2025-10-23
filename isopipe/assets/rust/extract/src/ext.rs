@@ -416,6 +416,7 @@ fn raw(
 /// - It fails to write to any of the `BufWriter`s (`writer_fa`, `writer_bed`, `writer_reduced_bed`, `index`).
 /// - `get_sequence` or `encode_id` functions panic due to invalid data or missing resources.
 /// - It fails to split or join BED line fields.
+#[allow(clippy::too_many_arguments)]
 fn index(
     mut transcripts: Vec<GenePred>,
     genome: &DashMap<String, Vec<u8>>,
@@ -436,7 +437,7 @@ fn index(
 
     let mut count = 0usize;
     for tx in transcripts.iter_mut() {
-        let seq = get_sequence(genome, chr, &tx, seq_mode);
+        let seq = get_sequence(genome, chr, tx, seq_mode);
         let key = seq.seq.as_bytes().to_vec();
         let encoded = encode_id(&tx.name);
 
@@ -657,7 +658,11 @@ pub fn find(args: crate::cli::IndexArgs) {
                 }
 
                 let rs = format!("ID: {} -> {:?}", header, group);
-                print!("{}", rs);
+                log::info!("{}", rs);
+                break; // Found the target, exit
+            } else {
+                // CRITICAL FIX: Skip the IDs for this non-matching group
+                reader.seek_relative((n_ids as i64) * 4).unwrap();
             }
         }
     }
