@@ -190,7 +190,7 @@ def map_to_blocks(
     >>> # # This would create 'test_predictions.tsv' and 'test_predictions.bed'
     >>> # # in the './output' directory.
     """
-
+    log.info(f"INFO: Initial size of table: {len(table)}")
     table = table.copy()
     # table["id"] = [id.split("__")[0] for id in table.blast_id] -> replace by prefix
     table["tag"] = ["#" + id.split("__")[1] for id in table.id]
@@ -220,6 +220,9 @@ def map_to_blocks(
         .groupby("prefix")
         .head(max_predictions)
     )
+
+    log.info(f"INFO: Final size of table: {len(table)}")
+    log.info(f"INFO: Writing predictions to {args.outdir}/{prefix}.predictions.tsv")
 
     table.drop(columns=["prefix", "tag"]).to_csv(
         f"{args.outdir}/{prefix}.predictions.tsv", index=False, header=True, sep="\t"
@@ -544,14 +547,14 @@ def parse() -> argparse.Namespace:
         "--min-score-max-predictions",
         type=float,
         default=0.70,
-        help="Minimum score to keep a prediction(s), controlled by max_predictions",
+        help="Minimum score to keep a prediction(s), controlled by max_predictions [default: 0.70]",
     )
     parser.add_argument(
         "-mp",
         "--max-predictions",
         type=int,
         default=1,
-        help="Maximum number of predictions to keep per query",
+        help="Maximum number of predictions to keep per query [default: 1]",
     )
     parser.add_argument(
         "-K", "--keep-raw", action="store_true", help="Keep raw predictions"
