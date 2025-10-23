@@ -14,11 +14,11 @@ minimap2 = "2.26"
 isotools = "0.0.1"
 pbindex = "1.7.0"
 samtools = "1.14"
-perl = ""
 python3 = ""
 rust = "1.77.1"
 diamond = "2.1.11"
 nextflow = ""
+rnasamba = ""
 
 [global]
 data_prefix = ""                   # FILL: raw data prefix
@@ -134,7 +134,7 @@ orf_min_len = 30           # minimum ORF length in bp
 parallel_mode = "chr"      # WARN: controls parallelization, "chr" for chromosomes, "all" for all at once [recommended: "chr"]
 keep_temp = "false"        # WARN: keep temporary files, change to "true" to keep them
 max_predictions = 3        # WARN: maximum number of predictions per read above max_pred_threshold
-max_pred_threshold = 0.7   # WARN: maximum prediction score threshold
+max_pred_threshold = 0.9   # WARN: maximum prediction score threshold
 
 [params.nmd]
 input_dir = "step8_orf"  # previous step data dir [default]

@@ -78,6 +78,7 @@ pub const FREE: &str = "free";
 pub const FUSIONS: &str = "fusions";
 pub const EXTRACT: &str = "extract";
 pub const TAI: &str = "tai";
+pub const SAMBA: &str = "samba";
 
 // filenames | suffixes
 pub const NF_RUNNER: &str = "execute_joblist.nf";
@@ -120,6 +121,8 @@ pub const BED_TO_BIG_BED: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/c/
 pub const SCHEMA: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/as/schema.as");
 pub const ORF_CHUNKS: usize = 50000; // 50k transcripts
 pub const HPC_MAX_NUM_JOBS: usize = 30000; // para max number of jobs
+pub const RNASAMBA_WEIGHTS: &str =
+    "https://github.com/apcamargo/RNAsamba/raw/refs/heads/master/data/full_length_weights.hdf5";
 
 // tool binaries or scripts
 pub const PREDICT_PY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/py/predict/predict.py");
@@ -142,6 +145,10 @@ pub const EXTRACT_RELEASE: &str = concat!(
 pub const TAI_VENV: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/assets/rust/orf/tai/.venv/bin/activate"
+);
+pub const PREDICT_VENV: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/assets/py/predict/.venv/bin/activate"
 );
 pub const APARENT_PY: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),

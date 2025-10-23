@@ -69,11 +69,31 @@ pub fn orf(
         .unwrap_or_else(|e| panic!("ERROR: could not convert chunk to num -> {e}!"));
 
     log::info!(
-        "INFO: Merging TOGA predictions in a single file here: {}...",
+        "INFO: Downloading RNASamba weights to: {}/weights",
         step_output_dir.display()
     );
+    let w_dir = step_output_dir.join("weights");
+    let weights = w_dir.join("full_length_weights.hdf5");
 
-    let toga_merged = __merge_toga(step_output_dir, config, step);
+    std::fs::create_dir_all(&w_dir).unwrap_or_else(|e| {
+        panic!(
+            "ERROR: could not creat temporary directory in {} -> {e}",
+            &w_dir.display()
+        )
+    });
+
+    let cmd = format!(
+        "wget {WEIGHTS} -O {weights}",
+        WEIGHTS = RNASAMBA_WEIGHTS,
+        weights = weights.display()
+    );
+    log::debug!("DEBUG: downloading weights -> {cmd}");
+
+    std::process::Command::new("bash")
+        .arg("-c")
+        .arg(&cmd)
+        .status()
+        .unwrap_or_else(|e| panic!("ERROR: could not run command -> {cmd} -> {e}!"));
 
     // INFO: looping through all [per-chr or merged -> depend on parallel_mode opt]
     // INFO: each [subdir/main] should have -> free + fakes + review [other color + tag] and fusions
@@ -96,6 +116,7 @@ pub fn orf(
                 &args,
                 &mut jobs,
                 &mode,
+                &weights,
             );
         }
         ParallelMode::Genome => {
@@ -109,6 +130,7 @@ pub fn orf(
                     &args,
                     &mut jobs,
                     &mode,
+                    &weights,
                 );
             }
         }
@@ -118,13 +140,7 @@ pub fn orf(
         .add_jobs(jobs)
         .execute(config, step, global_output_dir.to_path_buf(), Some("prep"));
 
-    predict(
-        step_output_dir,
-        &mode,
-        &toga_merged,
-        max_predictions,
-        max_pred_threshold,
-    )
+    predict(step_output_dir, &mode, max_predictions, max_pred_threshold)
 }
 
 /// Predicts Open Reading Frames (ORFs)
@@ -143,8 +159,6 @@ pub fn orf(
 ///   the prediction per chromosome or per entire genome.
 ///   - `ParallelMode::Chromosome`: Processes data chunk by chunk within chromosome-specific directories.
 ///   - `ParallelMode::Genome`: (Currently unimplemented) Intended to process the entire genome data.
-/// * `toga_merged` - A `PathBuf` reference to the merged TOGA (Tool for Genome Annotation) file.
-///   This file is crucial for the prediction process and its existence is validated.
 ///
 /// # Returns
 ///
@@ -158,13 +172,11 @@ pub fn orf(
 ///
 /// * If `step_output_dir` or any of its expected subdirectories (chromosome subdirs, chunk subdirs)
 ///   cannot be read.
-/// * If the `toga_merged` path does not exist.
 /// * If required input files (`.bed` alignments, `blast` results, or `tai` results)
 ///   are not found within the expected `chunked_dir` for a `Chromosome` mode job.
 fn predict(
     step_output_dir: &PathBuf,
     mode: &ParallelMode,
-    toga_merged: &Path,
     max_predictions: usize,
     max_pred_threshold: f64,
 ) -> Vec<Job> {
@@ -194,7 +206,7 @@ fn predict(
 
                     let mut alignments: Option<PathBuf> = None;
                     let mut blast: Option<PathBuf> = None;
-                    let mut tai: Option<PathBuf> = None;
+                    let mut samba: Option<PathBuf> = None;
 
                     for file in std::fs::read_dir(&chunked_dir)
                         .unwrap_or_else(|e| {
@@ -220,21 +232,22 @@ fn predict(
                         } else if file.is_dir() {
                             let dir = file.file_name().unwrap_or_default().to_string_lossy();
 
-                            // INFO: looks like -> {step_orf}/seqs_{suffix}/{chr}:{chunk}/{orf, tai}
+                            // INFO: looks like -> {step_orf}/seqs_{suffix}/{chr}:{chunk}/{orf, tai, samba}
                             if dir == ORF {
                                 // INFO: grab .result
-                                blast = Some(file.join("orfs.pep.dedup.dmd.result"));
-                            } else if dir == TAI {
-                                // INFO: grab .result
-                                for tai_entry in std::fs::read_dir(&file)
+                                blast = Some(file.join("orf.result"));
+                            } else if dir == SAMBA {
+                                // INFO: grab .tsv
+                                for samba_entry in std::fs::read_dir(&file)
                                     .unwrap_or_else(|e| {
                                         panic!("ERROR: could read directory -> {:?}. {e}", file)
                                     })
                                     .flatten()
                                 {
-                                    let res_path = tai_entry.path();
-                                    if res_path.is_file() {
-                                        tai = Some(res_path.clone());
+                                    let res_path = samba_entry.path();
+                                    if res_path.is_file() && res_path.extension().unwrap() == "tsv"
+                                    {
+                                        samba = Some(res_path.clone());
                                     }
                                 }
                             } else {
@@ -245,10 +258,6 @@ fn predict(
                         }
                     }
 
-                    if !toga_merged.exists() {
-                        panic!("ERROR: toga_merged path is empty!");
-                    }
-
                     // INFO: if any of the required files are missing, skip the chunk
                     let Some(blast) = blast else {
                         log::warn!("WARN: could not find blast result in -> {chunk:?}");
@@ -257,24 +266,23 @@ fn predict(
 
                     let cmd =
                         format!(
-                        "source {} && {} --blast {} --tai {} --toga {} --alignments {} --outdir {} --prefix tmp_ --max-predictions {} --min-score-max-predictions {}",
-                        TAI_VENV, PREDICT_PY, blast.display(),
-                        tai.unwrap_or_else(|| {
+                        "source {PREDICT_VENV} && {PREDICT_PY} --blast {blast} --samba {samba} --alignments {alignments} --outdir {outdir} --prefix tmp --max-predictions {max_predictions} --min-score-max-predictions {max_pred_threshold}",
+                        blast = blast.display(),
+                        samba = samba.unwrap_or_else(|| {
                             panic!(
                                 "ERROR: could not find tai file in chunked dir -> {}",
                                 chunked_dir.display()
                             )
                         }).display(),
-                        toga_merged.display(),
-                        alignments.unwrap_or_else(|| {
+                        alignments = alignments.unwrap_or_else(|| {
                             panic!(
                                 "ERROR: could not find alignments file in chunked dir -> {}",
                                 chunked_dir.display()
                             )
                         }).display(),
-                        chunked_dir.display(),
-                        max_predictions,
-                        max_pred_threshold
+                        outdir = chunked_dir.display(),
+                        max_predictions = max_predictions,
+                        max_pred_threshold = max_pred_threshold
                     );
 
                     jobs.push(Job::from(cmd));
@@ -478,6 +486,7 @@ fn unbounded_extract(
 /// );
 /// ```
 #[allow(clippy::doc_lazy_continuation)]
+#[allow(clippy::too_many_arguments)]
 fn process_bed(
     bed: Option<PathBuf>,
     twobit: &Path,
@@ -486,9 +495,11 @@ fn process_bed(
     args: &[String],
     jobs: &mut Vec<Job>,
     mode: &ParallelMode,
+    weights: &Path,
 ) {
     match mode {
-        ParallelMode::Chromosome => parallel_processing(step_output_dir, args, jobs),
+        ParallelMode::Chromosome => parallel_processing(step_output_dir, args, jobs, weights),
+        // WARN: Genome branch is basically deprecated!
         ParallelMode::Genome => cannonical_processing(
             bed.unwrap(),
             twobit,
@@ -533,7 +544,12 @@ fn process_bed(
 /// - It fails to read the `step_output_dir` or any of its subdirectories.
 /// - It fails to construct a `Job` from the command string.
 #[allow(clippy::doc_lazy_continuation)]
-fn parallel_processing(step_output_dir: &PathBuf, args: &[String], jobs: &mut Vec<Job>) {
+fn parallel_processing(
+    step_output_dir: &PathBuf,
+    args: &[String],
+    jobs: &mut Vec<Job>,
+    weights: &Path,
+) {
     let suffixes = vec![REDUCED_BED, FA, INDEX];
 
     // INFO: need to loop again to run blast and tai
@@ -562,6 +578,12 @@ fn parallel_processing(step_output_dir: &PathBuf, args: &[String], jobs: &mut Ve
                 args[2], // INFO: database
             );
 
+            let mut samba = format!(
+                "{ORF_RELEASE} samba --weights {weights} --outdir {outdir} ",
+                weights = weights.display(),
+                outdir = chunked_dir.display()
+            );
+
             let mut tai = format!("{} tai --outdir {} ", ORF_RELEASE, chunked_dir.display(),);
 
             for file in std::fs::read_dir(&chunked_dir)
@@ -580,25 +602,31 @@ fn parallel_processing(step_output_dir: &PathBuf, args: &[String], jobs: &mut Ve
                     let part = format!("--fasta {} ", file.display());
                     tai += &part;
                     blast += &part;
+                    samba += &part;
                 } else if ext == Some(INDEX) {
                     let part = format!("--index {} ", file.display());
                     tai += &part;
                     blast += &part;
+                    samba += &part;
+
+                    let tai_result =
+                        format!("--tai {} ", file.with_extension("fmt.result").display());
+                    blast += &tai_result;
                 } else {
                     continue;
                 };
             }
 
-            // // INFO: if tai results are less than 10 lines, skip the blast job
-            // let cmd = format!(
-            //     "{} && ( [ \"$(wc -l < {})\" -ge 10 ] && {} || true )",
-            //     tai,
-            //     chunked_dir.join(TAI).join("*.result").display(),
-            //     blast
-            // );
+            // INFO: if tai results are less than 10 lines, skip the blast job
+            let cmd = format!(
+                "{} && {} && ( [ \"$(wc -l < {})\" -ge 10 ] && {} || true )",
+                samba,
+                tai,
+                chunked_dir.join(TAI).join("*.result").display(),
+                blast
+            );
 
-            let cmd = format!("{} && {}", tai, blast);
-
+            log::debug!("DEBUG: sending cmd -> {cmd}");
             jobs.push(Job::from(cmd));
         }
     }
