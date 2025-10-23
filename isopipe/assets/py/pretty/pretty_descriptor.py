@@ -3,7 +3,7 @@
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 import argparse
 import ast
@@ -50,6 +50,7 @@ from pretty_consts import (
     # ORF prediction
     ORF_PREDICTOR_COLS,
     ORF_RESULT_COLS,
+    ORF_TYPE_MAPPING,
     # Poly-A tail analysis
     POLYA_METADATA_COLUMNS_FROM_DESCRIPTOR,
     POLYA_METADATA_EXCLUDE,
@@ -756,18 +757,18 @@ def read_descriptor(path: PathLike) -> pd.DataFrame:
             )
             descriptor[col] = np.nan
 
-    # Step 1: Convert descriptor columns into proper lists
+    # INFO: Step 1 -> Convert descriptor columns into proper lists
     for col in DESCRIPTOR_COLUMNS_TO_VECTOR:
         if col in descriptor.columns:
             descriptor[col] = descriptor[col].apply(convert_to_proper_list)
 
-    # Step 2: Apply column-specific mappings
+    # INFO: Step 2 -> Apply column-specific mappings
     _apply_column_mappings(descriptor)
 
-    # Step 3: Handle missing values
+    # INFO: Step 3 -> Handle missing values
     descriptor.fillna(DESCRIPTOR_MAPPING_MISSING_VALUES, inplace=True)
 
-    # Step 4: Cast float columns to int and round
+    # INFO: Step 4 -> Cast float columns to int and round
     descriptor[FLOAT_TO_INT_COLS] = descriptor[FLOAT_TO_INT_COLS].astype(int)
     descriptor = descriptor.round(3)
 
@@ -792,7 +793,7 @@ def _apply_column_mappings(df: pd.DataFrame) -> None:
     >>> _apply_column_mappings(descriptor_df)
     """
 
-    # Generic helper to apply mapping to scalars or lists
+    # INFO: generic helper to apply mapping to scalars or lists
     def _map_values(x: Any, mapping: Dict[Any, Any]) -> Any:
         if isinstance(x, list):
             return [mapping.get(item, item) for item in x]
@@ -1259,8 +1260,22 @@ def get_orf_metadata(path: PathLike) -> pd.DataFrame:
     data = (
         pd.read_csv(path, sep="\t")
         .rename(columns=ORF_MOD_METADATA_RENAME)[ORF_PREDICTOR_COLS]
-        .round({"O_blast_pid": 3, "O_class_0_prob": 3, "O_blast_percentage_aligned": 3})
+        .round(
+            {
+                "O_blast_pid": 3,
+                "O_prob_noncoding": 3,
+                "O_blast_percentage_aligned": 3,
+                "O_read_orf_score": 3,  # prob_coding
+                "O_rna_score": 3,
+                "O_tai_start_score": 3,
+                "O_tai_stop_score": 3,
+                "O_tai_mean_score": 3,
+                "O_log_orf_len": 4,
+            }
+        )
     )
+
+    data["O_orf_type"] = data["O_orf_type"].map(ORF_TYPE_MAPPING)
 
     data[ORF_METADATA_HTML_COL] = [
         row_to_html(dict(zip(data.columns, row)), ORF_METADATA_EXCLUDE)
@@ -1295,13 +1310,13 @@ def get_orf_data(
     -------
     >>> orf_data = get_orf_data(descriptor_df, "orf_predictions.tsv")
     >>> print(orf_data.columns.tolist())
-    ['id', 'O_read_orf_score', 'O_metadata_html']
+    ['O_id', 'O_read_orf_score', 'O_metadata_html']
     """
     ids_df = global_descriptor.id.to_frame()
     ids_df[["prefix", "suffix_main"]] = ids_df["id"].str.split("__", n=1, expand=True)
 
     orf = get_orf_metadata(predictions)
-    orf[["prefix", "suffix"]] = orf["O_blast_id"].str.split("__", n=1, expand=True)
+    orf[["prefix", "suffix"]] = orf["O_id"].str.split("__", n=1, expand=True)
 
     merged = pd.merge(
         ids_df, orf, on="prefix", how="left"
