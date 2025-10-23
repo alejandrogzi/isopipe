@@ -609,8 +609,14 @@ fn parallel_processing(
                     blast += &part;
                     samba += &part;
 
-                    let tai_result =
-                        format!("--tai {} ", file.with_extension("fmt.result").display());
+                    let bind = file.with_extension("fmt.result");
+                    let filename = bind
+                        .file_name()
+                        .unwrap_or_else(|| panic!("ERROR: could not get filename from {file:?}"));
+                    let tai_result = format!(
+                        "--tai {} ",
+                        chunked_dir.join("tai").join(filename).display()
+                    );
                     blast += &tai_result;
                 } else {
                     continue;
