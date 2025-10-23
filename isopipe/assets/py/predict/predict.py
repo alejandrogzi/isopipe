@@ -3,84 +3,84 @@
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 import argparse
 import logging
 from os import PathLike
 from pathlib import Path
-from typing import List, Union
+from typing import Dict, List, Union
 
+import numpy as np
 import pandas as pd
-from joblib import load
-from sklearn.ensemble import RandomForestClassifier
+import xgboost as xgb
 
-MODEL = "model/model.joblib"
+MODEL = "model/orf_classifier_model.json"
 MODEL_PATH = Path(__file__).parent / MODEL
 UNIQUE_TAI_TAG = "UT"
-FEATURES: List = [
-    "blast_pid",
-    "blast_e-value",
-    "blast_offset",
-    "blast_percentage_aligned",
-    "toga_pid",
-    "toga_blosum",
-    "toga_overlap_bp",
-    "translationAI_orf_start",
-    "translationAI_orf_stop",
-]
+START_CODONS = ["ATG", "CTG"]
+STOP_CODONS = ["TAA", "TAG", "TGA"]
 BLAST_COLS: List = [
-    "blast_id",
-    "blast_encoded",
+    "chr",
+    "start",
+    "end",
+    "id",
+    "strand",
+    "tai_start_score",
+    "tai_stop_score",
+    "relative_orf_start",
+    "relative_orf_end",
+    "start_codon",
+    "stop_codon",
+    "inner_stops",
+    "orf_type",
     "blast_pid",
-    "blast_e-value",
+    "blast_evalue",
     "blast_offset",
     "blast_length",
     "blast_percentage_aligned",
-    "blast_o_start",
-    "blast_o_end",
-    "blast_orf_start",
-    "blast_orf_end",
-    "blast_strand",
-    "blast_chr",
 ]
-TAI_COLS = [
-    "tai_id",
-    "translationAI_orf_start_coord",
-    "translationAI_orf_stop_coord",
-    "translationAI_orf_start",
-    "translationAI_orf_stop",
-    "tai_strand",
-    "tai_orf_start",
-    "tai_orf_end",
-    "tai_chr",
+SAMBA_COLS: List = ["prefix", "rna_score"]
+TAI_MASKING_NAN_COLS: List = [
+    "tai_start_score",
+    "tai_stop_score",
+    "tai_mean_score",
+    "tai_combined_score",
 ]
-TOGA_COLS: List = [
-    "toga_id",
-    "toga_chr",
-    "toga_label",
-    "toga_pid",
-    "toga_blosum",
-    "toga_start",
-    "toga_end",
-    "toga_strand",
-    "toga_key",
-    "masked",
+BLAST_MASKING_NAN_COLS: List = [
+    "blast_pid",
+    "neg_log10_blast_evalue",
+    "blast_offset",
+    "blast_percentage_aligned",
 ]
-EXTENDED = [
-    "blast_id",
-    "key",
-    "blast_chr",
-    "blast_strand",
-    "masked",
-    "toga_label",
-    "tai_orf_start",
-    "tai_orf_end",
-    "class0_prob",
-    "class1_prob",
+FEATURES: List = [
+    "tai_start_score",
+    "tai_stop_score",
+    "inner_stops",
+    "orf_type",
+    "blast_pid",
+    "neg_log10_blast_evalue",
+    "blast_offset",
+    "blast_percentage_aligned",
+    "rna_score",
+    "tai_mean_score",
+    "blast_match",
+    "log_orf_len",
+    "has_canonical_start",
+    "has_canonical_stop",
 ]
+ORF_TYPE_MAPPING: Dict = {
+    "CO": 1,
+    "CN": 2,
+    "UN": 3,
+    "FP": 4,
+    "TP": 5,
+    "TN": 6,
+    "FN": 7,
+}
 
 log = logging.getLogger(__name__)
+logging.basicConfig(encoding="utf-8", level=logging.INFO)
 
 
 def run(args: argparse.Namespace) -> None:
@@ -122,13 +122,13 @@ def run(args: argparse.Namespace) -> None:
     >>> # run(dummy_args)
     >>> # # This would create a 'predictions.tsv' file in 'output_data'
     """
-    model = load_model(args.model)
+    model = xgb.XGBClassifier()
+    model.load_model(args.model)
 
-    table = predict(args.blast, args.tai, args.toga, model)
-    table = table.loc[:, EXTENDED + FEATURES]
+    log.info("INFO: Model loaded successfully!")
+    log.info(f"INFO: Number of features: {model.n_features_in_}")
 
-    # if args.overrule:
-    #     overrule(table)
+    table = predict(args.blast, args.samba, model)
 
     _ = map_to_blocks(
         table,
@@ -192,88 +192,65 @@ def map_to_blocks(
     """
 
     table = table.copy()
-    table["id"] = [id.split("__")[0] for id in table.blast_id]
-    table["tag"] = ["#" + id.split("__")[1] for id in table.blast_id]
+    # table["id"] = [id.split("__")[0] for id in table.blast_id] -> replace by prefix
+    table["tag"] = ["#" + id.split("__")[1] for id in table.id]
 
     bed = pd.read_csv(alignments, sep="\t", header=None)
     merged = (
-        bed.assign(id=bed[3].str.split("__").str[0])
+        bed.assign(prefix=bed[3].str.split("__").str[0])
         .merge(
-            table[["id", "tai_orf_start", "tai_orf_end", "tag"]], on="id", how="left"
+            table[["prefix", "start", "end", "tag", "prob_coding"]],
+            on="prefix",
+            how="left",
         )
-        .dropna(subset=["tai_orf_start"])
+        .dropna(subset=["start"])
         .assign(
-            tai_orf_start=lambda df: df["tai_orf_start"].astype(int),
-            tai_orf_end=lambda df: df["tai_orf_end"].astype(int),
+            start=lambda df: df["start"].astype(int),
+            end=lambda df: df["end"].astype(int),
         )
     )
 
-    merged[6] = merged["tai_orf_start"]
-    merged[7] = merged["tai_orf_end"]
+    merged[6] = merged["start"]
+    merged[7] = merged["end"]
     merged[3] += merged["tag"]
 
     table = (
-        table[table["class1_prob"] >= min_score_max_predictions]
-        .sort_values("class1_prob", ascending=False)
-        .groupby("id")
+        table[table["prob_coding"] >= min_score_max_predictions]
+        .sort_values("prob_coding", ascending=False)
+        .groupby("prefix")
         .head(max_predictions)
     )
 
-    table.drop(columns=["id", "tag"]).to_csv(
-        f"{args.outdir}/{prefix}predictions.tsv", index=False, header=True, sep="\t"
+    table.drop(columns=["prefix", "tag"]).to_csv(
+        f"{args.outdir}/{prefix}.predictions.tsv", index=False, header=True, sep="\t"
     )
 
-    merged.drop(columns=["id", "tai_orf_start", "tai_orf_end", "tag"]).to_csv(
-        f"{outdir}/{prefix}predictions.bed", sep="\t", header=False, index=False
+    if args.keep_raw:
+        merged.drop(columns=["prefix", "start", "end", "tag"]).to_csv(
+            f"{outdir}/{prefix}.all.predictions.bed",
+            sep="\t",
+            header=False,
+            index=False,
+        )
+
+    merged = (
+        merged[merged["prob_coding"] >= min_score_max_predictions]
+        .sort_values("prob_coding", ascending=False)
+        .groupby("prefix")
+        .head(max_predictions)
+    )
+
+    merged.drop(columns=["prefix", "start", "end", "tag", "prob_coding"]).to_csv(
+        f"{outdir}/{prefix}.predictions.bed", sep="\t", header=False, index=False
     )
 
     return
 
 
-def load_model(model: Union[str, PathLike]) -> RandomForestClassifier:
-    """
-    Loads a pre-trained RandomForestClassifier model from a specified file path.
-
-    Parameters
-    ----------
-    model : Union[str, PathLike]
-        The file path to the pre-trained RandomForestClassifier model.
-        This path can be a string or a Path-like object.
-
-    Returns
-    -------
-    RandomForestClassifier
-        The loaded RandomForestClassifier object.
-
-    Raises
-    ------
-    SystemExit
-        Exits the program with an error message if the model fails to load.
-
-    Example
-    -------
-    >>> from pathlib import Path
-    >>> # Assuming 'my_model.joblib' exists and contains a RandomForestClassifier
-    >>> loaded_clf = load_model("my_model.joblib")
-    >>> type(loaded_clf)
-    <class 'sklearn.ensemble.forest.RandomForestClassifier'>
-    """
-    try:
-        with open(model, "rb") as file:
-            clf: RandomForestClassifier = load(file)
-    except Exception as err:
-        log.error(f"ERROR: failed to load model: {err}!")
-        exit(1)
-
-    log.info(f"INFO: finished loading model from -> {model}")
-    return clf
-
-
 def predict(
     blast: Union[str, PathLike],
-    tai: Union[str, PathLike],
-    toga: Union[str, PathLike],
-    model: RandomForestClassifier,
+    samba: Union[str, PathLike],
+    model: xgb.XGBClassifier,
 ) -> pd.DataFrame:
     """
     Performs predictions using a loaded RandomForestClassifier model on input data.
@@ -307,22 +284,30 @@ def predict(
     >>> # result_df = predict("blast.tsv", "tai.tsv", "toga.tsv", dummy_model)
     >>> # print(result_df.head())
     """
-    table = read(blast, tai, toga)
+    table = read(blast, samba)
     query = table.loc[:, FEATURES]
 
-    predictions = model.predict_proba(query)
+    for col in query.columns:
+        query[col] = pd.to_numeric(query[col], errors="coerce")
+
+    predictions = model.predict(query)
+    probabilities = model.predict_proba(query)
     log.info("INFO: Finished predictions!")
 
-    table["class0_prob"] = predictions[:, 0]
-    table["class1_prob"] = predictions[:, 1]
+    table["predicted_class"] = predictions
+    table["prob_noncoding"] = probabilities[:, 0]
+    table["prob_coding"] = probabilities[:, 1]
+
+    log.info("INFO: Predictions summary:")
+    log.info(f"INFO:  Predicted as real ORFs (1): {(predictions == 1).sum()}")
+    log.info(f"INFO:  Predicted as spurious (0): {(predictions == 0).sum()}")
 
     return table
 
 
 def read(
     blast: Union[str, PathLike, Path],
-    tai: Union[str, PathLike, Path],
-    toga: Union[str, PathLike, Path],
+    samba: Union[str, PathLike, Path],
 ) -> pd.DataFrame:
     """
     Reads and merges data from BLAST, TAI, and TOGA files into a single DataFrame.
@@ -331,10 +316,8 @@ def read(
     ----------
     blast : Union[str, PathLike, Path]
         Path to the BLAST input file.
-    tai : Union[str, PathLike, Path]
-        Path to the TAI input file.
-    toga : Union[str, PathLike, Path]
-        Path to the TOGA input file.
+    samba : Union[str, PathLike, Path]
+        Path to the RNASamba input file.
 
     Returns
     -------
@@ -343,15 +326,13 @@ def read(
 
     Example
     -------
-    >>> # Assuming 'blast.tsv', 'tai.tsv', 'toga.tsv' exist
-    >>> # merged_data = read("blast.tsv", "tai.tsv", "toga.tsv")
-    >>> # print(merged_data.head())
+    >>> # Assuming 'blast.tsv', 'samba.tsv' exist
+    >>> # merged_data = read("blast.tsv", "samba.tsv")
     """
     blast = read_blast(blast)
-    tai = read_tai(tai)
-    toga = read_toga(toga)
+    samba = read_samba(samba)
 
-    table = merge_tables(blast, tai, toga)
+    table = merge_tables(blast, samba)
     return table
 
 
@@ -382,106 +363,54 @@ def read_blast(path: Union[str, PathLike, Path]) -> pd.DataFrame:
     blast = pd.read_csv(path, sep="\t", header=None, names=BLAST_COLS)
 
     # INFO: needs to be the cannonical ID
+    # R1_chr1__OR2#NE1 -> R1_chr1 [samba] + R1_chr1:1-10(+) [bed]
+    blast["prefix"] = blast["id"].str.split("__").str[0]
     blast["key"] = (
-        blast["blast_id"].str.split("__").str[0]
+        blast["prefix"]
         + ":"
-        + blast["blast_orf_start"].astype(str)
+        + blast["start"].astype(str)
         + "-"
-        + blast["blast_orf_end"].astype(str)
+        + blast["end"].astype(str)
         + "("
-        + blast["blast_strand"].astype(str)
+        + blast["strand"].astype(str)
         + ")"
     )
     return blast
 
 
-def read_tai(path: Union[str, PathLike, Path]) -> pd.DataFrame:
+def read_samba(path: Union[str, PathLike, Path]) -> pd.DataFrame:
     """
-    Reads a TAI tab-separated file and processes it into a pandas DataFrame.
+    Reads a RNASamba tab-separated file and processes it into a pandas DataFrame.
 
-    This function reads the file using predefined column names (TAI_COLS)
-    and generates a unique 'key' column based on 'tai_id', 'tai_orf_start',
-    and 'tai_orf_end'.
+    This function reads the file using predefined column names (SAMBA_COLS)
 
     Parameters
     ----------
     path : Union[str, PathLike, Path]
-        The file path to the TAI input file.
+        The file path to the RNASamba input file.
 
     Returns
     -------
     pd.DataFrame
-        A pandas DataFrame containing the TAI data with an additional 'key' column.
+        A pandas DataFrame containing the RNASamba data with an additional 'key' column.
 
     Example
-    -------
-    >>> # Assuming 'my_tai.tsv' exists with appropriate tab-separated data
-    >>> # tai_df = read_tai("my_tai.tsv")
-    >>> # print(tai_df.head())
+    >>> # Assuming 'my_samba.tsv' exists with appropriate tab-separated data
+    >>> # samba_df = read_samba("my_samba.tsv")
+    >>> # print(samba_df.head())
     """
-    tai = pd.read_csv(path, sep="\t", header=None, names=TAI_COLS)
-
-    # INFO: needs to be the cannonical ID
-    tai["key"] = (
-        tai["tai_id"].str.split(".").str[0]
-        + ":"
-        + tai["tai_orf_start"].astype(str)
-        + "-"
-        + tai["tai_orf_end"].astype(str)
-        + "("
-        + tai["tai_strand"].astype(str)
-        + ")"
-    )
-    tai["tai_id"] = [
-        id.replace(".p", "__OR") + f"#{UNIQUE_TAI_TAG}" for id in tai.tai_id
-    ]  # WARN: introducing unique TAI tag
-
-    return tai
-
-
-def read_toga(path: Union[str, PathLike, Path]) -> pd.DataFrame:
-    """
-    Reads a TOGA tab-separated file, processes it, and removes duplicate entries.
-
-    This function reads the file using predefined column names (TOGA_COLS),
-    generates a unique 'key' column based on 'toga_chr', 'toga_start', 'toga_end',
-    and 'toga_strand'. It then sorts by 'toga_pid' and removes duplicate keys,
-    keeping only the first occurrence.
-
-    Parameters
-    ----------
-    path : Union[str, PathLike, Path]
-        The file path to the TOGA input file.
-
-    Returns
-    -------
-    pd.DataFrame
-        A pandas DataFrame containing the processed TOGA data with a 'key' column
-        and duplicate keys removed.
-
-    Example
-    -------
-    >>> # Assuming 'my_toga.tsv' exists with appropriate tab-separated data:
-    >>> # ENST00000518498.3#TFF3#229 chr17 FI 75.72 67.90 31125482 31129576 - chr17:31125482-31129576(-) false
-    >>> # toga_df = read_toga("my_toga.tsv")
-    >>> # print(toga_df.head())
-    """
-    toga = pd.read_csv(path, sep="\t", header=None, names=TOGA_COLS).drop_duplicates(
-        subset="toga_key", keep="first"
-    )
-    toga.sort_values(by="toga_pid", inplace=True, ascending=False)
-
-    return toga
+    return pd.read_csv(path, sep="\t", header=None, names=SAMBA_COLS)
 
 
 def merge_tables(
-    blast: pd.DataFrame, tai: pd.DataFrame, toga: pd.DataFrame
+    blast: pd.DataFrame,
+    samba: pd.DataFrame,
 ) -> pd.DataFrame:
     """
-    Merges the BLAST, TAI, and TOGA DataFrames into a final comprehensive table.
+    Merges the BLAST and RNASamba DataFrames into a final comprehensive table.
 
     The merging process involves:
-    1. Inner merging TAI and BLAST DataFrames on the 'key' column.
+    1. Inner merging BLAST and RNASamba DataFrames on the 'prefix' column.
     2. Extracting chromosome information into 'm_chr' from the merged key.
     3. Creating a 'toga_key' based on chromosome and ORF start/end, considering strand.
     4. Left merging with the TOGA DataFrame on 'toga_key' and TOGA's 'key'.
@@ -491,10 +420,8 @@ def merge_tables(
     ----------
     blast : pd.DataFrame
         The DataFrame containing BLAST data.
-    tai : pd.DataFrame
-        The DataFrame containing TAI data.
-    toga : pd.DataFrame
-        The DataFrame containing TOGA data.
+    samba : pd.DataFrame
+        The DataFrame containing RNASamba data.
 
     Returns
     -------
@@ -504,26 +431,60 @@ def merge_tables(
 
     Example
     -------
-    >>> # Assuming blast_df, tai_df, and toga_df are pre-read DataFrames
-    >>> # final_table = merge_tables(blast_df, tai_df, toga_df)
+    >>> # Assuming blast_df, samba_df are pre-read DataFrames
+    >>> # final_table = merge_tables(blast_df, samba_df)
     >>> # print(final_table.head())
     """
-    merged = tai.merge(blast, on="key", how="outer")  # INFO: preserving ALL predictions
+    merged = blast.merge(samba, on="prefix", how="left")
 
-    merged.blast_strand = merged.blast_strand.fillna(merged.tai_strand)
-    merged.tai_orf_start = merged.tai_orf_start.fillna(merged.blast_orf_start)
-    merged.tai_orf_end = merged.tai_orf_end.fillna(merged.blast_orf_end)
-    merged.blast_chr = merged.blast_chr.fillna(merged.tai_chr)
-    merged.blast_id = merged.blast_id.fillna(merged.tai_id)
+    log.info(f"INFO: Merged df looks like this:\n{merged.head()}")
+    log.info(f"INFO: BLAST has {len(blast.prefix.unique())} unique rows!")
+    log.info(f"INFO: RNASamba has {len(samba)} rows!")
+    log.info(f"INFO: BLAST and RNASamba files have {len(merged)} rows!")
 
-    merged["toga_key"] = [key.split("_")[-1] for key in merged.key]
-    table = merged.merge(toga, on="toga_key", how="left")
-    table.drop(columns=["toga_key"], inplace=True)
+    did_not_get_any_orf = samba[~samba.prefix.isin(blast.prefix)].sort_values(
+        "rna_score", ascending=False
+    )
+    if did_not_get_any_orf.shape[0] > 0:
+        log.info(
+            f"INFO: These prefixes did not get any ORF prediction:\n{did_not_get_any_orf}"
+        )
 
-    # INFO: binary flag: 0 if toga_pid NaN else 1
-    table["toga_overlap_bp"] = (~table["toga_pid"].isna()).astype(int)
+    not_catched_by_samba = blast[~blast.prefix.isin(samba.prefix)]
+    if not_catched_by_samba.shape[0] > 0:
+        log.info(
+            f"INFO: These prefixes are not caught by samba: {not_catched_by_samba}"
+        )
 
-    return table
+    if len(merged.prefix.unique()) != len(blast.prefix.unique()):
+        raise ValueError(
+            "ERROR: BLAST and RNASamba files do not match! Some BLAST rows do not have a prediction in RNASamba!"
+        )
+
+    merged["tai_mean_score"] = (merged.tai_start_score + merged.tai_stop_score) / 2
+    merged["blast_match"] = [1 if x > 0 else 0 for x in merged.blast_percentage_aligned]
+    merged["log_orf_len"] = np.log1p(
+        merged.relative_orf_end - merged.relative_orf_start
+    )
+    merged["has_canonical_start"] = merged.start_codon.isin(START_CODONS).astype(int)
+    merged["has_canonical_stop"] = merged.stop_codon.isin(STOP_CODONS).astype(int)
+    merged["neg_log10_blast_evalue"] = -np.log10(merged.blast_evalue)
+
+    mask = (merged.tai_start_score == 0.0) & (merged.tai_stop_score == 0.0)
+    merged.loc[
+        mask,
+        TAI_MASKING_NAN_COLS,
+    ] = np.nan
+
+    mask = merged["blast_evalue"] == 1
+    merged.loc[
+        mask,
+        BLAST_MASKING_NAN_COLS,
+    ] = np.nan
+
+    merged["orf_type"] = merged["orf_type"].map(ORF_TYPE_MAPPING)
+
+    return merged
 
 
 def parse() -> argparse.Namespace:
@@ -545,29 +506,10 @@ def parse() -> argparse.Namespace:
         "-b", "--blast", required=True, help="Path to BLAST results file"
     )
     parser.add_argument(
-        "-t", "--tai", required=True, help="Path to translationAI results file"
-    )
-    parser.add_argument(
-        "-g", "--toga", required=True, help="Path to TOGA merged results file"
-    )
-    parser.add_argument(
-        "-v",
-        "--version",
-        action="version",
-        version=f"Version: {__version__}",
-    )
-    parser.add_argument(
-        "-O",
-        "--overrule",
-        action="store_const",
-        const=True,
-        metavar="Flag to activate TOGA overrule on query reads",
+        "-s", "--samba", required=True, help="Path to RNASamba results file"
     )
     parser.add_argument(
         "-a", "--alignments", required=True, help="Path to aligned .bed file"
-    )
-    parser.add_argument(
-        "-f", "--fasta", required=False, help="Path to alignments .fa file"
     )
     parser.add_argument(
         "-m",
@@ -611,13 +553,17 @@ def parse() -> argparse.Namespace:
         default=1,
         help="Maximum number of predictions to keep per query",
     )
+    parser.add_argument(
+        "-K", "--keep-raw", action="store_true", help="Keep raw predictions"
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"Version: {__version__}",
+    )
 
     args = parser.parse_args()
-
-    if args.overrule and (not args.alignments or not args.fasta):
-        parser.error(
-            "ERROR: Arguments --alignments (-a) and --fasta (-f) are required when --overrule is set."
-        )
 
     return args
 

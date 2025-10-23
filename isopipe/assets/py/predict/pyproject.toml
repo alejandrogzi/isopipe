@@ -1,0 +1,27 @@
+[project]
+name = "predict"
+version = "0.0.1"
+description = "ORF Gradient Boosting Model"
+authors = [
+    { name = "Alejandro Gonzales-Irribarren", email = "alejandrxgzi@gmail.com" },
+]
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.10,<3.13"
+
+dependencies = [
+    "pandas==2.2.3",
+    "numpy==2.1.2",
+    "scikit-learn==1.5.2",
+    "matplotlib==3.9.2",
+    "scipy==1.14.1",
+    "joblib==1.4.2",
+    "xgboost==3.1.0",
+    "seaborn"
+]
+
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+include = ["predict.py"]
