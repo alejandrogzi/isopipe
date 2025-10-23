@@ -54,8 +54,14 @@ uv venv
 source .venv/bin/activate
 uv pip install "."
 
-echo "INFO: [8/9] Returning to repo root..."
+echo "INFO: [8/9] Building predict venv"
+cd ../predict
+uv venv
+source .venv/bin/activate
+uv pip sync
+
+echo "INFO: [9/10] Returning to repo root..."
 cd ../../../../
 
-echo "INFO: [9/9] Running test..."
+echo "INFO: [10/10] Running test..."
 echo "INFO: Configuration completed successfully!"
