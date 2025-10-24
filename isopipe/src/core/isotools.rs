@@ -107,7 +107,7 @@ pub fn iso_nmd(
 
                 if file.is_file() {
                     // INFO: matching specific name
-                    if file.ends_with("tmp_predictions.bed") {
+                    if file.ends_with("tmp.predictions.bed") {
                         log::debug!("DEBUG: found predictions.bed for {chr:?} -> {file:?}");
 
                         let prediction = file.with_extension("tsv");
