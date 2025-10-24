@@ -53,6 +53,7 @@ num-threads = 64          # -j
 chunk-size = 100          # --chunk-size, each thread consumes N ZMWs per chunk
 log-level = "INFO"        # log-level [INFO]
 alarms = "alarms.json"    # error alamrs
+keep_temp = "false"          # WARN: keep temporary files, change to "true" to keep them
 
 [params.refine]
 input_dir = "step2_lima"    # previous step data dir [default]
