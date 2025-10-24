@@ -33,6 +33,13 @@ pub fn refine(
     let args = config.get_step_args(step, vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, PRIMERS]);
     let fields = config.get_step_custom_fields(step, vec![PRIMERS]);
 
+    // INFO: gzipping .report and .clips
+    let report = scan_dir(input_dir, "report");
+    let clips = scan_dir(input_dir, "clips");
+
+    crate::gz!(&report);
+    crate::gz!(&clips);
+
     // INFO: format of files: {prefix}.{name}.ccs.merged.fl.{primers}.bam
     for entry in std::fs::read_dir(input_dir)
         .expect("Failed to read assets directory")
@@ -109,6 +116,10 @@ pub fn cluster(
         CLUSTER,
         false,
     );
+
+    // INFO: gzipping .report.csv
+    let report = scan_dir(&input_dir.to_path_buf(), "csv");
+    crate::gz!(&report);
 
     let args = config.get_step_args(step, vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, LOG_FILE]);
     let out_bam = format!("{}/{}", step_output_dir.display(), CLUSTERED_BAM);

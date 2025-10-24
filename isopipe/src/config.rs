@@ -2105,6 +2105,69 @@ pub fn move_file(file: &PathBuf, target: &Path) {
     let _ = std::fs::rename(file, target.join(file.file_name().unwrap()));
 }
 
+/// Gzip a file
+///
+/// # Arguments
+///
+/// * `file` - A `PathBuf` representing the file to be gzipped.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use std::path::PathBuf;
+/// use std::fs::{self, File};
+/// use std::io::Write;
+/// use tempfile::tempdir;
+///
+/// // Create a temporary directory and some dummy files for testing
+/// let temp_dir = tempdir().unwrap();
+/// let dir_path = temp_dir.path().to_path_buf();
+///
+/// File::create(dir_path.join("file1.bed")).unwrap().write_all(b"content").unwrap();
+/// File::create(dir_path.join("file2.txt")).unwrap().write_all(b"content").unwrap();
+/// File::create(dir_path.join("another.bed")).unwrap().write_all(b"content").unwrap();
+///
+/// // Gzip file from dir_path
+/// let file = dir_path.join("file1.bed");
+/// __gz(&file);
+/// ```
+pub fn __gz_file(file: &Path) {
+    let cmd = format!("gzip {}", file.display());
+    shell(cmd, "INFO: gzipping file", "", false);
+}
+
+/// Gzip a collection of files
+///
+/// # Arguments
+///
+/// * `files` - A slice of `PathBuf` representing the files to be gzipped.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use std::path::PathBuf;
+/// use std::fs::{self, File};
+/// use std::io::Write;
+/// use tempfile::tempdir;
+///
+/// // Create a temporary directory and some dummy files for testing
+/// let temp_dir = tempdir().unwrap();
+/// let dir_path = temp_dir.path().to_path_buf();
+///
+/// File::create(dir_path.join("file1.bed")).unwrap().write_all(b"content").unwrap();
+/// File::create(dir_path.join("file2.txt")).unwrap().write_all(b"content").unwrap();
+/// File::create(dir_path.join("another.bed")).unwrap().write_all(b"content").unwrap();
+///
+/// // Gzip files from dir_path
+/// let files = vec![dir_path.join("file1.bed"), dir_path.join("file2.txt")];
+/// __gz(&files);
+/// ```
+pub fn __gz_files(files: &[PathBuf]) {
+    for file in files {
+        __gz_file(file);
+    }
+}
+
 /// Macro wrapper for remove_any to match ergonomic usage
 #[macro_export]
 macro_rules! rm {
@@ -2118,6 +2181,14 @@ macro_rules! rm {
 macro_rules! mv {
     ($file:expr, $target:expr) => {
         move_file($file, $target);
+    };
+}
+
+/// Macro wrapper for gz to match ergonomic usage
+#[macro_export]
+macro_rules! gz {
+    ($files:expr) => {
+        __gz_files($files);
     };
 }
 
