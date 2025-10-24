@@ -27,6 +27,7 @@ pub fn lima(
     input_dir: &PathBuf,
     step_output_dir: &Path,
 ) -> Vec<Job> {
+    let prefix = config.get_data_prefix();
     let mut jobs = Vec::new();
 
     let fields = config.get_step_custom_fields(step, vec![PRIMERS]);
@@ -34,6 +35,13 @@ pub fn lima(
         step,
         vec![INPUT_DIR, PREFIX, OUTPUT_DIR, MEMORY, TIME, PRIMERS],
     );
+
+    let keep_temp = config
+        .get_step_custom_field(step, KEEP_TEMP)
+        .parse::<bool>()
+        .unwrap_or(false);
+
+    crate::core::ccs::__join_ccs_reports(input_dir, &prefix, keep_temp);
 
     // INFO: format of files: {prefix}.{name}.ccs.merged.bam
     for entry in std::fs::read_dir(input_dir)

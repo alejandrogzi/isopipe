@@ -38,7 +38,7 @@ pub fn run_step(
     let jobs = match step {
         PipelineStep::Ccs => {
             log::info!("INFO [STEP 1]: Pre-processing for ccs started...");
-            ccs::ccs(step, config, &input_dir, &step_output_dir, prefix, executor)
+            ccs::ccs(step, config, &input_dir, &step_output_dir, executor)
         }
         PipelineStep::Lima => {
             log::info!("INFO [STEP 2]: Pre-processing for lima started...");

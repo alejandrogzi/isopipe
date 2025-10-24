@@ -2033,7 +2033,7 @@ pub fn scan_dir(dir: &PathBuf, extension: &str) -> Vec<PathBuf> {
         std::process::exit(1);
     } else {
         log::info!(
-            "INFO: found {} .bed files in {}",
+            "INFO: found {} files in {} with extension {extension:?}",
             files.len(),
             dir.display()
         );
@@ -2042,12 +2042,83 @@ pub fn scan_dir(dir: &PathBuf, extension: &str) -> Vec<PathBuf> {
     files
 }
 
+/// Moves files from one directory to another
+///
+/// # Arguments
+///
+/// * `files` - A slice of `PathBuf` representing the files to be moved.
+/// * `target` - A `PathBuf` representing the target directory.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use std::path::PathBuf;
+/// use std::fs::{self, File};
+/// use std::io::Write;
+/// use tempfile::tempdir;
+///
+/// // Create a temporary directory and some dummy files for testing
+/// let temp_dir = tempdir().unwrap();
+/// let dir_path = temp_dir.path().to_path_buf();
+///
+/// File::create(dir_path.join("file1.bed")).unwrap().write_all(b"content").unwrap();
+/// File::create(dir_path.join("file2.txt")).unwrap().write_all(b"content").unwrap();
+/// File::create(dir_path.join("another.bed")).unwrap().write_all(b"content").unwrap();
+///
+/// // Move files from dir_path to temp_dir
+/// let files = vec![dir_path.join("file1.bed"), dir_path.join("file2.txt")];
+/// move_files(&files, &temp_dir.path());
+pub fn move_files(files: &[PathBuf], target: &Path) {
+    for file in files {
+        let _ = std::fs::rename(file, target.join(file.file_name().unwrap()));
+    }
+}
+
+/// Moves a file from one directory to another
+///
+/// # Arguments
+///
+/// * `file` - A `PathBuf` representing the file to be moved.
+/// * `target` - A `PathBuf` representing the target directory.
+///
+/// # Example
+///
+/// ```rust, no_run
+/// use std::path::PathBuf;
+/// use std::fs::{self, File};
+/// use std::io::Write;
+/// use tempfile::tempdir;
+///
+/// // Create a temporary directory and some dummy files for testing
+/// let temp_dir = tempdir().unwrap();
+/// let dir_path = temp_dir.path().to_path_buf();
+///
+/// File::create(dir_path.join("file1.bed")).unwrap().write_all(b"content").unwrap();
+/// File::create(dir_path.join("file2.txt")).unwrap().write_all(b"content").unwrap();
+/// File::create(dir_path.join("another.bed")).unwrap().write_all(b"content").unwrap();
+///
+/// // Move file from dir_path to temp_dir
+/// let file = dir_path.join("file1.bed");
+/// move_file(&file, &temp_dir.path());
+/// ```
+pub fn move_file(file: &PathBuf, target: &Path) {
+    let _ = std::fs::rename(file, target.join(file.file_name().unwrap()));
+}
+
 /// Macro wrapper for remove_any to match ergonomic usage
 #[macro_export]
 macro_rules! rm {
     ($path:expr) => {{
         remove_any($path);
     }};
+}
+
+/// Macro wrapper for move_file to match ergonomic usage
+#[macro_export]
+macro_rules! mv {
+    ($file:expr, $target:expr) => {
+        move_file($file, $target);
+    };
 }
 
 /// Macro to convert a String with a
