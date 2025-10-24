@@ -434,7 +434,7 @@ fn __run_diamond(mut table: HashMap<usize, Vec<String>>, database: &Path, outdir
     let orfs = outdir.join("orf.dedup.pep");
 
     let cmd = format!(
-        "~/Documents/binaries/diamond blastp --query {} --db {} --out {} --outfmt 6 qseqid pident qlen slen length qstart qend sstart send evalue --threads 8 --sensitive -e 1e-10",
+        "diamond blastp --query {} --db {} --out {} --outfmt 6 qseqid pident qlen slen length qstart qend sstart send evalue --threads 8 --sensitive -e 1e-10",
         orfs.display(),
         database.display(),
         diamond.display()

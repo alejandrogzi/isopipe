@@ -1089,8 +1089,8 @@ pub fn split_header<'a>(header: &'a str, capture: &regex::Regex) -> Option<(usiz
 /// let tai = read_tai_table(tai).unwrap();
 /// ```
 pub fn read_tai_table(tai: PathBuf) -> HashMap<String, TaiRecord> {
-    let predictions = bed_reader(tai)
-        .unwrap_or_else(|e| panic!("ERROR: failed to read blast predictions file -> {e}"));
+    let predictions = bed_reader(&tai)
+        .unwrap_or_else(|e| panic!("ERROR: failed to read blast predictions file {tai:?} -> {e}"));
 
     let mut accumulator = HashMap::new();
 
