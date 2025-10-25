@@ -1091,10 +1091,18 @@ fn __pre_polish<P: AsRef<Path> + Debug + Copy>(
 fn merge_aparent(outdir: PathBuf, _prefix: &str) -> Option<PathBuf> {
     let assets = outdir.join(APARENT_CHUNKS);
 
+    if !assets.exists() {
+        log::warn!(
+            "WARN: could not find any APARENT chunks in {:?} -> skipping...",
+            assets
+        );
+        return None;
+    }
+
     let mut beds = Vec::new();
 
     for entry in std::fs::read_dir(assets.clone())
-        .unwrap_or_else(|e| panic!("ERROR: could read directory -> {:?}. {e}", assets))
+        .unwrap_or_else(|e| panic!("ERROR: could not read directory -> {:?}. {e}", assets))
         .flatten()
     {
         let path = entry.path();
