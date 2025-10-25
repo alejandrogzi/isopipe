@@ -79,6 +79,19 @@ pub fn iso_nmd(
             .filter(|e| e.path().is_dir())
         {
             let chunked_dir = chunk.path(); // INFO: {chr}:{chunk}
+
+            // WARN: need to check that tmp.predictions.bed is not empty!
+            if std::fs::metadata(chunked_dir.join("tmp.predictions.bed"))
+                .unwrap_or_else(|e| {
+                    panic!("ERROR: could not get tmp.predictions.bed for {chunked_dir:?} -> {e}")
+                })
+                .len()
+                == 0
+            {
+                log::warn!("WARN: skipping chunk {chunked_dir:?} because it is empty!");
+                continue;
+            }
+
             let chr = chunked_dir
                 .file_name()
                 .unwrap_or_else(|| panic!("ERROR: could not get file name from {:?}", chunked_dir))
@@ -89,9 +102,7 @@ pub fn iso_nmd(
                 .unwrap_or_else(|| {
                     panic!("ERROR: could not get chromosome from {:?}", chunked_dir)
                 });
-
             let chr_outdir = step_output_dir.join(chr).join(suffix);
-
             std::fs::create_dir_all(&chr_outdir).unwrap_or_else(|e| {
                 panic!(
                     "ERROR: Failed to create directory -> {} -> {e}",
