@@ -175,7 +175,7 @@ pub fn load(
             );
         } else {
             cmd = format!(
-                "{COLLAPSE} --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
+                "{COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
                 input.display(),
                 step_output_dir.display(), // INFO: creates collapse/ by default
                 basename.clone(), // INFO: e.g pass.bed
