@@ -80,10 +80,13 @@ pub fn iso_nmd(
         {
             let chunked_dir = chunk.path(); // INFO: {chr}:{chunk}
 
-            // WARN: need to check that tmp.predictions.bed is not empty!
-            if std::fs::metadata(chunked_dir.join("tmp.predictions.bed"))
+            // WARN: need to check that tmp.predictions.bed exists and is not empty!
+            if !chunked_dir.join("tmp.predictions.bed").exists() {
+                log::warn!("WARN: skipping chunk {chunked_dir:?} because it does not have tmp.predictions.bed!");
+                continue;
+            } else if std::fs::metadata(chunked_dir.join("tmp.predictions.bed"))
                 .unwrap_or_else(|e| {
-                    panic!("ERROR: could not get tmp.predictions.bed for {chunked_dir:?} -> {e}")
+                    panic!("ERROR: could not get tmp.predictions.bed for {chunked_dir:?} but seems to exist -> {e}")
                 })
                 .len()
                 == 0
