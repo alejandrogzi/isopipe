@@ -886,14 +886,17 @@ pub fn polish(
         // INFO: subdirs should have then -> nmd.bed, Option<fusions.bed>, Option<raw_reads.bed>
         // INFO: nmd is assumed to exist either way -> otherwise would be catched by dir deleting cmd above
         // INFO: an optionally -> {chr}.predictions.seqs_fusions.tsv, {chr}.predictions.seqs_free.tsv
-        let mut decisions = format!(
-            "source {} && {} --reads {} --predictions {} --name nmd.bed --nmd --outdir {}",
-            TAI_VENV,
-            PRETTY_PY,
-            step_output_dir.join(chr).join("nmd.bed").display(),
-            step_output_dir.join(chr).join("predictions.tsv").display(),
-            step_output_dir.join(chr).display(),
-        );
+        let mut decisions = format!("source {}", TAI_VENV);
+
+        if free_nmd.exists() || fusion_nmd.exists() {
+            decisions += &format!(
+                " && {} --reads {} --predictions {} --name nmd.bed --nmd --outdir {}",
+                PRETTY_PY,
+                step_output_dir.join(chr).join("nmd.bed").display(),
+                step_output_dir.join(chr).join("predictions.tsv").display(),
+                step_output_dir.join(chr).display(),
+            );
+        }
 
         if fsn.exists() {
             cleaning += &format!(
