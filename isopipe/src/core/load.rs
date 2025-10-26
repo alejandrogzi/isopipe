@@ -211,6 +211,18 @@ pub fn load(
                 target.join(ISOPIPE).join(&bb_name).display(),
                 web.join(bb_name).display(),
             );
+
+            if basename == "pass.bed" {
+                let orphans_bb_name = "HLIsoClassAnnot.orphans.bb";
+
+                cmd = format!("{cmd} && ssh {user}@{server} mkdir -p {} && rsync -av {} {user}@{server}:{} && ssh {user}@{server} ln -sf {} {}",
+                    target.join(ISOPIPE).display(),
+                    step_output_dir.join("bb").join("orphans.bb").display(),
+                    target.join(ISOPIPE).join(orphans_bb_name).display(),
+                    target.join(ISOPIPE).join(orphans_bb_name).display(),
+                    web.join(orphans_bb_name).display(),
+                );
+            }
         }
 
         log::debug!("DEBUG: executing cmd: {cmd:?}");
