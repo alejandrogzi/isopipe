@@ -158,7 +158,7 @@ pub fn load(
 
         if basename == "pass.bed" {
             cmd = format!(
-                "{} --bed {} --toga {} --all --outdir {} --name pass && {COLLAPSE} --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
+                "{} --bed {} --toga {} --all --outdir {} --name pass && {COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
                 // INFO: orphan
                 isotools!(ISO_ORPHAN).display(),
                 input.display(),
