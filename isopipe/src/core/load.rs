@@ -163,9 +163,9 @@ pub fn load(
                 isotools!(ISO_ORPHAN).display(),
                 input.display(),
                 toga,
-                step_output_dir.display(), // INFO: creates orphans/ by default and orphans/pass_orphan_free.bed + orphans.bed
+                step_output_dir.display(), // INFO: creates orphans/ by default and orphans/pass.orphan_free.bed + orphans.bed
                 // INFO: collapse
-                step_output_dir.join("orphans").join("pass_orphan_free.bed").display(), // INFO: orphan free output -> pass_orphan_free.bed
+                step_output_dir.join("orphans").join("pass.orphan_free.bed").display(), // INFO: orphan free output -> pass_orphan_free.bed
                 step_output_dir.display(), // INFO: creates collapse/ by default
                 basename.clone(), // INFO: e.g pass.bed -> will force output to be collapsed/pass.bed
                 // INFO: bigbed
@@ -173,6 +173,21 @@ pub fn load(
                 chrom_sizes,
                 step_output_dir.join("bb").join(bb).display() // INFO: bb/pass.bb
             );
+
+            // TODO: find a way to assert that pass.orphans.bed exists
+            let orphans_cmd = format!(
+                " && {COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
+                // INFO: collapse
+                step_output_dir.join("orphans").join("pass.orphans.bed").display(),
+                step_output_dir.display(), // INFO: creates collapse/ by default
+                "orphans.bed", // INFO: will force output to be collapsed/orphans.bed
+                // INFO: bigbed
+                step_output_dir.join("collapsed").join("orphans.bed").display(), // INFO: collapsed/orphans.bed
+                chrom_sizes,
+                step_output_dir.join("bb").join("orphans.bb").display() // INFO: bb/orphans.bb
+            );
+
+            cmd = format!("{cmd}{orphans_cmd}");
         } else {
             cmd = format!(
                 "{COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
