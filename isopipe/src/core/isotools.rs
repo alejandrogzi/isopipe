@@ -847,21 +847,38 @@ pub fn polish(
         let bed = subdir.join("seqs_free").join(format!("{}.reads.bed", chr));
         let outdir = step_output_dir.join(chr);
 
-        // WARN: not asserting existence because iso-nmd will create a file either way
-        let nmd = subdir.join("*/*nmd.bed"); // INFO: move nmds from free/fusions
         let preds = subdir.join("*/*predictions*tsv"); // INFO: move predictions from free/fusions
 
         let fsn = subdir.join("seqs_fusions").join(format!("{chr}.reads.bed"));
         let reads = subdir.join("seqs_free").join(format!("{chr}.reads.bed"));
 
         let mut cleaning = format!(
-            "cat {} > {} && cat {} > {} && gawk -i inplace 'NR==1 || $0 != header {{print}} NR==1 {{header=$0}}' {}",
-            nmd.display(),
-            step_output_dir.join(chr).join("nmd.bed").display(),
+            "cat {} > {} && gawk -i inplace 'NR==1 || $0 != header {{print}} NR==1 {{header=$0}}' {}",
             preds.display(),
             step_output_dir.join(chr).join("predictions.tsv").display(),
             step_output_dir.join(chr).join("predictions.tsv").display(),
         );
+
+        // WARN: not asserting existence because iso-nmd will create a file either way -> WRONG
+        // WARN: existence of nmds should be checked because if NMD collection is empty no file is created
+        // let nmd = subdir.join("*/*nmd.bed"); // INFO: move nmds from free/fusions
+        let free_nmd = subdir.join("seqs_free").join(format!("{}.nmd.bed", chr));
+        let fusion_nmd = subdir.join("seqs_fusions").join(format!("{}.nmd.bed", chr));
+        let nmd_target = step_output_dir.join(chr).join("nmd.bed");
+
+        if free_nmd.exists() {
+            log::debug!("DEBUG: found seqs_free nmd file -> {free_nmd:?} -> will concatenate to {nmd_target:?}");
+            cleaning += &format!(" && cat {} >> {}", free_nmd.display(), nmd_target.display());
+        }
+
+        if fusion_nmd.exists() {
+            log::debug!("DEBUG: found seqs_fusions nmd file -> {fusion_nmd:?} -> will concatenate to {nmd_target:?}");
+            cleaning += &format!(
+                " && cat {} >> {}",
+                fusion_nmd.display(),
+                nmd_target.display()
+            );
+        }
 
         // INFO: subdirs should have then -> nmd.bed, Option<fusions.bed>, Option<raw_reads.bed>
         // INFO: nmd is assumed to exist either way -> otherwise would be catched by dir deleting cmd above
@@ -997,7 +1014,7 @@ fn __pre_polish<P: AsRef<Path> + Debug + Copy>(
     config: &Config,
     twobit: &str,
 ) {
-    let mem = CHUNK_SIZE as f32 * RAM_PER_SITE; // INFO: will be converted to MB by executor
+    // let mem = CHUNK_SIZE as f32 * RAM_PER_SITE; // INFO: will be converted to MB by executor
     let mut inner_jobs = Vec::new();
 
     // INFO: path would look like: {step_nmd}/{chr} -> looping for each chr
@@ -1079,7 +1096,7 @@ fn __pre_polish<P: AsRef<Path> + Debug + Copy>(
         "aparent",
         step_output_dir.to_path_buf(),
         1,
-        mem as u32,
+        4,
         None,
         None,
     );
