@@ -113,6 +113,7 @@ pub const DEFAULT_MEMORY: &str = "default_memory";
 pub const DEFAULT_THREADS: &str = "default_threads";
 
 // miscellaneous constants
+pub const BB_TYPE: &str = "bed12+27";
 pub const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 pub const RUN_ID_LEN: usize = 4;
 pub const SGN_COLOR: &str = "51,153,255";
@@ -222,4 +223,5 @@ pub const TAG_SCHEMA: &str = r#"
     SN = strong NMD marker
     WN = weak NMD marker
     AR = artificial read produced by merging ends
+    DU = duplicated non-best open-reading-frame
 "#;

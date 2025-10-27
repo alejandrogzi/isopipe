@@ -340,6 +340,7 @@ TAG_MAP: Dict[str, str] = {
     "RW": "TAG_review_fusion",
     "SN": "TAG_strong_nmd",
     "WN": "TAG_weak_nmd",
+    "DU": "TAG_duplicated_non_best_orf",
 }
 
 TAG_REGEX: re.Pattern = re.compile(r"([A-Z]{2})(\d+)?")
@@ -523,4 +524,5 @@ BB_SCHEMA_COLUMNS: List[str] = [
     "TAG_strong_nmd",
     "TAG_weak_nmd",
     "TAG_unique_tai",
+    "TAG_duplicated_non_best_orf",
 ]

@@ -158,7 +158,7 @@ pub fn load(
 
         if basename == "pass.bed" {
             cmd = format!(
-                "{} --bed {} --toga {} --all --outdir {} --name pass && {COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
+                "{} --bed {} --toga {} --all --outdir {} --name pass && {COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
                 // INFO: orphan
                 isotools!(ISO_ORPHAN).display(),
                 input.display(),
@@ -176,7 +176,7 @@ pub fn load(
 
             // TODO: find a way to assert that pass.orphans.bed exists
             let orphans_cmd = format!(
-                " && {COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
+                " && {COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
                 // INFO: collapse
                 step_output_dir.join("orphans").join("pass.orphans.bed").display(),
                 step_output_dir.display(), // INFO: creates collapse/ by default
@@ -190,7 +190,7 @@ pub fn load(
             cmd = format!("{cmd}{orphans_cmd}");
         } else {
             cmd = format!(
-                "{COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type=bed12+26 {} {} {}",
+                "{COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
                 input.display(),
                 step_output_dir.display(), // INFO: creates collapse/ by default
                 basename.clone(), // INFO: e.g pass.bed

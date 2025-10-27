@@ -3,7 +3,7 @@
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 import argparse
 import logging
@@ -219,12 +219,17 @@ def map_to_blocks(
         .sort_values("prob_coding", ascending=False)
         .groupby("prefix")
         .head(max_predictions)
+        .reset_index(drop=True)
     )
+
+    # INFO: add #DU tag to non-best predictions
+    table["rank"] = table.groupby("prefix").cumcount() + 1
+    table.loc[table["rank"] > 1, "id"] += "#DU"
 
     log.info(f"INFO: Final size of table: {len(table)}")
     log.info(f"INFO: Writing predictions to {args.outdir}/{prefix}.predictions.tsv")
 
-    table.drop(columns=["prefix", "tag"]).to_csv(
+    table.drop(columns=["prefix", "tag", "rank"]).to_csv(
         f"{args.outdir}/{prefix}.predictions.tsv", index=False, header=True, sep="\t"
     )
 
@@ -241,11 +246,16 @@ def map_to_blocks(
         .sort_values("prob_coding", ascending=False)
         .groupby("prefix")
         .head(max_predictions)
+        .reset_index(drop=True)
     )
 
-    merged.drop(columns=["prefix", "start", "end", "tag", "prob_coding"]).to_csv(
-        f"{outdir}/{prefix}.predictions.bed", sep="\t", header=False, index=False
-    )
+    # INFO: add #DU tag to non-best predictions
+    merged["rank"] = merged.groupby("prefix").cumcount() + 1
+    merged.loc[merged["rank"] > 1, 3] += "#DU"
+
+    merged.drop(
+        columns=["prefix", "start", "end", "tag", "prob_coding", "rank"]
+    ).to_csv(f"{outdir}/{prefix}.predictions.bed", sep="\t", header=False, index=False)
 
     return
 
@@ -540,7 +550,7 @@ def parse() -> argparse.Namespace:
         "--prefix",
         type=str,
         help="Prefix for the output file name",
-        default="",
+        default="xgb",
     )
     parser.add_argument(
         "-mm",
