@@ -109,7 +109,7 @@ pub fn get_table(
     outdir: &Path,
     tai: Option<PathBuf>,
 ) -> HashMap<usize, Vec<String>> {
-    let chr = get_chr_from_path(index);
+    let chr = get_chr_from_filename(index);
     let index = extract::read::read_index(index, &chr);
 
     // INFO: sequence index -> vec of constructed lines
@@ -159,13 +159,6 @@ pub fn get_table(
                     .replace("@", "#NE")
             );
 
-            let gp = bed.get_mut(record_extract_id).unwrap_or_else(|| {
-                panic!(
-                    "ERROR: could not find gene prediction for ID: {}",
-                    record_extract_id
-                );
-            });
-
             // INFO: extract index to ids -> 0 : [R123_chr12, R124_chr12]
             let record_cannonical_ids = index
                 .get(&record_extract_id.parse::<u32>().unwrap_or_else(|e| {
@@ -181,9 +174,15 @@ pub fn get_table(
                     )
                 });
 
-            let (orf_start, orf_end) = gp.map_absolute_cds(record.start as u64, record.end as u64);
-
+            // INFO: looping over [ R1_chr1, R2_chr1 ]
             for id in record_cannonical_ids {
+                let gp = bed.get_mut(id).unwrap_or_else(|| {
+                    panic!("ERROR: could not find bed record prediction for ID: {}", id);
+                });
+
+                let (orf_start, orf_end) =
+                    gp.map_absolute_cds(record.start as u64, record.end as u64);
+
                 let record_key = format!("{}:{}-{}", id, orf_start, orf_end);
 
                 // INFO: only important thing to inherit from orfipy is orf_type; strand is inherited from bed!

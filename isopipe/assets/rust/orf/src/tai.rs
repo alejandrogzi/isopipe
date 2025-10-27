@@ -11,7 +11,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{BedColumnValue, SCALE, Strand, bed_to_struct_collection};
+use config::{BedColumnValue, SCALE, Strand, bed_to_custom_struct_collection};
 use dashmap::{DashMap, DashSet};
 use hashbrown::HashMap;
 use isopipe::config::depure;
@@ -87,23 +87,27 @@ pub const STOP_CODONS_BYTES: [&[u8]; 3] = [b"TAA", b"TAG", b"TGA"];
 ///
 /// run_tai(args);
 /// ```
+#[allow(unused_assignments)]
 pub fn run_tai(args: TaiArgs) {
     let dir = args.common.outdir.join("tai");
     std::fs::create_dir_all(&dir)
         .unwrap_or_else(|e| panic!("ERROR: could not create directory -> {e}!"));
 
-    let index = args.common.index;
+    let chr = get_chr_from_filename(&args.common.index);
+    let index = extract::read::read_index(&args.common.index, &chr);
+
     let records = flatten_dashmap(
-        bed_to_struct_collection::<GenePred>(
+        bed_to_custom_struct_collection::<GenePred>(
             bed_reader(&args.common.alignments)
                 .unwrap_or_else(|e| panic!("ERROR: failed to read BED file -> {e}"))
                 .into(),
             config::BedColumn::Name,
+            config::BedOperation::SplitName("__", 0),
         )
         .unwrap_or_else(|e| panic!("ERROR: failed construct BED to GenePred collection -> {e}")),
     );
 
-    let (fasta, sequences) = refmt(&args.common.fasta, &records, &dir);
+    let (fasta, sequences) = refmt(&args.common.fasta, &records, &dir, &index);
 
     let cmd = format!(
         "source {} && translationai -I {} -t {},{} -O {}",
@@ -200,15 +204,12 @@ pub fn run_tai(args: TaiArgs) {
 /// ```
 #[allow(unused_assignments)]
 fn unroll_tai(
-    index: PathBuf,
+    index: std::collections::HashMap<u32, Vec<String>>,
     predictions: String,
     mut records: HashMap<String, GenePred>,
     mut writer: BufWriter<File>,
     sequences: HashMap<smol_str::SmolStr, Vec<u8>>,
 ) {
-    let chr = get_chr_from_path(&index);
-    let index = extract::read::read_index(&index, &chr);
-
     let accumulator = DashSet::new();
 
     for line in predictions.lines() {
@@ -234,7 +235,7 @@ fn unroll_tai(
 
         let u_id = id
             .parse::<u32>()
-            .unwrap_or_else(|e| panic!("ERROR: could parse ID to u32 -> {id}. {e}"));
+            .unwrap_or_else(|e| panic!("ERROR: could not parse ID to u32 -> {id}. {e}"));
 
         // INFO: unpacking index reference -> queries
         let queries = index
@@ -268,140 +269,148 @@ fn unroll_tai(
                 );
             }
 
-            // INFO: retrieving the reference gene prediction record
-            let record = records.get_mut(&id).unwrap_or_else(|| {
-                panic!("ERROR: id not found in BED, this is a bug -> {}!", id);
-            });
-
-            let strand = record.strand.clone();
-
-            let (mut orf_start, mut orf_end) = record.map_absolute_cds(start, stop);
-
-            // WARN: skipping unreliable ORFs for the current alignment
-            if orf_start == 0 && orf_end == 0 {
-                continue;
-            }
-
-            let mut stop_codon = "";
-
-            // INFO: before adding up we need to check the stop codon to see if its a real one or not
-            let sequence = sequences.get(&id.to_smolstr()).unwrap_or_else(|| {
-                panic!("ERROR: sequence not found for {id:?}");
-            });
-            let mut orf_sequence = sequence.clone();
-
-            let start_codon =
-                from_utf8(&sequence[start as usize..(start + 3) as usize])
-                    .unwrap_or_else(|e| {
-                        panic!("ERROR: failed to parse start codon -> {e} -> {sequence:?} from {id:?} using {orf_start:?}");
-                    });
-
-            __check_start_codon(start_codon, &id, start);
-
-            // INFO: stop is inclusive, so we add 3 to include the stop codon
-            match strand.as_str() {
-                // WARN: some weird cases where the tool predicts a non-stopped ORF:
-                // WARN: R146001_manual_scaffold_1.p1    102     2199
-                // WARN: sizes -> 144,117,332,112,120,117,138,78,66,270,246,137,79,156,87 = 2199
-                // WARN: record -> manual_scaffold_1 189532046 189543938 R146001 60 + 189532148 189543941
-                // WARN: would be out-of-bounds if we add +3 in this case
-                "+" => {
-                    if orf_end + 3 > record.end {
-                        dbg!("WARN: translationAi predicted a non-stop ORF: {orf:?} for {gp:?}");
-                        // orf_end = record.end
-                        stop_codon =
-                            from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
-                                .unwrap_or_else(|e| {
-                                    panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
-                                });
-                        dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
-
-                        orf_sequence = sequence[start as usize..stop as usize].to_vec();
-                    } else {
-                        stop_codon =
-                            from_utf8(&sequence[(stop) as usize..(stop + 3) as usize])
-                                .unwrap_or_else(|e| {
-                                    panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
-                                });
-
-                        if !STOP_CODONS.contains(&stop_codon) {
-                            // WARN: if stop_codon is not cannonical this is probably a case where the tool is wrong
-                            dbg!(
-                                "WARN: stop codon is not TAA, TAG, or TGA -> {:?} from {:?} using {:?}",
-                                stop_codon,
-                                &id,
-                                stop
-                            );
-
-                            // INFO: taking stop as last base and going back 2 nt to capture last codon
-                            stop_codon =
-                                from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
-                                    .unwrap_or_else(|e| {
-                                        panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
-                                    });
-
-                            dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
-                            orf_sequence = sequence[start as usize..stop as usize].to_vec();
-                        } else {
-                            // INFO: stop_codon is cannonical so we can safely add 3 to the end
-                            orf_end += 3;
-                            orf_sequence = sequence[start as usize..(stop + 3) as usize].to_vec();
-                            stop += 3;
-                        }
-                    }
-                }
-                "-" => {
-                    if orf_start - 3 < config::SCALE - record.end {
-                        dbg!("WARN: translationAi predicted a non-stop ORF: {orf:?} for {gp:?}");
-                        // orf_start = config::SCALE - record.end
-                        stop_codon =
-                            from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
-                                .unwrap_or_else(|e| {
-                                    panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
-                                });
-                        dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
-                        orf_sequence = sequence[start as usize..stop as usize].to_vec();
-                    } else {
-                        stop_codon =
-                            from_utf8(&sequence[(stop) as usize..(stop + 3) as usize])
-                                .unwrap_or_else(|e| {
-                                    panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
-                                });
-
-                        if !STOP_CODONS.contains(&stop_codon) {
-                            // WARN: if stop_codon is not cannonical this is probably a case where the tool is wrong
-                            dbg!(
-                                "WARN: stop codon is not TAA, TAG, or TGA -> {:?} from {:?} using {:?}",
-                                stop_codon,
-                                &id,
-                                stop
-                            );
-
-                            // INFO: taking stop as last base and going back 2 nt to capture last codon
-                            stop_codon =
-                                from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
-                                    .unwrap_or_else(|e| {
-                                        panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
-                                    });
-
-                            dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
-                            orf_sequence = sequence[start as usize..stop as usize].to_vec();
-                        } else {
-                            // INFO: stop_codon is cannonical so we can safely add 3 to the end
-                            orf_start -= 3;
-                            orf_sequence = sequence[start as usize..(stop + 3) as usize].to_vec();
-                            stop += 3;
-                        }
-                    }
-                }
-                _ => panic!("ERROR: unexpected strand value: {}", strand),
-            }
-
-            let pep = translate(&orf_sequence);
-            let inner_stops = scan_stops(orf_sequence);
-
-            // INFO: queries are the orfs in the current record
+            // queries -> { 1 : [ R1_chr1, R2_chr1 ]}
             for query in queries {
+                // INFO: retrieving the reference gene prediction record from original bed
+                // INFO: this means bed has the original name as a name (likely splitted by BedOperation)
+                let record = records.get_mut(query).unwrap_or_else(|| {
+                    panic!("ERROR: id not found in BED, this is a bug -> {}!", id);
+                });
+
+                let strand = record.strand.clone();
+
+                let (mut orf_start, mut orf_end) = record.map_absolute_cds(start, stop);
+
+                // WARN: skipping unreliable ORFs for the current alignment
+                if orf_start == 0 && orf_end == 0 {
+                    continue;
+                }
+
+                let mut stop_codon = "";
+
+                // INFO: before adding up we need to check the stop codon to see if its a real one or not
+                let sequence = sequences.get(&id.to_smolstr()).unwrap_or_else(|| {
+                    panic!("ERROR: sequence not found for {id:?}");
+                });
+                let mut orf_sequence = sequence.clone();
+
+                let start_codon =
+                    from_utf8(&sequence[start as usize..(start + 3) as usize])
+                        .unwrap_or_else(|e| {
+                            panic!("ERROR: failed to parse start codon -> {e} -> {sequence:?} from {id:?} using {orf_start:?}");
+                        });
+
+                __check_start_codon(start_codon, &id, start);
+
+                // INFO: stop is inclusive, so we add 3 to include the stop codon
+                match strand.as_str() {
+                    // WARN: some weird cases where the tool predicts a non-stopped ORF:
+                    // WARN: R146001_manual_scaffold_1.p1    102     2199
+                    // WARN: sizes -> 144,117,332,112,120,117,138,78,66,270,246,137,79,156,87 = 2199
+                    // WARN: record -> manual_scaffold_1 189532046 189543938 R146001 60 + 189532148 189543941
+                    // WARN: would be out-of-bounds if we add +3 in this case
+                    "+" => {
+                        if orf_end + 3 > record.end {
+                            dbg!(
+                                "WARN: translationAi predicted a non-stop ORF: {orf:?} for {gp:?}"
+                            );
+                            // orf_end = record.end
+                            stop_codon =
+                                from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
+                                    .unwrap_or_else(|e| {
+                                        panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
+                                    });
+                            dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
+
+                            orf_sequence = sequence[start as usize..stop as usize].to_vec();
+                        } else {
+                            stop_codon =
+                                from_utf8(&sequence[(stop) as usize..(stop + 3) as usize])
+                                    .unwrap_or_else(|e| {
+                                        panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
+                                    });
+
+                            if !STOP_CODONS.contains(&stop_codon) {
+                                // WARN: if stop_codon is not cannonical this is probably a case where the tool is wrong
+                                dbg!(
+                                    "WARN: stop codon is not TAA, TAG, or TGA -> {:?} from {:?} using {:?}",
+                                    stop_codon,
+                                    &id,
+                                    stop
+                                );
+
+                                // INFO: taking stop as last base and going back 2 nt to capture last codon
+                                stop_codon =
+                                    from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
+                                        .unwrap_or_else(|e| {
+                                            panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
+                                        });
+
+                                dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
+                                orf_sequence = sequence[start as usize..stop as usize].to_vec();
+                            } else {
+                                // INFO: stop_codon is cannonical so we can safely add 3 to the end
+                                orf_end += 3;
+                                orf_sequence =
+                                    sequence[start as usize..(stop + 3) as usize].to_vec();
+                                stop += 3;
+                            }
+                        }
+                    }
+                    "-" => {
+                        if orf_start - 3 < config::SCALE - record.end {
+                            dbg!(
+                                "WARN: translationAi predicted a non-stop ORF: {orf:?} for {gp:?}"
+                            );
+                            // orf_start = config::SCALE - record.end
+                            stop_codon =
+                                from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
+                                    .unwrap_or_else(|e| {
+                                        panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
+                                    });
+                            dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
+                            orf_sequence = sequence[start as usize..stop as usize].to_vec();
+                        } else {
+                            stop_codon =
+                                from_utf8(&sequence[(stop) as usize..(stop + 3) as usize])
+                                    .unwrap_or_else(|e| {
+                                        panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
+                                    });
+
+                            if !STOP_CODONS.contains(&stop_codon) {
+                                // WARN: if stop_codon is not cannonical this is probably a case where the tool is wrong
+                                dbg!(
+                                    "WARN: stop codon is not TAA, TAG, or TGA -> {:?} from {:?} using {:?}",
+                                    stop_codon,
+                                    &id,
+                                    stop
+                                );
+
+                                // INFO: taking stop as last base and going back 2 nt to capture last codon
+                                stop_codon =
+                                    from_utf8(&sequence[(stop - 3) as usize..(stop) as usize])
+                                        .unwrap_or_else(|e| {
+                                            panic!("ERROR: failed to parse stop codon -> {e} -> {sequence:?} from {id:?} using {orf_end:?}");
+                                        });
+
+                                dbg!("WARN: non-stop ORF stop_codon picked -> {:?}", stop_codon);
+                                orf_sequence = sequence[start as usize..stop as usize].to_vec();
+                            } else {
+                                // INFO: stop_codon is cannonical so we can safely add 3 to the end
+                                orf_start -= 3;
+                                orf_sequence =
+                                    sequence[start as usize..(stop + 3) as usize].to_vec();
+                                stop += 3;
+                            }
+                        }
+                    }
+                    _ => panic!("ERROR: unexpected strand value: {}", strand),
+                }
+
+                let pep = translate(&orf_sequence);
+                let inner_stops = scan_stops(orf_sequence);
+
+                // INFO: queries are the orfs in the current record
                 let query_id = format!("{}.p{}", query, orf_idx + 1);
                 let query_line = format!(
                     "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
@@ -1195,6 +1204,7 @@ fn refmt(
     fasta: &PathBuf,
     records: &HashMap<String, GenePred>,
     outdir: &Path,
+    index: &std::collections::HashMap<u32, Vec<String>>,
 ) -> (PathBuf, HashMap<smol_str::SmolStr, Vec<u8>>) {
     let seqs = fasta_to_hashmap(fasta)
         .unwrap_or_else(|e| panic!("ERROR: failed to parse FASTA file -> {e}"));
@@ -1209,7 +1219,21 @@ fn refmt(
     // INFO: not using further deduplication (DashMap in HL version) -> seqs are already deduplicated by extract
     let mut accumulator = Vec::with_capacity(seqs.len());
 
-    records.into_iter().for_each(|(header, gp)| {
+    seqs.iter().for_each(|(header, seq)| {
+        // INFO: >0 -> 0; opens index { 0 : [ R1_chr1, R2_chr1 ] }
+        let u_header = header.parse::<u32>().unwrap_or_else(|e| {
+            panic!("ERROR: could not parse header -> {e}");
+        });
+
+        // INFO: [ R1_chr1, R2_chr1 ] -> only use first index to build fmt_header
+        let queries = index
+            .get(&u_header)
+            .unwrap_or_else(|| panic!("ERROR: could not find index match for id {header}"));
+
+        let gp = records.get(&queries[0]).unwrap_or_else(|| {
+            panic!("ERROR: could not find bed records for {} using index {u_header} that unroll to {queries:?}", queries[0]);
+        });
+
         let mut start = gp.start;
         let mut end = gp.end;
 
@@ -1221,17 +1245,13 @@ fn refmt(
                 end = config::SCALE - tmp;
             }
         }
-
-        let fmt_header = format!(
-            ">{}:{}-{}({})({})(0, 0,)",
-            gp.chrom, start, end, gp.strand, gp.name
-        );
-
-        let seq = seqs.get(&header.clone().to_smolstr()).unwrap_or_else(|| {
-            panic!("ERROR: {header} not found in sequences {:?}!", seqs);
-        });
-
-        accumulator.push((seq, fmt_header));
+        accumulator.push((
+            seq,
+            format!(
+                ">{}:{}-{}({})({})(0, 0,)",
+                gp.chrom, start, end, gp.strand, header
+            ),
+        ));
     });
 
     accumulator.into_iter().for_each(|(seq, header)| {
