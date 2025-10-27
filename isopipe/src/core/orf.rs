@@ -415,7 +415,7 @@ fn unbounded_extract(
             // INFO: collect paths and collect extract cmds
             // INFO: end path would look like: {step_orf}/seqs_{suffix}/{chr}:{chunk}/{name}{fa/bed}
             let cmd = format!(
-                "{} base --twobit {} --bed {} -o {} --index --suffix {} --chunk-size {}",
+                "{} base --twobit {} --bed {} -o {} --index --suffix {} --chunk-size {} --no-reduced-bed",
                 EXTRACT_RELEASE,
                 &twobit.display(),
                 bed.display(),
@@ -550,7 +550,7 @@ fn parallel_processing(
     jobs: &mut Vec<Job>,
     weights: &Path,
 ) {
-    let suffixes = vec![REDUCED_BED, FA, INDEX];
+    let suffixes = vec![BED, FA, INDEX];
 
     // INFO: need to loop again to run blast and tai
     // INFO: end path would look like: {step_orf}/seqs_{suffix}/{chr}:{chunk}/{name}{fa/bed/reduced/index}
@@ -594,7 +594,7 @@ fn parallel_processing(
                 let file = file.path();
                 let ext = get_suffix_from_path(&file, &suffixes, &suffixes);
 
-                if ext == Some(REDUCED_BED) {
+                if ext == Some(BED) {
                     let part = format!("--alignments {} ", file.display());
                     tai += &part;
                     blast += &part;
