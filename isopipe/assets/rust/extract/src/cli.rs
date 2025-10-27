@@ -80,7 +80,7 @@ pub struct ExtractArgs {
     pub output_dir: PathBuf,
 
     #[arg(
-        short = 'i',
+        short = 'I',
         long = "index",
         help = "Flag to return indexed sequences [light .fa + index]",
         value_name = "FLAG",

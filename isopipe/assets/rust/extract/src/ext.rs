@@ -103,7 +103,7 @@ pub fn extract(args: ExtractArgs) {
 
     // INFO: define the chunk size for parallel processing
     // INFO: if chunk size > bed records -> symlink
-    let paths: Vec<(PathBuf, Option<PathBuf>)> = bed
+    let paths: Vec<(PathBuf, PathBuf)> = bed
         .into_par_iter()
         .flat_map(|(chrom, records)| {
             records
@@ -117,17 +117,10 @@ pub fn extract(args: ExtractArgs) {
             std::fs::create_dir_all(&chunk_path).unwrap();
 
             let chunk_fa = chunk_path.join(format!("tmp_chunk_{}.fa", &chunk_id));
-
-            let mut writer_bed = None;
-            let mut chunk_bed = None;
-            if !args.no_reduced_bed {
-                chunk_bed = Some(chunk_path.join(format!("tmp_chunk_{}.bed", &chunk_id)));
-                writer_bed = Some(BufWriter::new(
-                    File::create(chunk_bed.as_ref().unwrap()).unwrap(),
-                ));
-            }
+            let chunk_bed = chunk_path.join(format!("tmp_chunk_{}.bed", &chunk_id));
 
             let writer_fa = BufWriter::new(File::create(&chunk_fa).unwrap());
+            let writer_bed = BufWriter::new(File::create(&chunk_bed).unwrap());
 
             let chr = chunk_id.split(':').next().unwrap_or(&chunk_id);
 
@@ -152,6 +145,7 @@ pub fn extract(args: ExtractArgs) {
                         writer_fa,
                         writer_bed,
                         &args.seq_mode,
+                        args.no_reduced_bed,
                     );
                 }
             }
@@ -378,17 +372,14 @@ fn raw(
     genome: &DashMap<String, Vec<u8>>,
     chr: &str,
     mut writer_fa: BufWriter<File>,
-    mut writer_bed: Option<BufWriter<File>>,
+    mut writer_bed: BufWriter<File>,
     seq_mode: &SeqMode,
 ) {
     for tx in transcripts {
         let seq = get_sequence(genome, chr, &tx, seq_mode);
 
         writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap();
-
-        if let Some(writer_bed) = writer_bed.as_mut() {
-            writeln!(writer_bed, "{}", tx.line).unwrap();
-        }
+        writeln!(writer_bed, "{}", tx.line).unwrap();
     }
 }
 
@@ -434,16 +425,20 @@ fn index(
     path: &PathBuf,
     chunk_id: &String,
     mut writer_fa: BufWriter<File>,
-    mut writer_bed: Option<BufWriter<File>>,
+    mut writer_bed: BufWriter<File>,
     seq_mode: &SeqMode,
+    no_reduced_bed: bool,
 ) {
     let mut mapper = HashMap::new();
 
     let idx = path.join(format!("tmp_chunk_{}.index", chunk_id));
     let mut index = BufWriter::new(File::create(&idx).unwrap());
 
-    let chunk_reduced_bed = path.join(format!("tmp_chunk_{}_reduced.bed", &chunk_id));
-    let mut writer_reduced_bed = BufWriter::new(File::create(&chunk_reduced_bed).unwrap());
+    let mut writer_reduced_bed = None;
+    if !no_reduced_bed {
+        let chunk_reduced_bed = path.join(format!("tmp_chunk_{}_reduced.bed", &chunk_id));
+        writer_reduced_bed = Some(BufWriter::new(File::create(&chunk_reduced_bed).unwrap()));
+    }
 
     let mut count = 0usize;
     for tx in transcripts.iter_mut() {
@@ -463,9 +458,12 @@ fn index(
                 fields[3] = count.to_string();
                 let line = fields.join("\t");
 
-                writeln!(writer_reduced_bed, "{}", line).unwrap_or_else(|e| {
-                    panic!("ERROR: could not write line from -> {:?}. {e}", tx)
-                });
+                if let Some(writer_reduced_bed) = writer_reduced_bed.as_mut() {
+                    writeln!(writer_reduced_bed, "{}", line).unwrap_or_else(|e| {
+                        panic!("ERROR: could not write line from -> {:?}. {e}", tx)
+                    });
+                }
+
                 writeln!(writer_fa, ">{}\n{}", count, seq).unwrap_or_else(|e| {
                     panic!(
                         "ERROR: could not write sequence to .fa from -> {:?}. {e}",
@@ -490,10 +488,8 @@ fn index(
             }
         }
 
-        if let Some(writer_bed) = writer_bed.as_mut() {
-            writeln!(writer_bed, "{}", tx.line)
-                .unwrap_or_else(|e| panic!("ERROR: could not write line from -> {:?}. {e}", tx));
-        }
+        writeln!(writer_bed, "{}", tx.line)
+            .unwrap_or_else(|e| panic!("ERROR: could not write line from -> {:?}. {e}", tx));
     }
 
     // INFO: for every element in mapper -> write encoded id and encoded group
@@ -774,7 +770,7 @@ pub fn __rev_complement_u8(seq: &mut Vec<u8>) {
 /// ];
 /// __join(chunked);
 /// ```
-pub fn __join(chunked: &Vec<(PathBuf, Option<PathBuf>)>, basename: PathBuf) {
+pub fn __join(chunked: &Vec<(PathBuf, PathBuf)>, basename: PathBuf) {
     let mut writer = BufWriter::new(File::create(basename).unwrap());
     for (chunked_fa, _chunked_bed) in chunked {
         let mut reader = BufReader::new(File::open(chunked_fa).unwrap());
