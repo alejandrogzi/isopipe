@@ -140,6 +140,15 @@ pub struct ExtractArgs {
         action = ArgAction::SetTrue,
     )]
     pub join: bool,
+
+    #[arg(
+        short = 'N',
+        long = "no-reduced-bed",
+        help = "Flag to not create a reduced .bed file",
+        value_name = "FLAG",
+        action = ArgAction::SetTrue,
+    )]
+    pub no_reduced_bed: bool,
 }
 
 #[derive(ValueEnum, Clone, Debug)]
