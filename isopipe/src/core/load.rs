@@ -158,20 +158,57 @@ pub fn load(
 
         if basename == "pass.bed" {
             cmd = format!(
-                "{} --bed {} --toga {} --all --outdir {} --name pass && {COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                "{} --bed {} --toga {} --all --outdir {} --name pass",
                 // INFO: orphan
                 isotools!(ISO_ORPHAN).display(),
                 input.display(),
                 toga,
                 step_output_dir.display(), // INFO: creates orphans/ by default and orphans/pass.orphan_free.bed + orphans.bed
+            );
+
+            // INFO: separating duplications from non-dups
+            cmd = format!(
+                "{cmd} && grep -v 'DU' {} > {} && grep 'DU' {} > {}",
+                step_output_dir
+                    .join("orphans")
+                    .join("pass.orphan_free.bed")
+                    .display(),
+                step_output_dir
+                    .join("orphans")
+                    .join("best.pass.orphan_free.bed")
+                    .display(),
+                step_output_dir
+                    .join("orphans")
+                    .join("pass.orphan_free.bed")
+                    .display(),
+                step_output_dir
+                    .join("orphans")
+                    .join("dup.pass.orphan_free.bed")
+                    .display(),
+            );
+
+            // INFO: running collapse and bb on non-dups
+            cmd = format!("{cmd} && {COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
                 // INFO: collapse
-                step_output_dir.join("orphans").join("pass.orphan_free.bed").display(), // INFO: orphan free output -> pass_orphan_free.bed
+                step_output_dir.join("orphans").join("best.pass.orphan_free.bed").display(), // INFO: orphan free output -> pass_orphan_free.bed
                 step_output_dir.display(), // INFO: creates collapse/ by default
                 basename.clone(), // INFO: e.g pass.bed -> will force output to be collapsed/pass.bed
                 // INFO: bigbed
                 step_output_dir.join("collapsed").join(&basename).display(), // INFO: collapsed/pass.bed
                 chrom_sizes,
                 step_output_dir.join("bb").join(bb).display() // INFO: bb/pass.bb
+            );
+
+            // INFO: running collapse and bb on dups
+            cmd = format!("{cmd} && {COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                // INFO: collapse
+                step_output_dir.join("orphans").join("dup.pass.orphan_free.bed").display(), // INFO: orphan free output -> pass_orphan_free.bed
+                step_output_dir.display(), // INFO: creates collapse/ by default
+                "duplicates.bed", // INFO: e.g pass.bed -> will force output to be collapsed/duplicates.bed
+                // INFO: bigbed
+                step_output_dir.join("collapsed").join("duplicates.bed").display(), // INFO: collapsed/pass.bed
+                chrom_sizes,
+                step_output_dir.join("bb").join("duplicates.bb").display() // INFO: bb/pass.bb
             );
 
             // TODO: find a way to assert that pass.orphans.bed exists
@@ -214,13 +251,24 @@ pub fn load(
 
             if basename == "pass.bed" {
                 let orphans_bb_name = "HLIsoClassAnnot.orphans.bb";
+                let duplicates_bb_name = "HLIsoClassAnnot.duplicates.bb";
 
+                // INFO: orphans
                 cmd = format!("{cmd} && ssh {user}@{server} mkdir -p {} && rsync -av {} {user}@{server}:{} && ssh {user}@{server} ln -sf {} {}",
                     target.join(ISOPIPE).display(),
                     step_output_dir.join("bb").join("orphans.bb").display(),
                     target.join(ISOPIPE).join(orphans_bb_name).display(),
                     target.join(ISOPIPE).join(orphans_bb_name).display(),
                     web.join(orphans_bb_name).display(),
+                );
+
+                // INFO: duplicates
+                cmd = format!("{cmd} && ssh {user}@{server} mkdir -p {} && rsync -av {} {user}@{server}:{} && ssh {user}@{server} ln -sf {} {}",
+                    target.join(ISOPIPE).display(),
+                    step_output_dir.join("bb").join("duplicates.bb").display(),
+                    target.join(ISOPIPE).join(duplicates_bb_name).display(),
+                    target.join(ISOPIPE).join(duplicates_bb_name).display(),
+                    web.join(duplicates_bb_name).display(),
                 );
             }
         }

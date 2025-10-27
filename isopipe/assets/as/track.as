@@ -117,3 +117,15 @@ searchPriority 2.07207
         itemRgb On
         type bigBed 37
         bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.orphans.bb
+
+        track HLIsoClassAnnotDuplicates
+        parent HLIsoClassAnnot
+        subtrack HLIsoClassAnnot
+        shortLabel HL trash
+        longLabel HL_trash
+        group genes
+        priority 1
+        visibility pack
+        itemRgb On
+        type bigBed 37
+        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.duplicates.bb
