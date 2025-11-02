@@ -33,7 +33,9 @@ pub fn lima(
     let fields = config.get_step_custom_fields(step, vec![PRIMERS]);
     let args = config.get_step_args(
         step,
-        vec![INPUT_DIR, PREFIX, OUTPUT_DIR, MEMORY, TIME, PRIMERS],
+        vec![
+            INPUT_DIR, PREFIX, OUTPUT_DIR, MEMORY, TIME, PRIMERS, KEEP_TEMP,
+        ],
     );
 
     let keep_temp = config
