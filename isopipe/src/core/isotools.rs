@@ -928,11 +928,26 @@ pub fn polish(
                 step_output_dir.join(chr).display()
             );
 
-            // INFO: still need to execute decision on nmd and Option<fusions> + cleaning
-            let cmd = format!("{} && {}", cleaning, decisions);
-            log::debug!("DEBUG: executing non-APARENT + non-raw_reads dir: {cmd}");
+            // INFO: means reads.bed will not be processed -> at this point step10_polish/{chr} does not exist
+            // INFO: if fusions or nmd exist -> we need to re-create the dir
 
-            jobs.push(Job::from(cmd));
+            if fusion_nmd.exists() || free_nmd.exists() || fsn.exists() {
+                log::warn!("WARN: could not find any APARENT output for {chr:?} in {} and we remove the dir -> creating dir again...", step_output_dir.join(chr).display());
+                std::fs::create_dir_all(&step_output_dir.join(chr)).unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: Failed to create directory -> {} -> {e}",
+                        step_output_dir.join(chr).display()
+                    )
+                });
+
+                let cmd = format!("{} && {}", cleaning, decisions);
+                log::debug!("DEBUG: executing non-APARENT + non-raw_reads dir: {cmd}");
+
+                jobs.push(Job::from(cmd));
+            } else {
+                log::warn!("WARN: no APARENT and no fusions or nmd for {chr:?} in {} -> skipping isotools polish for this chr!", step_output_dir.join(chr).display());
+            }
+
             continue;
         };
 
