@@ -227,10 +227,14 @@ pub fn load(
             cmd = format!("{cmd}{orphans_cmd}");
         } else {
             cmd = format!(
-                "{COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                "{COLLAPSE} run --bed {} --extend --outdir {} --name {} && sed -i '/#DU/d' {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                // INFO: collapse
                 input.display(),
                 step_output_dir.display(), // INFO: creates collapse/ by default
                 basename.clone(), // INFO: e.g pass.bed
+                // INFO: sed
+                step_output_dir.join("collapsed").join(&basename).display(), // INFO: collapsed/pass.bed -> inplace modification
+                // INFO: bigbed
                 step_output_dir.join("collapsed").join(&basename).display(), // INFO: collapsed/pass.bed
                 chrom_sizes,
                 step_output_dir.join("bb").join(bb).display() // INFO: bb/pass.bb
