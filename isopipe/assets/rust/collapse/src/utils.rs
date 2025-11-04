@@ -124,6 +124,8 @@ fn par_parse_tracks(
     mode: CollapseMode,
     merge: bool,
 ) -> Result<HashMap<BinKey, Queue>, Box<dyn std::error::Error>> {
+    log::info!("INFO: Parsing BED12 content");
+
     let tracks = contents
         .par_lines()
         .filter(|row| !row.starts_with("#"))
@@ -132,6 +134,11 @@ fn par_parse_tracks(
             // INFO: if record not in tracks, create a new queue
             acc.entry(record.key)
                 .and_modify(|queue: &mut Queue| {
+                    log::debug!(
+                        "DEBUG: Updating queue with {:?}",
+                        std::str::from_utf8(&record.read)
+                    );
+
                     queue.count += 1;
                     queue.reads.push(record.read.clone());
 
@@ -160,6 +167,8 @@ fn par_parse_tracks(
                     if (record.bounds.0 > queue.bounds.0 && record.bounds.1 > queue.bounds.1)
                         || (record.bounds.0 < queue.bounds.0 && record.bounds.1 < queue.bounds.1)
                     {
+                        log::debug!("DEBUG: Perturbed state with case 1, updating queue");
+
                         queue.state = QueueState::Perturbed;
                         queue.bounds = (
                             record.bounds.0.min(queue.bounds.0),
@@ -188,6 +197,8 @@ fn par_parse_tracks(
                     // or its reverse
                     else if record.bounds.0 <= queue.bounds.0 && record.bounds.1 >= queue.bounds.1
                     {
+                        log::debug!("DEBUG: Unperturbed state with case 2, updating queue but will check for UTR extending args");
+
                         // INFO: in the case the read was already perturbed, makes
                         // sense to change the state because the new read bounds are
                         // outwards the already updated perturbed bounds
@@ -205,6 +216,7 @@ fn par_parse_tracks(
                     }
                     // 3. if both bounds are equal or less -> state remains the same
                     else {
+                        log::debug!("DEBUG: Unperturbed state -> case 3 and doing nothing");
                     }
                 })
                 .or_insert(Queue {
@@ -256,6 +268,8 @@ fn par_parse_tracks(
 ///
 /// See [`par_parse_tracks`] for descriptions of each branch
 fn __compare_queue(left: &mut Queue, right: &Queue, merge: bool) {
+    log::debug!("DEBUG: Comparing queues");
+
     // INFO: +1 accounts either for left or right
     left.count += right.count + 1;
 
@@ -265,6 +279,8 @@ fn __compare_queue(left: &mut Queue, right: &Queue, merge: bool) {
     if (right.bounds.0 > left.bounds.0 && right.bounds.1 > left.bounds.1)
         || (right.bounds.0 < left.bounds.0 && right.bounds.1 < left.bounds.1)
     {
+        log::debug!("DEBUG: Perturbed state with case 1 while comparing queues, updating queue");
+
         left.state = QueueState::Perturbed;
         left.bounds = (
             right.bounds.0.min(left.bounds.0),
@@ -279,6 +295,8 @@ fn __compare_queue(left: &mut Queue, right: &Queue, merge: bool) {
             left.reads.push(left.header.clone()); // INFO: sending right header to queue
         }
     } else if right.bounds.0 <= left.bounds.0 && right.bounds.1 >= left.bounds.1 {
+        log::debug!("DEBUG: Perturbed state with case 2 while comparing queues, updating queue");
+
         // INFO: in the case the read was already perturbed, makes
         // sense to change the state because the new read bounds are
         // outwards the already updated perturbed bounds
@@ -292,6 +310,7 @@ fn __compare_queue(left: &mut Queue, right: &Queue, merge: bool) {
         left.reads.push(left.header.clone());
         left.header = right.header.clone();
     } else {
+        log::debug!("DEBUG: Unperturbed state -> case 3 while comparing queues -> updating queue");
         left.reads.push(right.header.clone()); // INFO: accounts for right header
     }
 }
@@ -698,8 +717,8 @@ fn __write_line(writer: &mut BufWriter<File>, line: &str) {
 /// parts[10] = new_sizes.as_str();
 /// parts[11] = new_starts.as_str();
 /// ```
-fn update_blocks<'a>(
-    parts: &mut Vec<&'a str>,
+fn update_blocks(
+    parts: &mut [&str],
     old_start: u32,
     old_end: u32,
     new_start: u32,
@@ -720,15 +739,15 @@ fn update_blocks<'a>(
     let mut new_block_sizes = block_sizes.clone();
     let mut new_block_starts = block_starts.clone();
 
-    let start_diff = (new_start as i64 - old_start as i64).abs() as u32;
+    let start_diff = (new_start as i64 - old_start as i64).abs();
 
     if new_start < old_start {
         // INFO: Extended at start
-        new_block_sizes[0] += start_diff;
+        new_block_sizes[0] += start_diff as u32;
         new_block_starts[0] = 0;
     } else {
         // INFO: Trimmed at start
-        new_block_sizes[0] -= start_diff;
+        new_block_sizes[0] -= start_diff as u32;
         new_block_starts[0] = 0;
     }
 
@@ -740,13 +759,13 @@ fn update_blocks<'a>(
 
     // INFO: Adjust last exon
     let last_idx = new_block_sizes.len() - 1;
-    let end_diff = (new_end as i64 - old_end as i64).abs() as u32;
+    let end_diff = (new_end as i64 - old_end as i64).abs();
     if new_end > old_end {
         // INFO: Extended at end
-        new_block_sizes[last_idx] += end_diff;
+        new_block_sizes[last_idx] += end_diff as u32;
     } else {
         // INFO: Trimmed at end
-        new_block_sizes[last_idx] -= end_diff;
+        new_block_sizes[last_idx] -= end_diff as u32;
     }
 
     let new_sizes_str = new_block_sizes

@@ -280,6 +280,7 @@ impl BinKey {
     /// assert_eq!(key.end, 2000);
     /// assert_eq!(key.gaps.len(), 2);
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub fn from_parts(
         chrom: &str,
         mut start: u32,
@@ -332,7 +333,7 @@ impl BinKey {
             CollapseMode::GappedCoding => {
                 // INFO: ignores exonic start and end but preserves all gaps
                 //
-                // read1: xxxxxxxx--xxXXXX---XXX---XXXxx--xxx
+                // read1: xxxxxxx--xxXXXX---XXX---XXXxx--xxx
                 //            ||||||||||||||||||||||||||||||
                 // read2:     xxx--xxXXXX---XXX---XXXxx--xxx
                 // read3:      xx--xxXXXX---XXX---XXXxx--xxx
