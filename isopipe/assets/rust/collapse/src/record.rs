@@ -24,6 +24,7 @@ use xxhash_rust::xxh3::xxh3_64;
 ///
 /// A `Record` contains a binary key for efficient comparison and hashing,
 /// along with the original read name and line data as byte vectors.
+#[derive(Clone, Debug)]
 pub struct Record {
     /// Binary key containing parsed genomic coordinates and metadata
     pub key: BinKey,
@@ -33,6 +34,8 @@ pub struct Record {
     pub line: Vec<u8>,
     /// Record bounds (start, end)
     pub bounds: (u32, u32),
+    /// Record strand
+    pub strand: u8,
 }
 
 impl Record {
@@ -218,6 +221,7 @@ impl Record {
             read: name.as_bytes().to_vec(),
             line: line.as_bytes().to_vec(),
             bounds: (start, end),
+            strand,
         })
     }
 }
@@ -579,8 +583,6 @@ pub struct Queue {
     pub header: Vec<u8>,
     /// Queue bounds (start, end)
     pub bounds: (u32, u32),
-    /// Queue state
-    pub state: QueueState,
 }
 
 impl std::fmt::Display for Queue {
@@ -643,12 +645,6 @@ impl std::fmt::Display for Queue {
 
         Ok(())
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum QueueState {
-    Unperturbed,
-    Perturbed,
 }
 
 #[cfg(test)]

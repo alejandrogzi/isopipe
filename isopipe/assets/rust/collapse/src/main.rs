@@ -38,13 +38,18 @@ fn main() {
                 panic!("ERROR: Could not create directory {:?} -> {e}", &target)
             });
 
-            let tracks =
-                unpack(args.bed.clone(), args.collapse_mode, args.merge).unwrap_or_else(|e| {
-                    panic!(
-                        "ERROR: There was an error while unpacking {:?} -> {e}",
-                        &args.bed
-                    )
-                });
+            let tracks = unpack(
+                args.bed.clone(),
+                args.collapse_mode,
+                args.max_five_utr_length,
+                args.max_three_utr_length,
+            )
+            .unwrap_or_else(|e| {
+                panic!(
+                    "ERROR: There was an error while unpacking {:?} -> {e}",
+                    &args.bed
+                )
+            });
 
             match mode {
                 RunMode::Extend => {
@@ -59,7 +64,7 @@ fn main() {
                         __write_index(&tracks, &index);
                     }
 
-                    __write_collapsed(tracks, mode, &output, args.merge); // WARN: extra column appended!
+                    __write_collapsed(tracks, mode, &output); // WARN: extra column appended!
                 }
                 RunMode::Index => {
                     // INFO: index write by default, --write will write collapsed file [merged]
@@ -71,7 +76,7 @@ fn main() {
                         let output = target.join(args.name);
                         log::info!("INFO: Writing to collapsed file to {:?}", &output);
 
-                        __write_collapsed(tracks, mode, output, args.merge); // WARN: no extra column appended!
+                        __write_collapsed(tracks, mode, output); // WARN: no extra column appended!
                     }
                 }
             }
