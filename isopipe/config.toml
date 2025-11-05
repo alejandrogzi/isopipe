@@ -167,3 +167,5 @@ target = ""                 # FILL: target species output directory on the serve
 web = ""                    # FILL: web storage dir for .bb files
 chrom_sizes = ""            # FILL: chromosome sizes file
 toga = ""                   # FILL: toga query annotation -> iso-orphan
+max_five_utr_len = 150      # WARN: max bp distance in 5'UTR to collapse
+max_three_utr_len = 500     # WARN: max bp distance in 3'UTR to collapse
