@@ -219,7 +219,9 @@ pub fn load(
 
             // TODO: find a way to assert that pass.orphans.bed exists
             let orphans_cmd = format!(
-                " && {COLLAPSE} run --bed {} --extend --collapse-mode gapped-cds --outdir {} --name {} --U {} -u {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                " && sed -i '/#DU/d' {} && {COLLAPSE} run --bed {} --extend --collapse-mode gapped-cds --outdir {} --name {} --U {} -u {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                // INFO: sed
+                step_output_dir.join("orphans").join("pass.orphans.bed").display(), // INFO: inplace modification to remove #DU
                 // INFO: collapse
                 step_output_dir.join("orphans").join("pass.orphans.bed").display(),
                 step_output_dir.display(), // INFO: creates collapse/ by default
@@ -235,15 +237,15 @@ pub fn load(
             cmd = format!("{cmd}{orphans_cmd}");
         } else {
             cmd = format!(
-                "{COLLAPSE} run --bed {} --extend --collapse-mode gapped-cds --outdir {} --name {} -U {} -u {} && sed -i '/#DU/d' {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                "sed -i '/#DU/d' {} && {COLLAPSE} run --bed {} --extend --collapse-mode gapped-cds --outdir {} --name {} -U {} -u {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                // INFO: sed
+                input.display(), // INFO: inplace modification to remove #DU
                 // INFO: collapse
                 input.display(),
                 step_output_dir.display(), // INFO: creates collapse/ by default
                 basename.clone(), // INFO: e.g pass.bed
                 max_five_utr_len,
                 max_three_utr_len,
-                // INFO: sed
-                step_output_dir.join("collapsed").join(&basename).display(), // INFO: collapsed/pass.bed -> inplace modification
                 // INFO: bigbed
                 step_output_dir.join("collapsed").join(&basename).display(), // INFO: collapsed/pass.bed
                 chrom_sizes,
