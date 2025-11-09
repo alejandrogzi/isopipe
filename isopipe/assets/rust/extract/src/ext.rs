@@ -84,8 +84,13 @@ pub fn extract(args: ExtractArgs) {
         )
     });
 
-    let bed = unpack::<GenePred, _>(vec![args.bed.clone()], OverlapType::Exon, false)
-        .unwrap_or_else(|e| {
+    let overlap_type = match args.seq_mode {
+        SeqMode::CDS => OverlapType::CDS, // INFO: only in CDS mode bounds are thick start/end
+        SeqMode::Genome | SeqMode::Exon | SeqMode::Intron => OverlapType::Exon, // INFO: rest of modes follow normal exon bounds
+    };
+
+    let bed =
+        unpack::<GenePred, _>(vec![args.bed.clone()], overlap_type, false).unwrap_or_else(|e| {
             panic!(
                 "ERROR: could not unpack reads -> {}. {e}",
                 args.bed.display()
@@ -133,6 +138,7 @@ pub fn extract(args: ExtractArgs) {
                         writer_fa,
                         writer_bed,
                         &args.seq_mode,
+                        args.translate,
                     );
                 }
                 ExtractMode::Indexed => {
@@ -280,9 +286,9 @@ fn get_sequence(
             )
             .reverse_complement(),
         },
-
-        SeqMode::Exon => {
+        SeqMode::Exon | SeqMode::CDS => {
             // INFO: extract and concatenate exon sequences
+            // WARN: CDS is included here because coords are thick start/end
             let mut exonic_seq: Vec<u8> = Vec::with_capacity(transcript.exon_len as usize);
             for (exon_start, exon_end) in &transcript.exons {
                 match transcript.strand {
@@ -374,11 +380,18 @@ fn raw(
     mut writer_fa: BufWriter<File>,
     mut writer_bed: BufWriter<File>,
     seq_mode: &SeqMode,
+    translate: bool,
 ) {
     for tx in transcripts {
         let seq = get_sequence(genome, chr, &tx, seq_mode);
 
-        writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap();
+        if translate {
+            let seq = seq.translate();
+            writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap();
+        } else {
+            writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap();
+        }
+
         writeln!(writer_bed, "{}", tx.line).unwrap();
     }
 }
