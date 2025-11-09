@@ -219,7 +219,7 @@ pub fn load(
 
             // TODO: find a way to assert that pass.orphans.bed exists
             let orphans_cmd = format!(
-                " && sed -i '/#DU/d' {} && {COLLAPSE} run --bed {} --extend --collapse-mode gapped-cds --outdir {} --name {} --U {} -u {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                " && sed -i '/#DU/d' {} && {COLLAPSE} run --bed {} --extend --collapse-mode gapped-cds --outdir {} --name {} -U {} -u {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
                 // INFO: sed
                 step_output_dir.join("orphans").join("pass.orphans.bed").display(), // INFO: inplace modification to remove #DU
                 // INFO: collapse
