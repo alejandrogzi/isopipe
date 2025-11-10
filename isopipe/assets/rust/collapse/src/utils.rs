@@ -754,6 +754,9 @@ pub fn __write_collapsed<P: AsRef<Path> + Debug>(
                             .join(",");
 
                         line = format!("{}\t{}", line, tail);
+                    } else {
+                        // INFO: if empty, append empty string to make format compatible!
+                        line = format!("{}\tUNIQUE", line);
                     }
 
                     __write_line(&mut writer, &line);
