@@ -129,6 +129,8 @@ pub fn extract(args: ExtractArgs) {
 
             let chr = chunk_id.split(':').next().unwrap_or(&chunk_id);
 
+            log::info!("Extracting chunk {} from {}", chunk_id, chr);
+
             match mode {
                 ExtractMode::Raw => {
                     raw(
@@ -159,6 +161,8 @@ pub fn extract(args: ExtractArgs) {
             (chunk_fa, chunk_bed)
         })
         .collect();
+
+    log::info!("Extracted {} chunks", paths.len());
 
     if args.join {
         let basename = tmp_dir.join(
@@ -263,7 +267,7 @@ fn get_sequence(
     chr: &str,
     transcript: &GenePred,
     seq_mode: &SeqMode,
-) -> config::Sequence {
+) -> Result<config::Sequence, Box<dyn std::error::Error>> {
     let chr_seq = genome
         .get_mut(chr)
         .unwrap_or_else(|| panic!("ERROR: missing chromosome in .2bit -> {chr}"));
@@ -300,6 +304,14 @@ fn get_sequence(
                     Strand::Reverse => {
                         let start = (SCALE - *exon_end) as usize;
                         let end = (SCALE - *exon_start) as usize;
+
+                        if start > end {
+                            panic!(
+                                "ERROR: start > end in exon -> {}:{}-{} for {} with line -> {}",
+                                chr, start, end, transcript.name, transcript.line
+                            );
+                        }
+
                         let mut buf = chr_seq[start..end].to_vec();
                         __rev_complement_u8(&mut buf);
 
@@ -350,7 +362,7 @@ fn get_sequence(
         }
     };
 
-    seq
+    Ok(seq)
 }
 
 /// Writes extracted raw sequences and their corresponding BED lines to respective files.
@@ -383,16 +395,28 @@ fn raw(
     translate: bool,
 ) {
     for tx in transcripts {
-        let seq = get_sequence(genome, chr, &tx, seq_mode);
+        let seq = get_sequence(genome, chr, &tx, seq_mode)
+            .unwrap_or_else(|e| panic!("ERROR: could not get sequence from -> {:?}. {e}", tx));
 
         if translate {
             let seq = seq.translate();
-            writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap();
+            writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap_or_else(|e| {
+                panic!(
+                    "ERROR: could not write sequence to .fa from -> {:?}. {e}",
+                    tx
+                )
+            });
         } else {
-            writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap();
+            writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap_or_else(|e| {
+                panic!(
+                    "ERROR: could not write sequence to .fa from -> {:?}. {e}",
+                    tx
+                )
+            });
         }
 
-        writeln!(writer_bed, "{}", tx.line).unwrap();
+        writeln!(writer_bed, "{}", tx.line)
+            .unwrap_or_else(|e| panic!("ERROR: could not write line from -> {:?}. {e}", tx));
     }
 }
 
@@ -455,7 +479,8 @@ fn index(
 
     let mut count = 0usize;
     for tx in transcripts.iter_mut() {
-        let seq = get_sequence(genome, chr, tx, seq_mode);
+        let seq = get_sequence(genome, chr, tx, seq_mode)
+            .unwrap_or_else(|e| panic!("ERROR: could not get sequence from -> {:?}. {e}", tx));
         let key = seq.seq.as_bytes().to_vec();
         let encoded = encode_id(&tx.name);
 
