@@ -189,7 +189,7 @@ pub struct ExtractArgs {
     #[arg(
         short = 'Z',
         long = "icc",
-        help = "Output intron IC sequences in the format of name\tflank\tseq\tflank",
+        help = "Output intron IC sequences in the format of name-flank-seq-flank, tab-separated",
         value_name = "FLAG",
         action = ArgAction::SetTrue,
         requires = "split-extraction"

@@ -140,14 +140,11 @@ pub fn extract(args: ExtractArgs) {
                         writer_fa,
                         writer_bed,
                         &args.seq_mode,
-<<<<<<< HEAD
                         args.flank_upstream,
                         args.flank_downstream,
                         args.split_extraction,
                         args.intron_ic_output_fmt,
-=======
                         args.translate,
->>>>>>> refs/remotes/origin/master
                     );
                 }
                 ExtractMode::Indexed => {
@@ -277,13 +274,9 @@ fn get_sequence(
     chr: &str,
     transcript: &GenePred,
     seq_mode: &SeqMode,
-<<<<<<< HEAD
     flank_upstream: usize,
     flank_downstream: usize,
 ) -> config::Sequence {
-=======
-) -> Result<config::Sequence, Box<dyn std::error::Error>> {
->>>>>>> refs/remotes/origin/master
     let chr_seq = genome
         .get_mut(chr)
         .unwrap_or_else(|| panic!("ERROR: missing chromosome in .2bit -> {chr}"));
@@ -318,12 +311,8 @@ fn get_sequence(
                         exonic_seq.extend_from_slice(&chr_seq[start..end]);
                     }
                     Strand::Reverse => {
-<<<<<<< HEAD
                         let start = (SCALE - *exon_end) as usize - flank_upstream;
                         let end = (SCALE - *exon_start) as usize + flank_downstream;
-=======
-                        let start = (SCALE - *exon_end) as usize;
-                        let end = (SCALE - *exon_start) as usize;
 
                         if start > end {
                             panic!(
@@ -332,7 +321,6 @@ fn get_sequence(
                             );
                         }
 
->>>>>>> refs/remotes/origin/master
                         let mut buf = chr_seq[start..end].to_vec();
                         __rev_complement_u8(&mut buf);
 
@@ -381,13 +369,7 @@ fn get_sequence(
 
             intronic
         }
-<<<<<<< HEAD
     }
-=======
-    };
-
-    Ok(seq)
->>>>>>> refs/remotes/origin/master
 }
 
 fn get_split_sequence<'a>(
@@ -431,7 +413,7 @@ fn get_split_sequence<'a>(
             )],
         },
 
-        SeqMode::Exon => {
+        SeqMode::Exon | SeqMode::CDS => {
             // INFO: extract and return unconcatenated exon sequences
             let mut sequences: Vec<(String, Vec<u8>)> = Vec::with_capacity(transcript.exon_count);
             for (exon_idx, (exon_start, exon_end)) in transcript.exons.iter().enumerate() {
@@ -581,22 +563,34 @@ fn raw(
     mut writer_fa: BufWriter<File>,
     mut writer_bed: BufWriter<File>,
     seq_mode: &SeqMode,
-<<<<<<< HEAD
     flank_upstream: usize,
     flank_downstream: usize,
     split_extraction: bool,
     intron_ic_output_fmt: bool,
-=======
     translate: bool,
->>>>>>> refs/remotes/origin/master
 ) {
     let mut accumulator = HashMap::new();
     for tx in transcripts {
-<<<<<<< HEAD
         if !split_extraction {
             let seq = get_sequence(genome, chr, &tx, seq_mode, flank_upstream, flank_downstream);
 
-            writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap();
+            if translate {
+                let seq = seq.translate();
+                writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: could not write sequence to .fa from -> {:?}. {e}",
+                        tx
+                    )
+                });
+            } else {
+                writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: could not write sequence to .fa from -> {:?}. {e}",
+                        tx
+                    )
+                });
+            }
+
             writeln!(writer_bed, "{}", tx.line).unwrap();
         } else {
             // INFO: branch where each sequence is written separately [e.g. exon1, exon2, ...]
@@ -618,7 +612,17 @@ fn raw(
     if split_extraction {
         for (name, seq) in accumulator {
             if !intron_ic_output_fmt {
-                writeln!(writer_fa, ">{}\n{}", name, seq).unwrap();
+                if translate {
+                    let seq = seq.translate();
+                    writeln!(writer_fa, ">{}\n{}", name, seq).unwrap_or_else(|e| {
+                        panic!(
+                            "ERROR: could not write sequence to .fa from -> {:?}. {e}",
+                            name,
+                        )
+                    });
+                } else {
+                    writeln!(writer_fa, ">{}\n{}", name, seq).unwrap();
+                }
             } else {
                 writeln!(
                     writer_fa,
@@ -631,30 +635,6 @@ fn raw(
                 .unwrap();
             }
         }
-=======
-        let seq = get_sequence(genome, chr, &tx, seq_mode)
-            .unwrap_or_else(|e| panic!("ERROR: could not get sequence from -> {:?}. {e}", tx));
-
-        if translate {
-            let seq = seq.translate();
-            writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap_or_else(|e| {
-                panic!(
-                    "ERROR: could not write sequence to .fa from -> {:?}. {e}",
-                    tx
-                )
-            });
-        } else {
-            writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap_or_else(|e| {
-                panic!(
-                    "ERROR: could not write sequence to .fa from -> {:?}. {e}",
-                    tx
-                )
-            });
-        }
-
-        writeln!(writer_bed, "{}", tx.line)
-            .unwrap_or_else(|e| panic!("ERROR: could not write line from -> {:?}. {e}", tx));
->>>>>>> refs/remotes/origin/master
     }
 }
 
@@ -705,7 +685,7 @@ fn index(
     no_reduced_bed: bool,
     flank_upstream: usize,
     flank_downstream: usize,
-    split_extraction: bool,
+    _split_extraction: bool,
 ) {
     let mut mapper = HashMap::new();
 
@@ -720,12 +700,7 @@ fn index(
 
     let mut count = 0usize;
     for tx in transcripts.iter_mut() {
-<<<<<<< HEAD
         let seq = get_sequence(genome, chr, tx, seq_mode, flank_upstream, flank_downstream);
-=======
-        let seq = get_sequence(genome, chr, tx, seq_mode)
-            .unwrap_or_else(|e| panic!("ERROR: could not get sequence from -> {:?}. {e}", tx));
->>>>>>> refs/remotes/origin/master
         let key = seq.seq.as_bytes().to_vec();
         let encoded = encode_id(&tx.name);
 
