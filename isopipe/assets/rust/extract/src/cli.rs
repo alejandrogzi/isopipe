@@ -149,6 +149,43 @@ pub struct ExtractArgs {
         action = ArgAction::SetTrue,
     )]
     pub no_reduced_bed: bool,
+
+    #[arg(
+        short = 'u',
+        long = "flank-upstream",
+        help = "Flank upstream in bp",
+        value_name = "VALUE",
+        default_value("0")
+    )]
+    pub flank_upstream: usize,
+
+    #[arg(
+        short = 'd',
+        long = "flank-downstream",
+        help = "Flank downstream in bp",
+        value_name = "VALUE",
+        default_value("0")
+    )]
+    pub flank_downstream: usize,
+
+    #[arg(
+        short = 'K',
+        long = "split-extraction",
+        help = "Split extracted sequences as individual components (each exon or each intron)",
+        value_name = "FLAG",
+        action = ArgAction::SetTrue,
+    )]
+    pub split_extraction: bool,
+
+    #[arg(
+        short = 'Z',
+        long = "icc",
+        help = "Output intron IC sequences in the format of name\tflank\tseq\tflank",
+        value_name = "FLAG",
+        action = ArgAction::SetTrue,
+        requires = "split-extraction"
+    )]
+    pub intron_ic_output_fmt: bool,
 }
 
 #[derive(ValueEnum, Clone, Debug)]

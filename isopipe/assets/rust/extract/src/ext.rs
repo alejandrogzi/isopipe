@@ -23,7 +23,7 @@ use rayon::prelude::*;
 use std::collections::{HashMap, hash_map::Entry};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::cli::{ExtractArgs, SeqMode};
 
@@ -133,6 +133,10 @@ pub fn extract(args: ExtractArgs) {
                         writer_fa,
                         writer_bed,
                         &args.seq_mode,
+                        args.flank_upstream,
+                        args.flank_downstream,
+                        args.split_extraction,
+                        args.intron_ic_output_fmt,
                     );
                 }
                 ExtractMode::Indexed => {
@@ -146,6 +150,9 @@ pub fn extract(args: ExtractArgs) {
                         writer_bed,
                         &args.seq_mode,
                         args.no_reduced_bed,
+                        args.flank_upstream,
+                        args.flank_downstream,
+                        args.split_extraction,
                     );
                 }
             }
@@ -257,6 +264,8 @@ fn get_sequence(
     chr: &str,
     transcript: &GenePred,
     seq_mode: &SeqMode,
+    flank_upstream: usize,
+    flank_downstream: usize,
 ) -> config::Sequence {
     let chr_seq = genome
         .get_mut(chr)
@@ -270,7 +279,7 @@ fn get_sequence(
         transcript.strand
     );
 
-    let seq = match seq_mode {
+    match seq_mode {
         SeqMode::Genome => match transcript.strand {
             Strand::Forward => {
                 Sequence::new(&chr_seq[transcript.start as usize..transcript.end as usize])
@@ -287,13 +296,13 @@ fn get_sequence(
             for (exon_start, exon_end) in &transcript.exons {
                 match transcript.strand {
                     Strand::Forward => {
-                        let start = *exon_start as usize;
-                        let end = *exon_end as usize;
+                        let start = *exon_start as usize - flank_upstream;
+                        let end = *exon_end as usize + flank_downstream;
                         exonic_seq.extend_from_slice(&chr_seq[start..end]);
                     }
                     Strand::Reverse => {
-                        let start = (SCALE - *exon_end) as usize;
-                        let end = (SCALE - *exon_start) as usize;
+                        let start = (SCALE - *exon_end) as usize - flank_upstream;
+                        let end = (SCALE - *exon_start) as usize + flank_downstream;
                         let mut buf = chr_seq[start..end].to_vec();
                         __rev_complement_u8(&mut buf);
 
@@ -322,13 +331,13 @@ fn get_sequence(
             for (intron_start, intron_end) in &transcript.introns {
                 match transcript.strand {
                     Strand::Forward => {
-                        let start = *intron_start as usize;
-                        let end = *intron_end as usize;
+                        let start = *intron_start as usize - flank_upstream;
+                        let end = *intron_end as usize + flank_downstream;
                         intronic_seq.extend_from_slice(&chr_seq[start..end]);
                     }
                     Strand::Reverse => {
-                        let start = (SCALE - *intron_end) as usize;
-                        let end = (SCALE - *intron_start) as usize;
+                        let start = (SCALE - *intron_end) as usize - flank_upstream;
+                        let end = (SCALE - *intron_start) as usize + flank_downstream;
                         let mut buf = chr_seq[start..end].to_vec();
                         __rev_complement_u8(&mut buf);
 
@@ -342,11 +351,172 @@ fn get_sequence(
 
             intronic
         }
-    };
-
-    seq
+    }
 }
 
+fn get_split_sequence<'a>(
+    genome: &DashMap<String, Vec<u8>>,
+    chr: &str,
+    transcript: &GenePred,
+    seq_mode: &SeqMode,
+    flank_upstream: usize,
+    flank_downstream: usize,
+) -> Vec<(String, config::Sequence)> {
+    let chr_seq = genome
+        .get_mut(chr)
+        .unwrap_or_else(|| panic!("ERROR: missing chromosome in .2bit -> {chr}"));
+
+    log::debug!(
+        "DEBUG: extracting {seq_mode:?} sequence for {}:{}-{} ({:?})",
+        chr,
+        transcript.start,
+        transcript.end,
+        transcript.strand
+    );
+
+    match seq_mode {
+        // WARN: not sure if SeqMode::Genome should available in this case
+        // WARN: would make sense if we expose some flag to split genome in
+        // k sizes
+        SeqMode::Genome => match transcript.strand {
+            Strand::Forward => {
+                vec![(
+                    chr.to_string(),
+                    Sequence::new(&chr_seq[transcript.start as usize..transcript.end as usize]),
+                )]
+            }
+            Strand::Reverse => vec![(
+                chr.to_string(),
+                Sequence::new(
+                    &chr_seq
+                        [(SCALE - transcript.end) as usize..(SCALE - transcript.start) as usize],
+                )
+                .reverse_complement(),
+            )],
+        },
+
+        SeqMode::Exon => {
+            // INFO: extract and return unconcatenated exon sequences
+            let mut sequences: Vec<(String, Vec<u8>)> = Vec::with_capacity(transcript.exon_count);
+            for (exon_idx, (exon_start, exon_end)) in transcript.exons.iter().enumerate() {
+                match transcript.strand {
+                    Strand::Forward => {
+                        let start = *exon_start as usize;
+                        let end = *exon_end as usize + flank_downstream;
+                        let exon_sequence =
+                            chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
+                        let exon_name = format!(
+                            "{}:{}-{}({})#E{}#UP{}#DO{}",
+                            chr,
+                            start,
+                            end,
+                            transcript.strand,
+                            exon_idx,
+                            flank_upstream,
+                            flank_downstream
+                        );
+                        sequences.push((exon_name, exon_sequence));
+                    }
+                    Strand::Reverse => {
+                        let start = (SCALE - *exon_end) as usize;
+                        let end = (SCALE - *exon_start) as usize;
+                        let mut buf =
+                            chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
+                        let exon_name = format!(
+                            "{}:{}-{}({})#E{}#UP{}#DO{}",
+                            chr,
+                            start,
+                            end,
+                            transcript.strand,
+                            exon_idx,
+                            flank_upstream,
+                            flank_downstream
+                        );
+                        __rev_complement_u8(&mut buf);
+
+                        log::debug!(
+                            "DEBUG: reversing exon seq -> {}:{}-{} ({})",
+                            chr,
+                            start,
+                            end,
+                            Sequence::new(&buf)
+                        );
+
+                        sequences.push((exon_name, buf));
+                    }
+                }
+            }
+
+            let exon_sequences = sequences
+                .into_iter()
+                .map(|(name, seq)| (name, Sequence::new(&seq)))
+                .collect::<Vec<(String, Sequence)>>();
+
+            log::debug!(
+                "DEBUG: extracted unconcatenated exonic seq -> {:?}",
+                exon_sequences
+            );
+
+            exon_sequences
+        }
+
+        SeqMode::Intron => {
+            // INFO: extract and return unconcatenated intronic sequences
+            let mut sequences: Vec<(String, Vec<u8>)> =
+                Vec::with_capacity(transcript.exon_count - 1); // INFO: introns = exons - 1
+            for (idx, (intron_start, intron_end)) in transcript.introns.iter().enumerate() {
+                match transcript.strand {
+                    Strand::Forward => {
+                        let start = *intron_start as usize - 1;
+                        let end = *intron_end as usize + 1;
+                        let seq = chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
+                        let name = format!(
+                            "{}:{}-{}({})#I{}#UP{}#DO{}",
+                            chr,
+                            start,
+                            end,
+                            transcript.strand,
+                            idx,
+                            flank_upstream,
+                            flank_downstream
+                        );
+                        sequences.push((name, seq));
+                    }
+                    Strand::Reverse => {
+                        let start = (SCALE - *intron_end) as usize - 1;
+                        let end = (SCALE - *intron_start) as usize + 1;
+                        let mut buf =
+                            chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
+                        let name = format!(
+                            "{}:{}-{}({})#I{}#UP{}#DO{}",
+                            chr,
+                            start,
+                            end,
+                            transcript.strand,
+                            idx,
+                            flank_upstream,
+                            flank_downstream
+                        );
+                        __rev_complement_u8(&mut buf);
+                        sequences.push((name, buf));
+                    }
+                }
+            }
+
+            let intron_sequences = sequences
+                .into_iter()
+                .map(|(name, seq)| (name, Sequence::new(&seq)))
+                .collect::<Vec<(String, Sequence)>>();
+
+            log::debug!(
+                "DEBUG: extracted unconcatenated intronic seq -> {:?}",
+                intron_sequences
+            );
+
+            intron_sequences
+        }
+    }
+}
 /// Writes extracted raw sequences and their corresponding BED lines to respective files.
 ///
 /// This function iterates through a vector of `GenePred` transcripts. For each transcript,
@@ -367,6 +537,7 @@ fn get_sequence(
 /// This function will panic if:
 /// - It fails to write to `writer_fa` or `writer_bed`.
 /// - The `get_sequence` function panics (e.g., due to a missing chromosome).
+#[allow(clippy::too_many_arguments)]
 fn raw(
     transcripts: Vec<GenePred>,
     genome: &DashMap<String, Vec<u8>>,
@@ -374,12 +545,51 @@ fn raw(
     mut writer_fa: BufWriter<File>,
     mut writer_bed: BufWriter<File>,
     seq_mode: &SeqMode,
+    flank_upstream: usize,
+    flank_downstream: usize,
+    split_extraction: bool,
+    intron_ic_output_fmt: bool,
 ) {
+    let mut accumulator = HashMap::new();
     for tx in transcripts {
-        let seq = get_sequence(genome, chr, &tx, seq_mode);
+        if !split_extraction {
+            let seq = get_sequence(genome, chr, &tx, seq_mode, flank_upstream, flank_downstream);
 
-        writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap();
-        writeln!(writer_bed, "{}", tx.line).unwrap();
+            writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap();
+            writeln!(writer_bed, "{}", tx.line).unwrap();
+        } else {
+            // INFO: branch where each sequence is written separately [e.g. exon1, exon2, ...]
+            let seqs =
+                get_split_sequence(genome, chr, &tx, seq_mode, flank_upstream, flank_downstream);
+
+            for (name, seq) in seqs {
+                // writeln!(writer_fa, ">{}\n{}", name, seq).unwrap();
+                match accumulator.entry(name) {
+                    Entry::Vacant(v) => {
+                        v.insert(seq);
+                    }
+                    Entry::Occupied(_) => {}
+                }
+            }
+        }
+    }
+
+    if split_extraction {
+        for (name, seq) in accumulator {
+            if !intron_ic_output_fmt {
+                writeln!(writer_fa, ">{}\n{}", name, seq).unwrap();
+            } else {
+                writeln!(
+                    writer_fa,
+                    "{}\t{}\t{}\t{}",
+                    name,
+                    seq.slice_as_seq(0, flank_upstream),
+                    seq.slice_as_seq(flank_upstream, seq.len() - flank_downstream),
+                    seq.slice_as_seq(seq.len() - flank_downstream, seq.len())
+                )
+                .unwrap();
+            }
+        }
     }
 }
 
@@ -422,12 +632,15 @@ fn index(
     mut transcripts: Vec<GenePred>,
     genome: &DashMap<String, Vec<u8>>,
     chr: &str,
-    path: &PathBuf,
+    path: &Path,
     chunk_id: &String,
     mut writer_fa: BufWriter<File>,
     mut writer_bed: BufWriter<File>,
     seq_mode: &SeqMode,
     no_reduced_bed: bool,
+    flank_upstream: usize,
+    flank_downstream: usize,
+    split_extraction: bool,
 ) {
     let mut mapper = HashMap::new();
 
@@ -442,7 +655,7 @@ fn index(
 
     let mut count = 0usize;
     for tx in transcripts.iter_mut() {
-        let seq = get_sequence(genome, chr, tx, seq_mode);
+        let seq = get_sequence(genome, chr, tx, seq_mode, flank_upstream, flank_downstream);
         let key = seq.seq.as_bytes().to_vec();
         let encoded = encode_id(&tx.name);
 
