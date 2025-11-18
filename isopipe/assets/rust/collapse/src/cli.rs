@@ -99,15 +99,6 @@ pub struct RunArgs {
     pub collapse_mode: CollapseMode,
 
     #[arg(
-        short = 'M',
-        long = "merge",
-        help = "Flag to activate merging on perturbed queues and create artificial reads",
-        value_name = "FLAG",
-        action = ArgAction::SetTrue,
-    )]
-    pub merge: bool,
-
-    #[arg(
         short = 'o',
         long = "outdir",
         help = "Path to output directory (/collapse)",
@@ -126,6 +117,24 @@ pub struct RunArgs {
         default_value = "collapsed.bed"
     )]
     pub name: String,
+
+    #[arg(
+        short = 'U',
+        long = "max-five-utr-length",
+        help = "Maximum 5'UTR distance between queues to allow collapsing reads in bp",
+        value_name = "INT",
+        default_value = "50"
+    )]
+    pub max_five_utr_length: u32,
+
+    #[arg(
+        short = 'u',
+        long = "max-three-utr-length",
+        help = "Maximum 3'UTR distance between queues to allow collapsing reads in bp",
+        value_name = "INT",
+        default_value = "500"
+    )]
+    pub max_three_utr_length: u32,
 }
 
 #[derive(Parser, Debug)]

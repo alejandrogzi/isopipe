@@ -52,6 +52,8 @@ pub const TARGET: &str = "target";
 pub const WEB: &str = "web";
 pub const MAX_ORF_PREDICTIONS: &str = "max_predictions";
 pub const MAX_ORF_PRED_THRESHOLD: &str = "max_pred_threshold";
+pub const MAX_FIVE_UTR_LEN: &str = "max_five_utr_len";
+pub const MAX_THREE_UTR_LEN: &str = "max_three_utr_len";
 
 // project-wide pub const | names
 pub const ISOPIPE: &str = "isopipe";

@@ -1,6 +1,6 @@
 [package]
 name = "collapse"
-version = "0.0.3"
+version = "0.0.4"
 authors = ["alejandrogzi <alejandrxgzi@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -19,6 +19,7 @@ num_cpus = "1.16.0"
 rayon = "1.8.1"
 once_cell = "1.21.3"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+dashmap = "5.5.3"
 
 [profile.release]
 lto = true

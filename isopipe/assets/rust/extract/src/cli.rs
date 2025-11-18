@@ -116,7 +116,7 @@ pub struct ExtractArgs {
         short = 's',
         long = "sequence-mode",
         required = false,
-        help = "Sequence extraction mode [whole sequence, exon, intron]",
+        help = "Sequence extraction mode [whole sequence, exon, intron, cds]",
         value_name = "MODE",
         default_value("exon")
     )]
@@ -140,6 +140,15 @@ pub struct ExtractArgs {
         action = ArgAction::SetTrue,
     )]
     pub join: bool,
+
+    #[arg(
+        short = 'X',
+        long = "translate",
+        help = "Flag to translate the sequences to amino acids",
+        value_name = "FLAG",
+        action = ArgAction::SetTrue,
+    )]
+    pub translate: bool,
 
     #[arg(
         short = 'N',
@@ -196,6 +205,8 @@ pub enum SeqMode {
     Exon,
     #[value(name = "intron", alias = "i")]
     Intron,
+    #[value(name = "cds", alias = "c")]
+    CDS,
 }
 
 #[derive(Debug, Parser)]

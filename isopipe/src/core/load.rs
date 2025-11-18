@@ -69,6 +69,8 @@ pub fn load(
         .parse::<bool>()
         .unwrap_or(false);
     let toga = config.get_step_custom_field(step, TOGA);
+    let max_five_utr_len = config.get_step_custom_field(step, MAX_FIVE_UTR_LEN);
+    let max_three_utr_len = config.get_step_custom_field(step, MAX_THREE_UTR_LEN);
 
     let package = config.get_package_from_step(step);
 
@@ -188,11 +190,13 @@ pub fn load(
             );
 
             // INFO: running collapse and bb on non-dups
-            cmd = format!("{cmd} && {COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+            cmd = format!("{cmd} && {COLLAPSE} run --bed {} --extend --collapse-mode gapped-cds --outdir {} --name {} -U {} -u {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
                 // INFO: collapse
                 step_output_dir.join("orphans").join("best.pass.orphan_free.bed").display(), // INFO: orphan free output -> pass_orphan_free.bed
                 step_output_dir.display(), // INFO: creates collapse/ by default
                 basename.clone(), // INFO: e.g pass.bed -> will force output to be collapsed/pass.bed
+                max_five_utr_len,
+                max_three_utr_len,
                 // INFO: bigbed
                 step_output_dir.join("collapsed").join(&basename).display(), // INFO: collapsed/pass.bed
                 chrom_sizes,
@@ -200,11 +204,13 @@ pub fn load(
             );
 
             // INFO: running collapse and bb on dups
-            cmd = format!("{cmd} && {COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+            cmd = format!("{cmd} && {COLLAPSE} run --bed {} --extend --collapse-mode gapped-cds --outdir {} --name {} -U {} -u {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
                 // INFO: collapse
                 step_output_dir.join("orphans").join("dup.pass.orphan_free.bed").display(), // INFO: orphan free output -> pass_orphan_free.bed
                 step_output_dir.display(), // INFO: creates collapse/ by default
                 "duplicates.bed", // INFO: e.g pass.bed -> will force output to be collapsed/duplicates.bed
+                max_five_utr_len,
+                max_three_utr_len,
                 // INFO: bigbed
                 step_output_dir.join("collapsed").join("duplicates.bed").display(), // INFO: collapsed/pass.bed
                 chrom_sizes,
@@ -213,11 +219,15 @@ pub fn load(
 
             // TODO: find a way to assert that pass.orphans.bed exists
             let orphans_cmd = format!(
-                " && {COLLAPSE} run --bed {} --extend --outdir {} --name {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                " && sed -i '/#DU/d' {} && {COLLAPSE} run --bed {} --extend --collapse-mode gapped-cds --outdir {} --name {} -U {} -u {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                // INFO: sed
+                step_output_dir.join("orphans").join("pass.orphans.bed").display(), // INFO: inplace modification to remove #DU
                 // INFO: collapse
                 step_output_dir.join("orphans").join("pass.orphans.bed").display(),
                 step_output_dir.display(), // INFO: creates collapse/ by default
                 "orphans.bed", // INFO: will force output to be collapsed/orphans.bed
+                max_five_utr_len,
+                max_three_utr_len,
                 // INFO: bigbed
                 step_output_dir.join("collapsed").join("orphans.bed").display(), // INFO: collapsed/orphans.bed
                 chrom_sizes,
@@ -227,13 +237,15 @@ pub fn load(
             cmd = format!("{cmd}{orphans_cmd}");
         } else {
             cmd = format!(
-                "{COLLAPSE} run --bed {} --extend --outdir {} --name {} && sed -i '/#DU/d' {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                "sed -i '/#DU/d' {} && {COLLAPSE} run --bed {} --extend --collapse-mode gapped-cds --outdir {} --name {} -U {} -u {} && {BED_TO_BIG_BED} -tab -sort -extraIndex=name -as={SCHEMA} -type={BB_TYPE} {} {} {}",
+                // INFO: sed
+                input.display(), // INFO: inplace modification to remove #DU
                 // INFO: collapse
                 input.display(),
                 step_output_dir.display(), // INFO: creates collapse/ by default
                 basename.clone(), // INFO: e.g pass.bed
-                // INFO: sed
-                step_output_dir.join("collapsed").join(&basename).display(), // INFO: collapsed/pass.bed -> inplace modification
+                max_five_utr_len,
+                max_three_utr_len,
                 // INFO: bigbed
                 step_output_dir.join("collapsed").join(&basename).display(), // INFO: collapsed/pass.bed
                 chrom_sizes,

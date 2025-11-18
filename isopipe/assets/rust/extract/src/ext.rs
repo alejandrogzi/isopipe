@@ -84,8 +84,13 @@ pub fn extract(args: ExtractArgs) {
         )
     });
 
-    let bed = unpack::<GenePred, _>(vec![args.bed.clone()], OverlapType::Exon, false)
-        .unwrap_or_else(|e| {
+    let overlap_type = match args.seq_mode {
+        SeqMode::CDS => OverlapType::CDS, // INFO: only in CDS mode bounds are thick start/end
+        SeqMode::Genome | SeqMode::Exon | SeqMode::Intron => OverlapType::Exon, // INFO: rest of modes follow normal exon bounds
+    };
+
+    let bed =
+        unpack::<GenePred, _>(vec![args.bed.clone()], overlap_type, false).unwrap_or_else(|e| {
             panic!(
                 "ERROR: could not unpack reads -> {}. {e}",
                 args.bed.display()
@@ -124,6 +129,8 @@ pub fn extract(args: ExtractArgs) {
 
             let chr = chunk_id.split(':').next().unwrap_or(&chunk_id);
 
+            log::info!("Extracting chunk {} from {}", chunk_id, chr);
+
             match mode {
                 ExtractMode::Raw => {
                     raw(
@@ -133,10 +140,14 @@ pub fn extract(args: ExtractArgs) {
                         writer_fa,
                         writer_bed,
                         &args.seq_mode,
+<<<<<<< HEAD
                         args.flank_upstream,
                         args.flank_downstream,
                         args.split_extraction,
                         args.intron_ic_output_fmt,
+=======
+                        args.translate,
+>>>>>>> refs/remotes/origin/master
                     );
                 }
                 ExtractMode::Indexed => {
@@ -160,6 +171,8 @@ pub fn extract(args: ExtractArgs) {
             (chunk_fa, chunk_bed)
         })
         .collect();
+
+    log::info!("Extracted {} chunks", paths.len());
 
     if args.join {
         let basename = tmp_dir.join(
@@ -264,9 +277,13 @@ fn get_sequence(
     chr: &str,
     transcript: &GenePred,
     seq_mode: &SeqMode,
+<<<<<<< HEAD
     flank_upstream: usize,
     flank_downstream: usize,
 ) -> config::Sequence {
+=======
+) -> Result<config::Sequence, Box<dyn std::error::Error>> {
+>>>>>>> refs/remotes/origin/master
     let chr_seq = genome
         .get_mut(chr)
         .unwrap_or_else(|| panic!("ERROR: missing chromosome in .2bit -> {chr}"));
@@ -289,9 +306,9 @@ fn get_sequence(
             )
             .reverse_complement(),
         },
-
-        SeqMode::Exon => {
+        SeqMode::Exon | SeqMode::CDS => {
             // INFO: extract and concatenate exon sequences
+            // WARN: CDS is included here because coords are thick start/end
             let mut exonic_seq: Vec<u8> = Vec::with_capacity(transcript.exon_len as usize);
             for (exon_start, exon_end) in &transcript.exons {
                 match transcript.strand {
@@ -301,8 +318,21 @@ fn get_sequence(
                         exonic_seq.extend_from_slice(&chr_seq[start..end]);
                     }
                     Strand::Reverse => {
+<<<<<<< HEAD
                         let start = (SCALE - *exon_end) as usize - flank_upstream;
                         let end = (SCALE - *exon_start) as usize + flank_downstream;
+=======
+                        let start = (SCALE - *exon_end) as usize;
+                        let end = (SCALE - *exon_start) as usize;
+
+                        if start > end {
+                            panic!(
+                                "ERROR: start > end in exon -> {}:{}-{} for {} with line -> {}",
+                                chr, start, end, transcript.name, transcript.line
+                            );
+                        }
+
+>>>>>>> refs/remotes/origin/master
                         let mut buf = chr_seq[start..end].to_vec();
                         __rev_complement_u8(&mut buf);
 
@@ -351,7 +381,13 @@ fn get_sequence(
 
             intronic
         }
+<<<<<<< HEAD
     }
+=======
+    };
+
+    Ok(seq)
+>>>>>>> refs/remotes/origin/master
 }
 
 fn get_split_sequence<'a>(
@@ -545,13 +581,18 @@ fn raw(
     mut writer_fa: BufWriter<File>,
     mut writer_bed: BufWriter<File>,
     seq_mode: &SeqMode,
+<<<<<<< HEAD
     flank_upstream: usize,
     flank_downstream: usize,
     split_extraction: bool,
     intron_ic_output_fmt: bool,
+=======
+    translate: bool,
+>>>>>>> refs/remotes/origin/master
 ) {
     let mut accumulator = HashMap::new();
     for tx in transcripts {
+<<<<<<< HEAD
         if !split_extraction {
             let seq = get_sequence(genome, chr, &tx, seq_mode, flank_upstream, flank_downstream);
 
@@ -590,6 +631,30 @@ fn raw(
                 .unwrap();
             }
         }
+=======
+        let seq = get_sequence(genome, chr, &tx, seq_mode)
+            .unwrap_or_else(|e| panic!("ERROR: could not get sequence from -> {:?}. {e}", tx));
+
+        if translate {
+            let seq = seq.translate();
+            writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap_or_else(|e| {
+                panic!(
+                    "ERROR: could not write sequence to .fa from -> {:?}. {e}",
+                    tx
+                )
+            });
+        } else {
+            writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap_or_else(|e| {
+                panic!(
+                    "ERROR: could not write sequence to .fa from -> {:?}. {e}",
+                    tx
+                )
+            });
+        }
+
+        writeln!(writer_bed, "{}", tx.line)
+            .unwrap_or_else(|e| panic!("ERROR: could not write line from -> {:?}. {e}", tx));
+>>>>>>> refs/remotes/origin/master
     }
 }
 
@@ -655,7 +720,12 @@ fn index(
 
     let mut count = 0usize;
     for tx in transcripts.iter_mut() {
+<<<<<<< HEAD
         let seq = get_sequence(genome, chr, tx, seq_mode, flank_upstream, flank_downstream);
+=======
+        let seq = get_sequence(genome, chr, tx, seq_mode)
+            .unwrap_or_else(|e| panic!("ERROR: could not get sequence from -> {:?}. {e}", tx));
+>>>>>>> refs/remotes/origin/master
         let key = seq.seq.as_bytes().to_vec();
         let encoded = encode_id(&tx.name);
 

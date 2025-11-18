@@ -1,7 +1,7 @@
-use config::{CHUNK_SIZE, FUSION_FAKES, FUSION_FREE, FUSION_REVIEW};
+use config::{FUSION_FAKES, FUSION_FREE, FUSION_REVIEW};
 use iso_polya::{
     cli::AparentArgs,
-    core::apa::{calculate_polya, write_bed, RAM_PER_SITE},
+    core::apa::{calculate_polya, write_bed},
 };
 use packbed::par_reader;
 
