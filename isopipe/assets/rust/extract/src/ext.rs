@@ -13,14 +13,14 @@
 //! simple integers map to read identifiers [all of them as plain bytes].
 //! The process is heavily parallelized to offer fast performance on large datasets.
 
-use config::{OverlapType, SCALE, Sequence, Strand};
+use config::{OverlapType, Sequence, Strand, SCALE};
 use dashmap::DashMap;
 use iso_polya::utils::get_sequences;
 use log::debug;
-use packbed::{GenePred, unpack};
+use packbed::{unpack, GenePred};
 use rayon::prelude::*;
 
-use std::collections::{HashMap, hash_map::Entry};
+use std::collections::{hash_map::Entry, HashMap};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
@@ -416,7 +416,7 @@ fn get_split_sequence<'a>(
         SeqMode::Exon | SeqMode::CDS => {
             // INFO: extract and return unconcatenated exon sequences
             let mut sequences: Vec<(String, Vec<u8>)> = Vec::with_capacity(transcript.exon_count);
-            for (exon_idx, (exon_start, exon_end)) in transcript.exons.iter().enumerate() {
+            for (_exon_idx, (exon_start, exon_end)) in transcript.exons.iter().enumerate() {
                 match transcript.strand {
                     Strand::Forward => {
                         let start = *exon_start as usize;
@@ -424,14 +424,15 @@ fn get_split_sequence<'a>(
                         let exon_sequence =
                             chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
                         let exon_name = format!(
-                            "{}:{}-{}({})#E{}#UP{}#DO{}",
+                            // "{}:{}-{}({})#E{}#UP{}#DO{}",
+                            "{}:{}-{}({})",
                             chr,
                             start,
                             end,
                             transcript.strand,
-                            exon_idx,
-                            flank_upstream,
-                            flank_downstream
+                            // exon_idx,
+                            // flank_upstream,
+                            // flank_downstream
                         );
                         sequences.push((exon_name, exon_sequence));
                     }
@@ -441,14 +442,15 @@ fn get_split_sequence<'a>(
                         let mut buf =
                             chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
                         let exon_name = format!(
-                            "{}:{}-{}({})#E{}#UP{}#DO{}",
+                            // "{}:{}-{}({})#E{}#UP{}#DO{}",
+                            "{}:{}-{}({})",
                             chr,
                             start,
                             end,
                             transcript.strand,
-                            exon_idx,
-                            flank_upstream,
-                            flank_downstream
+                            // exon_idx,
+                            // flank_upstream,
+                            // flank_downstream
                         );
                         __rev_complement_u8(&mut buf);
 
@@ -482,21 +484,22 @@ fn get_split_sequence<'a>(
             // INFO: extract and return unconcatenated intronic sequences
             let mut sequences: Vec<(String, Vec<u8>)> =
                 Vec::with_capacity(transcript.exon_count - 1); // INFO: introns = exons - 1
-            for (idx, (intron_start, intron_end)) in transcript.introns.iter().enumerate() {
+            for (_idx, (intron_start, intron_end)) in transcript.introns.iter().enumerate() {
                 match transcript.strand {
                     Strand::Forward => {
                         let start = *intron_start as usize - 1;
                         let end = *intron_end as usize + 1;
                         let seq = chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
                         let name = format!(
-                            "{}:{}-{}({})#I{}#UP{}#DO{}",
+                            // "{}:{}-{}({})#I{}#UP{}#DO{}",
+                            "{}:{}-{}({})",
                             chr,
                             start,
                             end,
                             transcript.strand,
-                            idx,
-                            flank_upstream,
-                            flank_downstream
+                            // idx,
+                            // flank_upstream,
+                            // flank_downstream
                         );
                         sequences.push((name, seq));
                     }
@@ -506,14 +509,15 @@ fn get_split_sequence<'a>(
                         let mut buf =
                             chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
                         let name = format!(
-                            "{}:{}-{}({})#I{}#UP{}#DO{}",
+                            // "{}:{}-{}({})#I{}#UP{}#DO{}",
+                            "{}:{}-{}({})",
                             chr,
                             start,
                             end,
                             transcript.strand,
-                            idx,
-                            flank_upstream,
-                            flank_downstream
+                            // idx,
+                            // flank_upstream,
+                            // flank_downstream
                         );
                         __rev_complement_u8(&mut buf);
                         sequences.push((name, buf));
