@@ -2003,7 +2003,7 @@ pub fn maybe_cat(paths: &[PathBuf], target: impl AsRef<std::path::Path> + std::f
 /// // Clean up the temporary directory
 /// temp_dir.close().unwrap();
 /// ```
-pub fn scan_dir(dir: &PathBuf, extension: &str) -> Vec<PathBuf> {
+pub fn scan_dir(dir: &PathBuf, extension: &str) -> Option<Vec<PathBuf>> {
     if !dir.exists() {
         log::error!("ERROR: directory {} does not exist!", dir.display());
         std::process::exit(1);
@@ -2026,20 +2026,21 @@ pub fn scan_dir(dir: &PathBuf, extension: &str) -> Vec<PathBuf> {
         .collect::<Vec<_>>();
 
     if files.is_empty() {
-        log::error!(
-            "ERROR: could not find any .bed under parts/ in {}!",
+        log::warn!(
+            "WARN: could not find any file with extension {extension:?} in {}!",
             dir.display()
         );
-        std::process::exit(1);
+
+        None
     } else {
         log::info!(
             "INFO: found {} files in {} with extension {extension:?}",
             files.len(),
             dir.display()
         );
-    }
 
-    files
+        Some(files)
+    }
 }
 
 /// Moves files from one directory to another

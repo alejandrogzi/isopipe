@@ -164,7 +164,13 @@ pub fn merge(input_dir: &PathBuf, config: &Config, step: &PipelineStep) {
     if input_dir.join(POLYA_PARTS).exists() {
         log::info!("INFO [MERGE]: chunked directory found, merging parts...");
 
-        let files = scan_dir(&input_dir.join(POLYA_PARTS), BED);
+        let files = scan_dir(&input_dir.join(POLYA_PARTS), BED).unwrap_or_else(|| {
+            log::error!(
+                "ERROR: could not find any files with extension {BED:?} in {}!",
+                input_dir.join(POLYA_PARTS).display()
+            );
+            std::process::exit(1);
+        });
 
         // INFO: partition paths into their respective categories
         let (singletons, accepts, rejections): (Vec<_>, Vec<_>, Vec<_>) = files.into_iter().fold(
@@ -219,7 +225,13 @@ pub fn merge(input_dir: &PathBuf, config: &Config, step: &PipelineStep) {
             input_dir.display()
         );
 
-        let files = scan_dir(input_dir, BED);
+        let files = scan_dir(input_dir, BED).unwrap_or_else(|| {
+            log::error!(
+                "ERROR: could not find any files with extension {BED:?} in {}!",
+                input_dir.display()
+            );
+            std::process::exit(1);
+        });
         log::debug!("DEBUG: collected all .bed types -> {files:?}");
 
         log::warn!(

@@ -147,7 +147,13 @@ pub fn ccs(
 /// __join_ccs_reports(&ccs_output_dir, &prefix, &keep_temp);
 /// ```
 pub fn __join_ccs_reports(ccs_output_dir: &Path, prefix: &str, keep_temp: bool) {
-    let reports = scan_dir(&ccs_output_dir.to_path_buf(), "txt");
+    let reports = scan_dir(&ccs_output_dir.to_path_buf(), "txt").unwrap_or_else(|| {
+        log::error!(
+            "ERROR: could not find any files with extension .txt in {}!",
+            ccs_output_dir.display()
+        );
+        std::process::exit(1);
+    });
     let mut accumulator: HashMap<String, u64> = HashMap::new();
 
     let out_reports = ccs_output_dir.join("reports");

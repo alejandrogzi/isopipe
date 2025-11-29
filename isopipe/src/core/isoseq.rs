@@ -37,8 +37,15 @@ pub fn refine(
     let report = scan_dir(input_dir, "report");
     let clips = scan_dir(input_dir, "clips");
 
-    crate::gz!(&report);
-    crate::gz!(&clips);
+    if let Some(reports) = report {
+        log::info!("INFO [STEP 3]: Gzipping .report files...");
+        crate::gz!(&reports);
+    }
+
+    if let Some(clips) = clips {
+        log::info!("INFO [STEP 3]: Gzipping .clips files...");
+        crate::gz!(&clips);
+    }
 
     // INFO: format of files: {prefix}.{name}.ccs.merged.fl.{primers}.bam
     for entry in std::fs::read_dir(input_dir)
@@ -119,7 +126,11 @@ pub fn cluster(
 
     // INFO: gzipping .report.csv
     let report = scan_dir(&input_dir.to_path_buf(), "csv");
-    crate::gz!(&report);
+
+    if let Some(reports) = report {
+        log::info!("INFO [STEP 4]: Gzipping .report.csv files...");
+        crate::gz!(&reports);
+    }
 
     let args = config.get_step_args(step, vec![INPUT_DIR, OUTPUT_DIR, MEMORY, TIME, LOG_FILE]);
     let out_bam = format!("{}/{}", step_output_dir.display(), CLUSTERED_BAM);
