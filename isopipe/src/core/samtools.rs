@@ -43,6 +43,12 @@ pub fn merge(
     let package = config.get_custom_package(SAMTOOLS);
     let groups = scan_groups(input_dir);
 
+    log::debug!(
+        "DEBUG: found {} groups. Groups are: {:?}",
+        groups.len(),
+        groups
+    );
+
     for (group, bams) in groups {
         if bams.len() > 1 {
             let merged = input_dir.join(format!("{}.{}.ccs.{}", prefix, group, MERGED_BAM));
@@ -59,6 +65,13 @@ pub fn merge(
                     merged.display(),
                     wildcard.display(),
                     delete.display(),
+                );
+
+                log::debug!(
+                    "DEBUG: merging {} files -> {} with cmd -> {}",
+                    bams.len(),
+                    merged.display(),
+                    cmd
                 );
 
                 pbi.push(merged);
@@ -131,6 +144,12 @@ fn scan_groups(input_dir: &PathBuf) -> HashMap<String, Vec<PathBuf>> {
                 )
             })
             .to_string();
+
+        log::debug!(
+            "DEBUG: found {} BAM file for group {}",
+            bam.display(),
+            basename
+        );
 
         groups.entry(basename).or_default().push(bam);
     }
