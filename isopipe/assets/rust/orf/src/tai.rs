@@ -11,7 +11,7 @@
 //! learning model trained with true ORFs and false positives. The process is
 //! heavily parallelized to offer fast performance on large datasets.
 
-use config::{BedColumnValue, SCALE, Strand, bed_to_custom_struct_collection};
+use config::{bed_to_custom_struct_collection, BedColumnValue, Strand, SCALE};
 use dashmap::{DashMap, DashSet};
 use hashbrown::HashMap;
 use isopipe::config::depure;
@@ -1026,19 +1026,42 @@ fn _indexed(
 /// ```
 fn translate(sequence: &[u8]) -> String {
     let mut aa = String::new();
-    for codon in sequence.chunks(3) {
-        let amino_acid = translate_codon(codon);
 
+    for codon in sequence.chunks(3) {
+        if codon.len() != 3 {
+            break;
+        }
+
+        if codon.iter().any(|&b| !is_unambiguous_dna_base(b)) {
+            aa.push('X');
+            continue;
+        }
+
+        let amino_acid = translate_codon(codon);
         if amino_acid == "X" {
             panic!(
                 "ERROR: codon -> {:?} is not a valid codon from sequence -> {:?}!",
-                from_utf8(codon).unwrap(),
-                from_utf8(sequence).unwrap()
+                std::str::from_utf8(codon).unwrap(),
+                std::str::from_utf8(sequence).unwrap()
             );
         }
         aa.push_str(amino_acid);
     }
+
     aa
+}
+
+/// Checks if a base is unambiguous DNA.
+///
+/// # Arguments
+///
+/// * `b` - The base to check.
+///
+/// # Returns
+///
+/// A boolean indicating whether the base is unambiguous DNA.
+fn is_unambiguous_dna_base(b: u8) -> bool {
+    matches!(b, b'A' | b'C' | b'G' | b'T')
 }
 
 /// Translates a codon into an amino acid.
