@@ -377,8 +377,8 @@ fn get_split_sequence<'a>(
     chr: &str,
     transcript: &GenePred,
     seq_mode: &SeqMode,
-    flank_upstream: usize,
-    flank_downstream: usize,
+    mut flank_upstream: usize,
+    mut flank_downstream: usize,
 ) -> Vec<(String, config::Sequence)> {
     let chr_seq = genome
         .get_mut(chr)
@@ -489,6 +489,26 @@ fn get_split_sequence<'a>(
                     Strand::Forward => {
                         let start = *intron_start as usize - 1;
                         let end = *intron_end as usize + 1;
+
+                        // WARN: we need to assert that flanks are not outside of chr_seq
+                        if start - flank_upstream < 0 {
+                            log::warn!(
+                                "WARN: start - flank_upstream < 0 in intron -> {}:{}-{} ({}) with line -> {}",
+                               chr, start, end, transcript.strand, transcript.line
+                            );
+
+                            flank_upstream = 0;
+                        }
+
+                        if end + flank_downstream > chr_seq.len() {
+                            log::warn!(
+                                "WARN: end + flank_downstream > chr_seq.len() {} in intron -> {}:{}-{} ({}) with line -> {}",
+                                chr_seq.len(), chr, start, end, transcript.strand, transcript.line
+                            );
+
+                            flank_downstream = chr_seq.len() - end;
+                        }
+
                         let seq = chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
                         let name = format!(
                             // "{}:{}-{}({})#I{}#UP{}#DO{}",
@@ -506,6 +526,26 @@ fn get_split_sequence<'a>(
                     Strand::Reverse => {
                         let start = (SCALE - *intron_end) as usize - 1;
                         let end = (SCALE - *intron_start) as usize + 1;
+
+                        // WARN: we need to assert that flanks are not outside of chr_seq
+                        if start - flank_upstream < 0 {
+                            log::warn!(
+                                "WARN: start - flank_upstream < 0 in intron -> {}:{}-{} ({}) with line -> {}",
+                               chr, start, end, transcript.strand, transcript.line
+                            );
+
+                            flank_upstream = 0;
+                        }
+
+                        if end + flank_downstream > chr_seq.len() {
+                            log::warn!(
+                                "WARN: end + flank_downstream > chr_seq.len() {} in intron -> {}:{}-{} ({}) with line -> {}",
+                                chr_seq.len(), chr, start, end, transcript.strand, transcript.line
+                            );
+
+                            flank_downstream = chr_seq.len() - end;
+                        }
+
                         let mut buf =
                             chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
                         let name = format!(
@@ -1038,6 +1078,6 @@ pub fn __join(chunked: &Vec<(PathBuf, PathBuf)>, basename: PathBuf) {
         let mut reader = BufReader::new(File::open(chunked_fa).unwrap());
         let mut buf = String::new();
         reader.read_to_string(&mut buf).unwrap();
-        writeln!(writer, "{}", buf).unwrap();
+        write!(writer, "{}", buf).unwrap();
     }
 }
