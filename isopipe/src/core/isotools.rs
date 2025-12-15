@@ -977,12 +977,23 @@ pub fn polish(
             decisions += &cmd;
         }
 
-        let mut cmd = format!(
-            "{} run --query {} --aparent {} --twobit {} {args} --outdir {} && {} && {}",
+        let extract_introns = format!(
+            "{} base --twobit {} --bed {} -o {} --no-reduced-bed -s intron --split-extraction -Z -J -u 100 -d 100",
+            EXTRACT_RELEASE,
+            &twobit,
+            bed.display(),
+            outdir.display(),
+        );
+        log::debug!("DEBUG: extracting introns for {chr:?} with cmd: {extract_introns}");
+
+        let mut cmd =
+            format!(
+            "{} run --query {} --aparent {} --twobit {} {args} --iic {} --outdir {} && {} && {}",
             isotools!(ISOTOOLS).display(),
             bed.display(),
             apa.display(),
             twobit,
+            outdir.join("seqs_tmp").join(bed.with_extension("fa")).display(),
             outdir.display(),
             cleaning,
             decisions
