@@ -985,15 +985,24 @@ pub fn polish(
             outdir.display(),
         );
         log::debug!("DEBUG: extracting introns for {chr:?} with cmd: {extract_introns}");
+        log::debug!("DEBUG: output dir is {outdir:?}");
+
+        let basename = format!(
+            "{}.fa",
+            bed.file_stem()
+                .unwrap_or_else(|| { panic!("ERROR: could not get file stem from {:?}", bed) })
+                .to_str()
+                .unwrap_or_else(|| { panic!("ERROR: could not convert file stem to str") })
+        );
 
         let mut cmd =
             format!(
-            "{} run --query {} --aparent {} --twobit {} {args} --iic {} --outdir {} && {} && {}",
+            "{extract_introns} {} run --query {} --aparent {} --twobit {} {args} --iic {} --outdir {} && {} && {}",
             isotools!(ISOTOOLS).display(),
             bed.display(),
             apa.display(),
             twobit,
-            outdir.join("seqs_tmp").join(bed.with_extension("fa")).display(),
+            outdir.join("seqs_tmp").join(basename).display(),
             outdir.display(),
             cleaning,
             decisions
