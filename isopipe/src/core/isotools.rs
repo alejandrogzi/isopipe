@@ -997,7 +997,7 @@ pub fn polish(
 
         let mut cmd =
             format!(
-            "{extract_introns} {} run --query {} --aparent {} --twobit {} {args} --iic {} --outdir {} && {} && {}",
+            "{extract_introns} && {} run --query {} --aparent {} --twobit {} {args} --iic {} --outdir {} && {} && {}",
             isotools!(ISOTOOLS).display(),
             bed.display(),
             apa.display(),
