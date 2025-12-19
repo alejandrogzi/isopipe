@@ -34,7 +34,7 @@ REF_INTRONS_COLUMNS: List[str] = [
     "acceptor_rt_context",  # RT-switch context sequence for the acceptor site
     "is_rt_intron",  # Boolean indicating if the intron is an RT-switch intron
     "is_nag_intron",  # Boolean indicating if the intron is a TOGA-nag intron
-    "splice_u_type" # Splice type (U2, U12) from intronIC
+    "splice_u_type", # Splice type (U2, U12) from intronIC
     "support",  # Classification of the intron's support type
 ]
 
