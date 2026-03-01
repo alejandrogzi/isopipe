@@ -1,0 +1,7 @@
+name: minimap2_index
+
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - bioconda::minimap2=2.29
