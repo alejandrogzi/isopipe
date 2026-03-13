@@ -1,3 +1,9 @@
-[submodule "isotools"]
-	path = isotools
+[submodule "modules/isotools"]
+	path = modules/isotools
 	url = https://github.com/alejandrogzi/isotools.git
+
+[submodule "modules/xorf"]
+	path = modules/xorf
+	url = https://github.com/alejandrogzi/xorf
+	branch = master
+	shallow = true
