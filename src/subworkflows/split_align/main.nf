@@ -8,6 +8,7 @@ include { MINIMAP2_ALIGN } from '../../modules/custom/minimap2/align/main.nf'
 include { FXSPLIT } from '../../modules/custom/fxsplit/main.nf'
 include { ISOTOOLS_SEGMENT as ISOTOOLS_SEGMENT_POLYA } from '../../modules/custom/isotools/segment/main.nf'
 include { ISOTOOLS_FUSION as ISOTOOLS_FUSION_DETECTOR } from '../../modules/custom/isotools/fusion/main.nf'
+include { SAMTOOLS_BAM } from '../../modules/custom/samtools/bam/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -20,6 +21,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
       ch_reads                 // [ meta, reads ]
       ch_minimap2_index        // [ meta, index ]
       ch_reference_transcripts // [ file ]
+      ch_splice_scores         // [ meta, scores ]
       ch_versions              // [ meta, versions.yml ]
 
     main:
@@ -36,8 +38,14 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           }
           .set { ch_fastx_gz }
  
-      MINIMAP2_ALIGN(ch_fastx_gz, ch_minimap2_index) // INFO: align hq reads to reference
-      ISOTOOLS_SEGMENT_POLYA(MINIMAP2_ALIGN.out.bam, MINIMAP2_ALIGN.out.bai) // INFO: polyA tails
+      MINIMAP2_ALIGN(
+        ch_fastx_gz, 
+        ch_minimap2_index,
+        ch_splice_scores
+      )
+
+      SAMTOOLS_BAM(MINIMAP2_ALIGN.out.sam)
+      ISOTOOLS_SEGMENT_POLYA(SAMTOOLS_BAM.out.bam, SAMTOOLS_BAM.out.bai) // INFO: polyA tails
       ISOTOOLS_SEGMENT_POLYA.out.hq_bed
           .flatMap { 
             meta, bed -> { 
