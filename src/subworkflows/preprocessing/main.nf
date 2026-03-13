@@ -7,7 +7,8 @@
 include { ISOSEQ } from '../isoseq/main.nf'
 include { GENOME } from '../genome/main.nf'
 include { MINIMAP2_INDEX } from '../../modules/nf-core/minimap2/index/main.nf'
-include { SPLICING as GENOMIC_SPLICE_SCORES } from '../splicing/main.nf'
+include { SPLICING as MINISPLICE_GENOMIC_SPLICE_SCORES } from '../splicing/main.nf'
+include { SPLICING as SPLICEAI_GENOMIC_SPLICE_SCORES } from '../splicing/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -19,18 +20,24 @@ workflow PREPROCESSING {
     take:
       entrypoint             // isoseq or fastq
       global_input_dir       // path
+      global_primers         // path
       genome                 // path
-      toga2                  // path
+      annotation             // path
+      ccs_chunk              // int
+      isoseq_cluster2_mode   // string
       protein_database       // path
       minimap2_index         // path
       use_splice_scores      // bool
       splice_score_algorithm // string
+      bigwigs                // path
       ch_versions            // [ meta, versions.yml ]
 
     main:
       ch_genome = GENOME(genome)
-      ch_reference_transcripts = Channel.value(file(toga2, checkIfExists: true))
+      ch_reference_transcripts = Channel.value(file(annotation, checkIfExists: true))
       ch_database = Channel.value(file(protein_database, checkIfExists: true))
+
+      ch_reads = Channel.empty()
 
       ch_minimap2_index = Channel.empty()
       if (minimap2_index) {
@@ -42,33 +49,38 @@ workflow PREPROCESSING {
           )
       }
 
+      ch_splice_scores = Channel.empty()
       if (use_splice_scores) {
           if (splice_score_algorithm == "spliceai") {
-              def spliceai_use_pre_computed_scores = params.spliceai_bigwigs_dir ? true : false
-              // if (spliceai_use_pre_computed_scores) {
-              //    Channel
-              //      .fromPath("${params.spliceai_bigwigs_dir}/*.bw", checkIfExists: true)
-              //    .collect()
-              //     .map { bws -> [ [ id:"spliceai" , bws ] }
-              //      .set { ch_spliceai_bigwigs }
-              // } 
-              // else {
-                // GENOMIC_SPLICE_SCORES(
-                //    ch_genome.genome,  
-                // )
-              // }
-          } else if (splice_score_algorithm == "minisplice") {
-              GENOMIC_SPLICE_SCORES(
+              SPLICEAI_GENOMIC_SPLICE_SCORES(
                   ch_genome.genome,
+                  ch_reference_transcripts,
+                  bigwigs,
+                  splice_score_algorithm,
+                  ch_versions
+              )
+              ch_splice_scores = SPLICEAI_GENOMIC_SPLICE_SCORES.out.scores
+          } else if (splice_score_algorithm == "minisplice") {
+              MINISPLICE_GENOMIC_SPLICE_SCORES(
+                  ch_genome.genome,
+                  ch_reference_transcripts,
+                  bigwigs,
                   splice_score_algorithm,
                   ch_versions
               )             
+              ch_splice_scores = MINISPLICE_GENOMIC_SPLICE_SCORES.out.scores
           }
       }
 
       // INFO: isoseq entrypoint
       if (entrypoint == "isoseq") {
-          ISOSEQ()
+          ISOSEQ(
+              global_input_dir,
+              global_primers,
+              ccs_chunk,
+              isoseq_cluster2_mode
+          )
+
           ch_reads = ch_reads.mix(ISOSEQ.out.reads)
           ch_versions = ch_versions.mix(ISOSEQ.out.versions)
       } else if (entrypoint == "map") {
@@ -97,5 +109,6 @@ workflow PREPROCESSING {
       reads          = ch_reads
       minimap2_index = ch_minimap2_index.index
       reference_transcripts = ch_reference_transcripts
+      splice_scores  = ch_splice_scores
       versions = ch_versions
 }

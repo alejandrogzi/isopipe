@@ -30,12 +30,16 @@ workflow ISOPIPE {
       PREPROCESSING(
         params.entrypoint,
         params.global_input_dir,
+        params.global_primers,
         params.global_genome,
-        params.global_toga2,
+        params.global_annotation,
+        params.ccs_chunk,
+        params.isoseq_cluster2_mode,
         params.xorf_protein_database,
         params.minimap2_index_path,
         params.minimap2_align_use_splice_scores,
         params.minimap2_align_splicing_algorithm,
+        params.spliceai_bigwigs_dir,
         ch_versions
       )
 
@@ -43,6 +47,7 @@ workflow ISOPIPE {
         PREPROCESSING.out.reads, 
         PREPROCESSING.out.minimap2_index,
         PREPROCESSING.out.reference_transcripts,
+        PREPROCESSING.out.splice_scores,
         ch_versions
       )
 

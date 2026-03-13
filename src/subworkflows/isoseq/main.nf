@@ -7,12 +7,13 @@
 include { PBCCS } from '../../modules/nf-core/pbccs/main.nf'
 include { PBTK_PBINDEX as PBINDEX } from '../../modules/nf-core/pbtk/pbindex/main.nf'
 include { PBTK_PBMERGE as PBMERGE } from '../../modules/nf-core/pbtk/pbmerge/main.nf'
+include { PBTK_PBMERGE as PBMERGE_MULTI_SAMPLE } from '../../modules/nf-core/pbtk/pbmerge/main.nf'
 include { LIMA } from '../../modules/nf-core/lima/main.nf'
 include { ISOSEQ_REFINE } from '../../modules/nf-core/isoseq/refine/main.nf'
 include { ISOSEQ_CLUSTER2 } from '../../modules/custom/isoseq/cluster2/main.nf'
-include { ISOSEQ_CLUSTER2 as ISOSEQ_CLUSTER2_POOLED } from '../../modules/custom/isoseq/cluster2/main.nf'
+include { ISOSEQ_CLUSTER2 as ISOSEQ_CLUSTER2_MULTI_SAMPLE } from '../../modules/custom/isoseq/cluster2/main.nf'
 include { BAM_TO_FA } from '../../modules/custom/bamtofa/main.nf'
-include { BAM_TO_FA as BAM_TO_FA_POOLED } from '../../modules/custom/bamtofa/main.nf'
+include { BAM_TO_FA as BAM_TO_FA_MULTI_SAMPLE } from '../../modules/custom/bamtofa/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -21,12 +22,18 @@ include { BAM_TO_FA as BAM_TO_FA_POOLED } from '../../modules/custom/bamtofa/mai
 */
  
 workflow ISOSEQ {
+    take:
+      global_input_dir       // path
+      global_primers         // path
+      ccs_chunk              // int
+      isoseq_cluster2_mode   // string
+
     main:
       ch_versions = Channel.empty()
-      ch_primers = Channel.value(file(params.global_primers))
+      ch_primers = Channel.value(file(global_primers))
 
       Channel
-          .fromPath("${params.global_input_dir}/*.bam", checkIfExists: true)
+          .fromPath("${global_input_dir}/*.bam", checkIfExists: true)
           .map { bam ->
               def pbi = bam + '.pbi'
               return [
@@ -70,13 +77,13 @@ workflow ISOSEQ {
       ch_bam = ch_bam_branched.indexed.mix(ch_bam_reindexed)
 
       ch_bam
-          .combine(Channel.of(1..params.ccs_chunk))   // INFO: cartesian product: N_bam × chunk combos
+          .combine(Channel.of(1..ccs_chunk))   // INFO: cartesian product: N_bam × chunk combos
           .map { meta, bam, pbi, chunk_idx ->
               [ meta + [chunk: chunk_idx], bam, pbi ]
           }
           .set { ch_chunks }
 
-      PBCCS(ch_chunks, params.ccs_chunk) // INFO: generate CCS from raw reads
+      PBCCS(ch_chunks, ccs_chunk) // INFO: generate CCS from raw reads
       PBCCS.out.bam // INFO: update meta: update id (+chunkX) and store former id
       .map {
           def chunk   = it[0].chunk
@@ -89,7 +96,7 @@ workflow ISOSEQ {
       // INFO: group all chunks belonging to the same parent sample
       ch_pbccs_bam_updated
           .map { meta, bam -> [ meta.parent, meta, bam ] }   // INFO: key by parent
-          .groupTuple(by: 0, size: params.ccs_chunk)              // INFO: wait for all chunks
+          .groupTuple(by: 0, size: ccs_chunk)              // INFO: wait for all chunks
           .map { parent, metas, bams ->
               // Reconstruct a clean meta for the merged output
               def meta_merged = [ id: parent, single_end: true ]
@@ -103,13 +110,16 @@ workflow ISOSEQ {
 
       // INFO: three possible modes: per_tissue, pan_tissue, both
       ch_pbccs_merged_flnc_clustered_fa = Channel.empty()
-      if (params.isoseq_cluster2_mode == "per_tissue") {
+      if (isoseq_cluster2_mode == "per_sample") {
         ISOSEQ_CLUSTER2(ISOSEQ_REFINE.out.bam) // INFO: cluster reads
         BAM_TO_FA(ISOSEQ_CLUSTER2.out.bam)
 
         ch_pbccs_merged_flnc_clustered_fa  = ch_pbccs_merged_flnc_clustered_fa.mix(BAM_TO_FA.out.singletons)
         ch_pbccs_merged_flnc_clustered_fa  = ch_pbccs_merged_flnc_clustered_fa.mix(BAM_TO_FA.out.hq)
-      } else if (params.isoseq_cluster2_mode == "pan_tissue") {
+
+        ch_versions = ch_versions.mix(ISOSEQ_CLUSTER2.out.versions)
+        ch_versions = ch_versions.mix(BAM_TO_FA.out.versions)
+      } else if (isoseq_cluster2_mode == "multi_sample") {
         // INFO: collect all refined reads into a single channel for clustering
         ISOSEQ_REFINE.out.bam
           .map { meta, bam -> bam  }
@@ -117,12 +127,17 @@ workflow ISOSEQ {
           .map { bams -> [ [id:'pooled'], bams ] }
           .set { ch_pooled_bams }
 
-        ISOSEQ_CLUSTER2_POOLED(ch_pooled_bams)
-        BAM_TO_FA(ISOSEQ_CLUSTER2_POOLED.out.bam)
+        PBMERGE_MULTI_SAMPLE(ch_pooled_bams)
+        ISOSEQ_CLUSTER2_MULTI_SAMPLE(PBMERGE_MULTI_SAMPLE.out.bam)
+        BAM_TO_FA_MULTI_SAMPLE(ISOSEQ_CLUSTER2_MULTI_SAMPLE.out.bam)
 
-        ch_pbccs_merged_flnc_clustered_fa = ch_pbccs_merged_flnc_clustered_fa.mix(BAM_TO_FA.out.singletons)
-        ch_pbccs_merged_flnc_clustered_fa = ch_pbccs_merged_flnc_clustered_fa.mix(BAM_TO_FA.out.hq)
-      } else if (params.isoseq_cluster2_mode == "both") {
+        ch_pbccs_merged_flnc_clustered_fa = ch_pbccs_merged_flnc_clustered_fa.mix(BAM_TO_FA_MULTI_SAMPLE.out.singletons)
+        ch_pbccs_merged_flnc_clustered_fa = ch_pbccs_merged_flnc_clustered_fa.mix(BAM_TO_FA_MULTI_SAMPLE.out.hq)
+
+        ch_versions = ch_versions.mix(BAM_TO_FA_MULTI_SAMPLE.out.versions)
+        ch_versions = ch_versions.mix(ISOSEQ_CLUSTER2_MULTI_SAMPLE.out.versions)
+        ch_versions = ch_versions.mix(PBMERGE_MULTI_SAMPLE.out.versions)
+      } else if (isoseq_cluster2_mode == "both") {
         ISOSEQ_CLUSTER2(ISOSEQ_REFINE.out.bam)
         BAM_TO_FA(ISOSEQ_CLUSTER2.out.bam)
         ch_pbccs_merged_flnc_clustered_fa = ch_pbccs_merged_flnc_clustered_fa.mix(BAM_TO_FA.out.singletons)
@@ -134,20 +149,23 @@ workflow ISOSEQ {
           .map { bams -> [ [id:'pooled', single_end:true], bams ] }
           .set { ch_pooled_bams }
 
-        ISOSEQ_CLUSTER2_POOLED(ch_pooled_bams)
-        BAM_TO_FA_POOLED(ISOSEQ_CLUSTER2_POOLED.out.bam)
-        ch_pbccs_merged_flnc_clustered_fa = ch_pbccs_merged_flnc_clustered_fa.mix(BAM_TO_FA_POOLED.out.singletons)
-        ch_pbccs_merged_flnc_clustered_fa = ch_pbccs_merged_flnc_clustered_fa.mix(BAM_TO_FA_POOLED.out.hq)
+        PBMERGE_MULTI_SAMPLE(ch_pooled_bams)
+        ISOSEQ_CLUSTER2_MULTI_SAMPLE(PBMERGE_MULTI_SAMPLE.out.bam)
+        BAM_TO_FA_MULTI_SAMPLE(ISOSEQ_CLUSTER2_MULTI_SAMPLE.out.bam)
+        ch_pbccs_merged_flnc_clustered_fa = ch_pbccs_merged_flnc_clustered_fa.mix(BAM_TO_FA_MULTI_SAMPLE.out.singletons)
+        ch_pbccs_merged_flnc_clustered_fa = ch_pbccs_merged_flnc_clustered_fa.mix(BAM_TO_FA_MULTI_SAMPLE.out.hq)
+
+        ch_versions = ch_versions.mix(ISOSEQ_CLUSTER2.out.versions)
+        ch_versions = ch_versions.mix(BAM_TO_FA_MULTI_SAMPLE.out.versions)
+        ch_versions = ch_versions.mix(BAM_TO_FA.out.versions)
+        ch_versions = ch_versions.mix(ISOSEQ_CLUSTER2_MULTI_SAMPLE.out.versions)
+        ch_versions = ch_versions.mix(PBMERGE_MULTI_SAMPLE.out.versions)
       }
 
       // INFO: should end up emitting a channel with fastqs (hq and singletons in this branch)
       // ch_pbccs_merged_flnc_clustered_fa.view()
 
       ch_versions = ch_versions.mix(ISOSEQ_REFINE.out.versions)
-      ch_versions = ch_versions.mix(ISOSEQ_CLUSTER2.out.versions)
-      ch_versions = ch_versions.mix(ISOSEQ_CLUSTER2_POOLED.out.versions)
-      ch_versions = ch_versions.mix(BAM_TO_FA.out.versions)
-      ch_versions = ch_versions.mix(BAM_TO_FA_POOLED.out.versions)
       ch_versions = ch_versions.mix(LIMA.out.versions)
       ch_versions = ch_versions.mix(PBMERGE.out.versions)
       ch_versions = ch_versions.mix(PBINDEX.out.versions)
