@@ -6,6 +6,7 @@
 
 include { MINISPLICE_DOWNLOAD } from '../../modules/custom/minisplice/download/main.nf'
 include { MINISPLICE_PREDICT } from '../../modules/custom/minisplice/predict/main.nf'
+include { SPLICEAI_DERIVE } from '../../modules/custom/spliceai/derive/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -17,16 +18,32 @@ include { MINISPLICE_PREDICT } from '../../modules/custom/minisplice/predict/mai
 workflow SPLICING {
     take:
       genome
+      annotation
+      bigwigs
       algorithm
       ch_versions
 
     main:
       if (algorithm == "spliceai") {
-          Channel
-              .fromPath("${params.spliceai_bigwigs_dir}/*.bw", checkIfExists: true)
-              .collect()
-              .map { bws -> [ [ id:"spliceai" ] , bws ] }
-              .set { ch_spliceai_bigwigs }
+          if (bigwigs) {
+            Channel.value([
+                    [ id: "spliceai" ],
+                    file(bigwigs, checkIfExists: true)
+            ]).set { ch_spliceai_bigwigs }
+
+            SPLICEAI_DERIVE(
+                genome.map { genome -> [ [id:genome.baseName], genome ] },
+                annotation.map { annotation -> [ [id:annotation.baseName], annotation ] },
+                ch_spliceai_bigwigs
+            )
+            ch_scores = SPLICEAI_DERIVE.out.scores
+            ch_versions = ch_versions.mix(SPLICEAI_DERIVE.out.versions)
+          } else {
+              // SPLICEAI_RUN()
+
+              // ch_scores = SPLICEAI_RUN.out.scores
+              // ch_versions = ch_versions.mix(SPLICEAI_RUN.out.versions)
+          }
       } else if (algorithm == "minisplice") {
           MINISPLICE_DOWNLOAD()
           MINISPLICE_PREDICT(
