@@ -1,0 +1,1083 @@
+//! Core module for extracting sequences using .2bit from a query set of reads
+//! Alejandro Gonzales-Irribarren, 2025
+//!
+//! This module contains the main functions for efficiently getting whole
+//! sequences from .2bit genomic files using plain coordinates. Additionally,
+//! it provides the option of deduplicate repeated entries in order to save
+//! space.
+//!
+//! In short, every sequence is extracted from a .2bit and holded in memory
+//! as plain bytes for every read in the query set [rev comp for neg strand].
+//! The command line interface provides the option of specifying indexing, leading
+//! to a one-pass deduplication step and the creation of an index where
+//! simple integers map to read identifiers [all of them as plain bytes].
+//! The process is heavily parallelized to offer fast performance on large datasets.
+
+use config::{OverlapType, Sequence, Strand, SCALE};
+use dashmap::DashMap;
+use iso_polya::utils::get_sequences;
+use log::debug;
+use packbed::{unpack, GenePred};
+use rayon::prelude::*;
+
+use std::collections::{hash_map::Entry, HashMap};
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Read, Write};
+use std::path::{Path, PathBuf};
+
+use crate::cli::{ExtractArgs, SeqMode};
+
+/// Extracts sequences from a 2bit genome file based on BED records,
+/// chunks them, and writes them to temporary FASTA and BED files.
+///
+/// It performs the following steps:
+/// 1. Creates a temporary directory for chunked output files.
+/// 2. Unpacks the input BED file into `GenePred` structures, potentially
+///    handling overlapping exons.
+/// 3. Loads the entire genome sequences from the 2bit file into memory.
+/// 4. Chunks the `GenePred` records by chromosome and then into smaller
+///    sub-chunks based on `args.chunk_size`.
+/// 5. For each chunk, it extracts the corresponding sequences from the genome
+///    and writes them to a new FASTA file. The original BED entries for that
+///    chunk are written to a new BED file.
+///
+/// # Arguments
+///
+/// * `args` - An `Args` struct containing:
+///   - `bed`: Path to the input BED file.
+///   - `twobit`: Path to the 2bit genome file.
+///   - `output_dir`: Base directory for temporary chunked output.
+///   - `dir_prefix`: Prefix for the temporary directory name.
+///   - `suffix`: Suffix for the temporary directory name.
+///   - `chunk_size`: Maximum number of records per chunk.
+///   - `mode`: A boolean indicating the extraction mode (true for `Indexed`, false for `Raw`).
+///
+/// # Returns
+///
+/// A `Vec<(PathBuf, PathBuf)>` where each tuple contains the path to a
+/// chunked FASTA file and its corresponding chunked BED file.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - It fails to create the temporary output directory.
+/// - It fails to unpack the BED file.
+/// - It fails to load sequences from the 2bit file.
+/// - It fails to create chunk-specific directories or files.
+/// - It fails to write sequences or BED lines to the chunked files.
+/// - A chromosome is missing in the 2bit genome during sequence extraction.
+pub fn extract(args: ExtractArgs) {
+    let mode = ExtractMode::from(args.mode);
+
+    log::info!(
+        "INFO: Extracting mapped read sequences [{}] from .2bit file...",
+        args.bed.display()
+    );
+
+    let tmp_dir = args
+        .output_dir
+        .join(format!("{}_{}", args.dir_prefix, args.suffix));
+    std::fs::create_dir_all(&tmp_dir).unwrap_or_else(|e| {
+        panic!(
+            "ERROR: could not creat temporary directory in {} -> {e}",
+            &tmp_dir.display()
+        )
+    });
+
+    let overlap_type = match args.seq_mode {
+        SeqMode::CDS => OverlapType::CDS, // INFO: only in CDS mode bounds are thick start/end
+        SeqMode::Genome | SeqMode::Exon | SeqMode::Intron => OverlapType::Exon, // INFO: rest of modes follow normal exon bounds
+    };
+
+    let bed =
+        unpack::<GenePred, _>(vec![args.bed.clone()], overlap_type, false).unwrap_or_else(|e| {
+            panic!(
+                "ERROR: could not unpack reads -> {}. {e}",
+                args.bed.display()
+            )
+        });
+    log::debug!("DEBUG: packed bed -> {bed:#?}");
+
+    let (genome, _) = get_sequences(args.twobit.clone()).unwrap_or_else(|| {
+        panic!(
+            "ERROR: could not get sequences from .2bit -> {}",
+            args.twobit.display()
+        )
+    });
+    debug!("DEBUG: loaded genome with {} chromosomes", genome.len());
+
+    // INFO: define the chunk size for parallel processing
+    // INFO: if chunk size > bed records -> symlink
+    let paths: Vec<(PathBuf, PathBuf)> = bed
+        .into_par_iter()
+        .flat_map(|(chrom, records)| {
+            records
+                .chunks(args.chunk_size)
+                .enumerate()
+                .map(move |(chunk_id, chunk)| (format!("{}:{}", chrom, chunk_id), chunk.to_vec()))
+                .collect::<Vec<_>>()
+        })
+        .map(|(chunk_id, transcripts)| {
+            let chunk_path = tmp_dir.join(&chunk_id);
+            std::fs::create_dir_all(&chunk_path).unwrap();
+
+            let chunk_fa = chunk_path.join(format!("tmp_chunk_{}.fa", &chunk_id));
+            let chunk_bed = chunk_path.join(format!("tmp_chunk_{}.bed", &chunk_id));
+
+            let writer_fa = BufWriter::new(File::create(&chunk_fa).unwrap());
+            let writer_bed = BufWriter::new(File::create(&chunk_bed).unwrap());
+
+            let chr = chunk_id.split(':').next().unwrap_or(&chunk_id);
+
+            log::info!("Extracting chunk {} from {}", chunk_id, chr);
+
+            match mode {
+                ExtractMode::Raw => {
+                    raw(
+                        transcripts,
+                        &genome,
+                        chr,
+                        writer_fa,
+                        writer_bed,
+                        &args.seq_mode,
+                        args.flank_upstream,
+                        args.flank_downstream,
+                        args.split_extraction,
+                        args.intron_ic_output_fmt,
+                        args.translate,
+                    );
+                }
+                ExtractMode::Indexed => {
+                    index(
+                        transcripts,
+                        &genome,
+                        chr,
+                        &chunk_path,
+                        &chunk_id,
+                        writer_fa,
+                        writer_bed,
+                        &args.seq_mode,
+                        args.no_reduced_bed,
+                        args.flank_upstream,
+                        args.flank_downstream,
+                        args.split_extraction,
+                    );
+                }
+            }
+
+            (chunk_fa, chunk_bed)
+        })
+        .collect();
+
+    log::info!("Extracted {} chunks", paths.len());
+
+    if args.join {
+        let basename = tmp_dir.join(
+            args.bed
+                .with_extension("fa")
+                .file_name()
+                .unwrap_or_else(|| {
+                    panic!("ERROR: could not get basename from {}", args.bed.display())
+                })
+                .to_str()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "ERROR: could not convert basename to str from {}",
+                        args.bed.display()
+                    )
+                }),
+        );
+
+        __join(&paths, basename);
+
+        // INFO: cleanup chunked dirs
+        log::info!("INFO: removing chunked dirs in {}", tmp_dir.display());
+        for (chunk_fa, _chunk_bed) in paths {
+            std::fs::remove_dir_all(
+                chunk_fa
+                    .parent()
+                    .unwrap_or_else(|| panic!("ERROR: could not get parent dir")),
+            )
+            .unwrap_or_else(|e| {
+                panic!(
+                    "ERROR: could not remove chunked dir {} -> {e}",
+                    chunk_fa.parent().unwrap().display()
+                )
+            });
+        }
+    }
+}
+
+/// An enum representing the mode for sequence extraction.
+///
+/// This enum determines whether sequences are extracted directly ("Raw")
+/// or if an indexing approach is used (though `Indexed`)
+enum ExtractMode {
+    Raw,
+    Indexed,
+}
+
+impl ExtractMode {
+    /// Creates an `ExtractMode` from a boolean value.
+    ///
+    /// # Arguments
+    ///
+    /// * `mode` - A boolean value. `true` maps to `ExtractMode::Indexed`,
+    ///            `false` maps to `ExtractMode::Raw`.
+    ///
+    /// # Returns
+    ///
+    /// An `ExtractMode` variant.
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// let raw_mode = ExtractMode::from(false);
+    /// assert!(matches!(raw_mode, ExtractMode::Raw));
+    ///
+    /// let indexed_mode = ExtractMode::from(true);
+    /// assert!(matches!(indexed_mode, ExtractMode::Indexed));
+    /// ```
+    fn from(mode: bool) -> Self {
+        match mode {
+            true => Self::Indexed,
+            false => Self::Raw,
+        }
+    }
+}
+
+/// Retrieves a specific sequence from the genome based on chromosome and `GenePred` transcript information.
+///
+/// This function extracts a subsequence from the provided `genome` (a `DashMap` of chromosome sequences)
+/// corresponding to the coordinates defined in the `transcript`. It handles both forward and
+/// reverse strands, performing reverse complementation for reverse-strand transcripts.
+///
+/// # Arguments
+///
+/// * `genome` - A reference to a `DashMap<String, Vec<u8>>` containing chromosome sequences.
+/// * `chr` - A string slice representing the chromosome name.
+/// * `transcript` - A reference to a `GenePred` struct containing the transcript's
+///                  genomic coordinates (start, end) and strand information.
+///
+/// # Returns
+///
+/// A `config::Sequence` object representing the extracted sequence.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - The specified `chr` is not found as a key in the `genome` `DashMap`.
+/// - The `SCALE` constant (used for reverse strand coordinate transformation)
+///   is not defined or accessible.
+fn get_sequence(
+    genome: &DashMap<String, Vec<u8>>,
+    chr: &str,
+    transcript: &GenePred,
+    seq_mode: &SeqMode,
+    flank_upstream: usize,
+    flank_downstream: usize,
+) -> config::Sequence {
+    let chr_seq = genome
+        .get_mut(chr)
+        .unwrap_or_else(|| panic!("ERROR: missing chromosome in .2bit -> {chr}"));
+
+    log::debug!(
+        "DEBUG: extracting sequence for {}:{}-{} ({:?})",
+        chr,
+        transcript.start,
+        transcript.end,
+        transcript.strand
+    );
+
+    match seq_mode {
+        SeqMode::Genome => match transcript.strand {
+            Strand::Forward => {
+                Sequence::new(&chr_seq[transcript.start as usize..transcript.end as usize])
+            }
+            Strand::Reverse => Sequence::new(
+                &chr_seq[(SCALE - transcript.end) as usize..(SCALE - transcript.start) as usize],
+            )
+            .reverse_complement(),
+        },
+        SeqMode::Exon | SeqMode::CDS => {
+            // INFO: extract and concatenate exon sequences
+            // WARN: CDS is included here because coords are thick start/end
+            let mut exonic_seq: Vec<u8> = Vec::with_capacity(transcript.exon_len as usize);
+            for (exon_start, exon_end) in &transcript.exons {
+                match transcript.strand {
+                    Strand::Forward => {
+                        let start = *exon_start as usize - flank_upstream;
+                        let end = *exon_end as usize + flank_downstream;
+                        exonic_seq.extend_from_slice(&chr_seq[start..end]);
+                    }
+                    Strand::Reverse => {
+                        let start = (SCALE - *exon_end) as usize - flank_upstream;
+                        let end = (SCALE - *exon_start) as usize + flank_downstream;
+
+                        if start > end {
+                            panic!(
+                                "ERROR: start > end in exon -> {}:{}-{} for {} with line -> {}",
+                                chr, start, end, transcript.name, transcript.line
+                            );
+                        }
+
+                        let mut buf = chr_seq[start..end].to_vec();
+                        __rev_complement_u8(&mut buf);
+
+                        log::debug!(
+                            "DEBUG: reversing exon seq -> {}:{}-{} ({})",
+                            chr,
+                            start,
+                            end,
+                            Sequence::new(&buf)
+                        );
+
+                        exonic_seq.extend_from_slice(&buf);
+                    }
+                }
+            }
+
+            let exonic = Sequence::new(&exonic_seq);
+            log::debug!("DEBUG: extracted exonic seq -> {}", exonic);
+
+            exonic
+        }
+
+        SeqMode::Intron => {
+            // optional: for completeness, handle introns similarly
+            let mut intronic_seq: Vec<u8> = Vec::new();
+            for (intron_start, intron_end) in &transcript.introns {
+                match transcript.strand {
+                    Strand::Forward => {
+                        let start = *intron_start as usize - flank_upstream;
+                        let end = *intron_end as usize + flank_downstream;
+                        intronic_seq.extend_from_slice(&chr_seq[start..end]);
+                    }
+                    Strand::Reverse => {
+                        let start = (SCALE - *intron_end) as usize - flank_upstream;
+                        let end = (SCALE - *intron_start) as usize + flank_downstream;
+                        let mut buf = chr_seq[start..end].to_vec();
+                        __rev_complement_u8(&mut buf);
+
+                        intronic_seq.extend_from_slice(&buf);
+                    }
+                }
+            }
+
+            let intronic = Sequence::new(&intronic_seq);
+            log::debug!("DEBUG: extracted intronic seq -> {}", intronic);
+
+            intronic
+        }
+    }
+}
+
+fn get_split_sequence<'a>(
+    genome: &DashMap<String, Vec<u8>>,
+    chr: &str,
+    transcript: &GenePred,
+    seq_mode: &SeqMode,
+    mut flank_upstream: usize,
+    mut flank_downstream: usize,
+) -> Vec<(String, config::Sequence)> {
+    let chr_seq = genome
+        .get_mut(chr)
+        .unwrap_or_else(|| panic!("ERROR: missing chromosome in .2bit -> {chr}"));
+
+    log::debug!(
+        "DEBUG: extracting {seq_mode:?} sequence for {}:{}-{} ({:?})",
+        chr,
+        transcript.start,
+        transcript.end,
+        transcript.strand
+    );
+
+    match seq_mode {
+        // WARN: not sure if SeqMode::Genome should available in this case
+        // WARN: would make sense if we expose some flag to split genome in
+        // k sizes
+        SeqMode::Genome => match transcript.strand {
+            Strand::Forward => {
+                vec![(
+                    chr.to_string(),
+                    Sequence::new(&chr_seq[transcript.start as usize..transcript.end as usize]),
+                )]
+            }
+            Strand::Reverse => vec![(
+                chr.to_string(),
+                Sequence::new(
+                    &chr_seq
+                        [(SCALE - transcript.end) as usize..(SCALE - transcript.start) as usize],
+                )
+                .reverse_complement(),
+            )],
+        },
+
+        SeqMode::Exon | SeqMode::CDS => {
+            // INFO: extract and return unconcatenated exon sequences
+            let mut sequences: Vec<(String, Vec<u8>)> = Vec::with_capacity(transcript.exon_count);
+            for (_exon_idx, (exon_start, exon_end)) in transcript.exons.iter().enumerate() {
+                match transcript.strand {
+                    Strand::Forward => {
+                        let start = *exon_start as usize;
+                        let end = *exon_end as usize + flank_downstream;
+                        let exon_sequence =
+                            chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
+                        let exon_name = format!(
+                            // "{}:{}-{}({})#E{}#UP{}#DO{}",
+                            "{}:{}-{}({})",
+                            chr,
+                            start,
+                            end,
+                            transcript.strand,
+                            // exon_idx,
+                            // flank_upstream,
+                            // flank_downstream
+                        );
+                        sequences.push((exon_name, exon_sequence));
+                    }
+                    Strand::Reverse => {
+                        let start = (SCALE - *exon_end) as usize;
+                        let end = (SCALE - *exon_start) as usize;
+                        let mut buf =
+                            chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
+                        let exon_name = format!(
+                            // "{}:{}-{}({})#E{}#UP{}#DO{}",
+                            "{}:{}-{}({})",
+                            chr,
+                            start,
+                            end,
+                            transcript.strand,
+                            // exon_idx,
+                            // flank_upstream,
+                            // flank_downstream
+                        );
+                        __rev_complement_u8(&mut buf);
+
+                        log::debug!(
+                            "DEBUG: reversing exon seq -> {}:{}-{} ({})",
+                            chr,
+                            start,
+                            end,
+                            Sequence::new(&buf)
+                        );
+
+                        sequences.push((exon_name, buf));
+                    }
+                }
+            }
+
+            let exon_sequences = sequences
+                .into_iter()
+                .map(|(name, seq)| (name, Sequence::new(&seq)))
+                .collect::<Vec<(String, Sequence)>>();
+
+            log::debug!(
+                "DEBUG: extracted unconcatenated exonic seq -> {:?}",
+                exon_sequences
+            );
+
+            exon_sequences
+        }
+
+        SeqMode::Intron => {
+            // INFO: extract and return unconcatenated intronic sequences
+            let mut sequences: Vec<(String, Vec<u8>)> =
+                Vec::with_capacity(transcript.exon_count - 1); // INFO: introns = exons - 1
+            for (_idx, (intron_start, intron_end)) in transcript.introns.iter().enumerate() {
+                match transcript.strand {
+                    Strand::Forward => {
+                        let start = *intron_start as usize - 1;
+                        let end = *intron_end as usize + 1;
+
+                        // WARN: we need to assert that flanks are not outside of chr_seq
+                        if start - flank_upstream < 0 {
+                            log::warn!(
+                                "WARN: start - flank_upstream < 0 in intron -> {}:{}-{} ({}) with line -> {}",
+                               chr, start, end, transcript.strand, transcript.line
+                            );
+
+                            flank_upstream = 0;
+                        }
+
+                        if end + flank_downstream > chr_seq.len() {
+                            log::warn!(
+                                "WARN: end + flank_downstream > chr_seq.len() {} in intron -> {}:{}-{} ({}) with line -> {}",
+                                chr_seq.len(), chr, start, end, transcript.strand, transcript.line
+                            );
+
+                            flank_downstream = chr_seq.len() - end;
+                        }
+
+                        let seq = chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
+                        let name = format!(
+                            // "{}:{}-{}({})#I{}#UP{}#DO{}",
+                            "{}:{}-{}({})",
+                            chr,
+                            start,
+                            end,
+                            transcript.strand,
+                            // idx,
+                            // flank_upstream,
+                            // flank_downstream
+                        );
+                        sequences.push((name, seq));
+                    }
+                    Strand::Reverse => {
+                        let start = (SCALE - *intron_end) as usize - 1;
+                        let end = (SCALE - *intron_start) as usize + 1;
+
+                        // WARN: we need to assert that flanks are not outside of chr_seq
+                        if start - flank_upstream < 0 {
+                            log::warn!(
+                                "WARN: start - flank_upstream < 0 in intron -> {}:{}-{} ({}) with line -> {}",
+                               chr, start, end, transcript.strand, transcript.line
+                            );
+
+                            flank_upstream = 0;
+                        }
+
+                        if end + flank_downstream > chr_seq.len() {
+                            log::warn!(
+                                "WARN: end + flank_downstream > chr_seq.len() {} in intron -> {}:{}-{} ({}) with line -> {}",
+                                chr_seq.len(), chr, start, end, transcript.strand, transcript.line
+                            );
+
+                            flank_downstream = chr_seq.len() - end;
+                        }
+
+                        let mut buf =
+                            chr_seq[start - flank_upstream..end + flank_downstream].to_vec();
+                        let name = format!(
+                            // "{}:{}-{}({})#I{}#UP{}#DO{}",
+                            "{}:{}-{}({})",
+                            chr,
+                            start,
+                            end,
+                            transcript.strand,
+                            // idx,
+                            // flank_upstream,
+                            // flank_downstream
+                        );
+                        __rev_complement_u8(&mut buf);
+                        sequences.push((name, buf));
+                    }
+                }
+            }
+
+            let intron_sequences = sequences
+                .into_iter()
+                .map(|(name, seq)| (name, Sequence::new(&seq)))
+                .collect::<Vec<(String, Sequence)>>();
+
+            log::debug!(
+                "DEBUG: extracted unconcatenated intronic seq -> {:?}",
+                intron_sequences
+            );
+
+            intron_sequences
+        }
+    }
+}
+/// Writes extracted raw sequences and their corresponding BED lines to respective files.
+///
+/// This function iterates through a vector of `GenePred` transcripts. For each transcript,
+/// it extracts its sequence from the provided `genome` using `get_sequence` and writes
+/// the sequence to a FASTA file. It also writes the original BED line of the transcript
+/// to a BED file.
+///
+/// # Arguments
+///
+/// * `transcripts` - A `Vec<GenePred>` containing the transcript records to process.
+/// * `genome` - A reference to a `DashMap<String, Vec<u8>>` containing chromosome sequences.
+/// * `chr` - A string slice representing the chromosome name for the current set of transcripts.
+/// * `writer_fa` - A mutable `BufWriter<File>` for writing FASTA entries.
+/// * `writer_bed` - A mutable `BufWriter<File>` for writing BED entries.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - It fails to write to `writer_fa` or `writer_bed`.
+/// - The `get_sequence` function panics (e.g., due to a missing chromosome).
+#[allow(clippy::too_many_arguments)]
+fn raw(
+    transcripts: Vec<GenePred>,
+    genome: &DashMap<String, Vec<u8>>,
+    chr: &str,
+    mut writer_fa: BufWriter<File>,
+    mut writer_bed: BufWriter<File>,
+    seq_mode: &SeqMode,
+    flank_upstream: usize,
+    flank_downstream: usize,
+    split_extraction: bool,
+    intron_ic_output_fmt: bool,
+    translate: bool,
+) {
+    let mut accumulator = HashMap::new();
+    for tx in transcripts {
+        if !split_extraction {
+            let seq = get_sequence(genome, chr, &tx, seq_mode, flank_upstream, flank_downstream);
+
+            if translate {
+                let seq = seq.translate();
+                writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: could not write sequence to .fa from -> {:?}. {e}",
+                        tx
+                    )
+                });
+            } else {
+                writeln!(writer_fa, ">{}\n{}", tx.name, seq).unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: could not write sequence to .fa from -> {:?}. {e}",
+                        tx
+                    )
+                });
+            }
+
+            writeln!(writer_bed, "{}", tx.line).unwrap();
+        } else {
+            // INFO: branch where each sequence is written separately [e.g. exon1, exon2, ...]
+            let seqs =
+                get_split_sequence(genome, chr, &tx, seq_mode, flank_upstream, flank_downstream);
+
+            for (name, seq) in seqs {
+                // writeln!(writer_fa, ">{}\n{}", name, seq).unwrap();
+                match accumulator.entry(name) {
+                    Entry::Vacant(v) => {
+                        v.insert(seq);
+                    }
+                    Entry::Occupied(_) => {}
+                }
+            }
+        }
+    }
+
+    if split_extraction {
+        for (name, seq) in accumulator {
+            if !intron_ic_output_fmt {
+                if translate {
+                    let seq = seq.translate();
+                    writeln!(writer_fa, ">{}\n{}", name, seq).unwrap_or_else(|e| {
+                        panic!(
+                            "ERROR: could not write sequence to .fa from -> {:?}. {e}",
+                            name,
+                        )
+                    });
+                } else {
+                    writeln!(writer_fa, ">{}\n{}", name, seq).unwrap();
+                }
+            } else {
+                writeln!(
+                    writer_fa,
+                    "{}\t{}\t{}\t{}",
+                    name,
+                    seq.slice_as_seq(0, flank_upstream),
+                    seq.slice_as_seq(flank_upstream, seq.len() - flank_downstream),
+                    seq.slice_as_seq(seq.len() - flank_downstream, seq.len())
+                )
+                .unwrap();
+            }
+        }
+    }
+}
+
+/// Indexes and deduplicates `GenePred` transcripts, writing unique sequences
+/// to a FASTA file, a reduced BED file, and an index file.
+///
+/// This function processes a chunk of `GenePred` transcripts. It extracts the
+/// sequence for each transcript, uses the sequence as a key to deduplicate
+/// records, and maintains a mapping of original transcript IDs to a new,
+/// sequential ID for unique sequences.
+///
+/// For each unique sequence:
+/// - It writes the sequence to a FASTA file, with the new sequential ID as the header.
+/// - It writes a modified BED line to a "reduced" BED file, where the name
+///   field is replaced by the new sequential ID.
+/// - It records the mapping of original IDs to the new sequential ID in a binary index file.
+///
+/// For all transcripts (including duplicates):
+/// - Their original BED lines are written to a separate BED file.
+///
+/// # Arguments
+///
+/// * `transcripts` - A `Vec<GenePred>` containing the transcript records for the current chunk.
+/// * `genome` - A reference to a `DashMap<String, Vec<u8>>` containing chromosome sequences.
+/// * `chr` - A string slice representing the chromosome name for the current chunk.
+/// * `path` - A `PathBuf` representing the base directory for the chunk's output files.
+/// * `chunk_id` - A string slice representing the unique identifier for the current chunk.
+/// * `writer_fa` - A mutable `BufWriter<File>` for writing FASTA entries for unique sequences.
+/// * `writer_bed` - A mutable `BufWriter<File>` for writing all original BED entries.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - It fails to create the index file or the reduced BED file.
+/// - It fails to write to any of the `BufWriter`s (`writer_fa`, `writer_bed`, `writer_reduced_bed`, `index`).
+/// - `get_sequence` or `encode_id` functions panic due to invalid data or missing resources.
+/// - It fails to split or join BED line fields.
+#[allow(clippy::too_many_arguments)]
+fn index(
+    mut transcripts: Vec<GenePred>,
+    genome: &DashMap<String, Vec<u8>>,
+    chr: &str,
+    path: &Path,
+    chunk_id: &String,
+    mut writer_fa: BufWriter<File>,
+    mut writer_bed: BufWriter<File>,
+    seq_mode: &SeqMode,
+    no_reduced_bed: bool,
+    flank_upstream: usize,
+    flank_downstream: usize,
+    _split_extraction: bool,
+) {
+    let mut mapper = HashMap::new();
+
+    let idx = path.join(format!("tmp_chunk_{}.index", chunk_id));
+    let mut index = BufWriter::new(File::create(&idx).unwrap());
+
+    let mut writer_reduced_bed = None;
+    if !no_reduced_bed {
+        let chunk_reduced_bed = path.join(format!("tmp_chunk_{}_reduced.bed", &chunk_id));
+        writer_reduced_bed = Some(BufWriter::new(File::create(&chunk_reduced_bed).unwrap()));
+    }
+
+    let mut count = 0usize;
+    for tx in transcripts.iter_mut() {
+        let seq = get_sequence(genome, chr, tx, seq_mode, flank_upstream, flank_downstream);
+        let key = seq.seq.as_bytes().to_vec();
+        let encoded = encode_id(&tx.name);
+
+        match mapper.entry(key) {
+            Entry::Vacant(v) => {
+                // INFO: first one for this seq
+                v.insert(vec![count as u32, encoded]);
+
+                // INFO: only for unseen seqs
+                let mut fields: Vec<String> =
+                    tx.line_mut().split('\t').map(|s| s.to_string()).collect();
+
+                fields[3] = count.to_string();
+                let line = fields.join("\t");
+
+                if let Some(writer_reduced_bed) = writer_reduced_bed.as_mut() {
+                    writeln!(writer_reduced_bed, "{}", line).unwrap_or_else(|e| {
+                        panic!("ERROR: could not write line from -> {:?}. {e}", tx)
+                    });
+                }
+
+                writeln!(writer_fa, ">{}\n{}", count, seq).unwrap_or_else(|e| {
+                    panic!(
+                        "ERROR: could not write sequence to .fa from -> {:?}. {e}",
+                        tx
+                    )
+                });
+
+                log::debug!(
+                    "NEW -> ENCODE: {encoded}, COUNT: {count}, NAME: {}",
+                    &tx.name
+                );
+
+                count += 1;
+            }
+            Entry::Occupied(mut o) => {
+                o.get_mut().push(encoded); // INFO: append to existing
+
+                log::debug!(
+                    "SEEN -> ENCODE: {encoded}, COUNT: {count}, NAME: {}",
+                    &tx.name
+                );
+            }
+        }
+
+        writeln!(writer_bed, "{}", tx.line)
+            .unwrap_or_else(|e| panic!("ERROR: could not write line from -> {:?}. {e}", tx));
+    }
+
+    // INFO: for every element in mapper -> write encoded id and encoded group
+    for (_, group) in mapper {
+        let header = &group[0];
+
+        log::debug!("INSERTING: {header} as index for group: {group:?}");
+
+        let n_ids = group.len() as u16 - 1;
+        index.write_all(&n_ids.to_be_bytes()).unwrap();
+
+        index.write_all(&header.to_be_bytes()).unwrap();
+
+        for read in group.iter().skip(1) {
+            index.write_all(&read.to_be_bytes()).unwrap();
+        }
+    }
+}
+
+/// Encodes a read ID string into a `u32` integer.
+///
+/// This function expects read IDs to be in a specific format, typically starting
+/// with 'R' followed by a number, and then potentially more information
+/// separated by underscores. It extracts the numeric part immediately
+/// following 'R' and parses it as a `u32`.
+///
+/// # Arguments
+///
+/// * `id` - A reference to a `String` containing the read ID.
+///          Expected format example: "R9834_chr16__FC37#TC0#PA0#PR0#IY887"
+///
+/// # Returns
+///
+/// A `u32` integer representing the numeric part of the read ID.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - The `id` string does not contain an underscore (i.e., `split('_').next()` fails).
+/// - The part before the first underscore does not start with 'R'
+///   (i.e., `strip_prefix('R')` fails).
+/// - The remaining string after stripping 'R' cannot be successfully parsed as a `u32` integer.
+///
+/// # Example
+///
+/// ```rust, ignore
+/// let id1 = "R9834_chr16__FC37#TC0#PA0#PR0#IY887".to_string();
+/// let encoded1 = encode_id(&id1);
+/// assert_eq!(encoded1, 9834);
+///
+/// let id2 = "R123_abc".to_string();
+/// let encoded2 = encode_id(&id2);
+/// assert_eq!(encoded2, 123);
+///
+/// // Example of a string that would cause a panic:
+/// // let bad_id1 = "9834_chr16".to_string();
+/// // let _ = encode_id(&bad_id1); // Panics: "ERROR: could not preserve numeric part from 9834_chr16"
+///
+/// // let bad_id2 = "Rabc_chr16".to_string();
+/// // let _ = encode_id(&bad_id2); // Panics: "ERROR: could not parse as number: Rabc_chr16 -> invalid digit found in string"
+/// ```
+fn encode_id(id: &String) -> u32 {
+    // INFO: R9834_chr16__FC37#TC0#PA0#PR0#IY887
+    id.split('_')
+        .next()
+        .unwrap_or_else(|| panic!("ERROR: could not get read number from {id}"))
+        .strip_prefix('R')
+        .unwrap_or_else(|| panic!("ERROR: could not preserve numeric part from {id}"))
+        .parse::<u32>()
+        .unwrap_or_else(|e| panic!("ERROR: could not parse as number: {id} -> {e}"))
+}
+
+/// Locates or extracts read IDs from a binary index file.
+///
+/// This function serves two primary purposes: finding a specific group of read IDs
+/// associated with a given header, or iterating through the entire index and
+/// writing all header-ID group pairs to an output file. The function reads a
+/// custom binary format, which consists of a 2-byte count for the number of IDs
+/// in a group, followed by a 4-byte header, and then a sequence of 4-byte IDs.
+///
+/// # Arguments
+///
+/// * `args` - A `crate::cli::IndexArgs` struct containing command-line arguments,
+///            including the path to the index file (`args.index`), an optional
+///            header ID to search for (`args.id`), and flags to control the
+///            operation, such as whether to write the output (`args.write`)
+///            and the output directory (`args.output_dir`).
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - It fails to open the specified index file.
+/// - The `--write` flag is used, but the specified output directory cannot be created.
+/// - The `--write` flag is used, but the output file cannot be created within that directory.
+/// - A read operation from the index file fails unexpectedly before the end of the file is reached.
+/// - The `--write` flag is not used and no header ID is provided via `--id`.
+///
+/// # Example
+///
+/// ```rust, ignore
+/// // Example of finding a specific header ID:
+/// let args = IndexArgs {
+///     index: PathBuf::from("path/to/my/index.bin"),
+///     id: Some(1234),
+///     write: false,
+///     output_dir: PathBuf::new(),
+/// };
+/// find(args); // This would print the group of IDs associated with header 1234
+///
+/// // Example of writing all header-ID groups to a file:
+/// let args = IndexArgs {
+///     index: PathBuf::from("path/to/my/index.bin"),
+///     id: None,
+///     write: true,
+///     output_dir: PathBuf::from("output_dir"),
+/// };
+/// find(args); // This would create a file named 'index' in 'output_dir'
+/// ```
+pub fn find(args: crate::cli::IndexArgs) {
+    use std::io::Read;
+
+    let mut reader = std::io::BufReader::new(
+        File::open(args.index).unwrap_or_else(|e| panic!("ERROR: failed to open index -> {e}")),
+    );
+
+    let mut writer = None;
+    if args.write {
+        std::fs::create_dir_all(&args.output_dir).unwrap();
+
+        writer = Some(std::io::BufWriter::new(
+            File::create(args.output_dir.join("index")).unwrap(),
+        ));
+    }
+
+    loop {
+        let mut id_count_buf = [0u8; 2];
+        if reader.read_exact(&mut id_count_buf).is_err() {
+            break; // EOF reached cleanly
+        }
+        let n_ids = u16::from_be_bytes(id_count_buf);
+
+        let mut header_buf = [0u8; 4];
+        reader.read_exact(&mut header_buf).unwrap();
+        let header = u32::from_be_bytes(header_buf);
+
+        if args.write {
+            let mut id_buf = [0u8; 4];
+            let mut group = Vec::with_capacity(n_ids as usize);
+            for _ in 0..n_ids {
+                reader.read_exact(&mut id_buf).unwrap();
+                let id = u32::from_be_bytes(id_buf);
+
+                // WARN: id fmt -> R{int}_chr{chr}, skipping tags!
+                let name = format!("R{}", id);
+                group.push(name);
+            }
+
+            let _ = writeln!(writer.as_mut().unwrap(), "{}\t{:?}", header, group);
+        } else {
+            let id = args.id.unwrap_or_else(|| {
+                panic!("ERROR: you forgot to pass --id <ID>, otherwise use --write")
+            });
+
+            if header == id {
+                let mut id_buf = [0u8; 4];
+                let mut group = Vec::with_capacity(n_ids as usize);
+                for _ in 0..n_ids {
+                    reader.read_exact(&mut id_buf).unwrap();
+                    let id = u32::from_be_bytes(id_buf);
+
+                    // WARN: id fmt -> R{int}_chr{chr}, skipping tags!
+                    let name = format!("R{}", id);
+                    group.push(name);
+                }
+
+                let rs = format!("ID: {} -> {:?}", header, group);
+                log::info!("{}", rs);
+                break; // Found the target, exit
+            } else {
+                // CRITICAL FIX: Skip the IDs for this non-matching group
+                reader.seek_relative((n_ids as i64) * 4).unwrap();
+            }
+        }
+    }
+}
+
+/// Computes the reverse complement of a DNA sequence in-place.
+///
+/// This function takes a mutable reference to a vector of bytes representing a DNA sequence
+/// and transforms it into its reverse complement. The sequence is reversed and each base is
+/// complemented according to Watson-Crick base pairing rules: A ↔ T and C ↔ G. The operation
+/// is performed in-place, modifying the original vector. Ambiguous bases (like 'N') and
+/// unrecognized characters remain unchanged.
+///
+/// # Arguments
+///
+/// * `seq` - A mutable reference to a `Vec<u8>` containing the DNA sequence as ASCII bytes.
+///           The sequence can contain uppercase or lowercase nucleotide characters (A, T, C, G).
+///           Other characters (such as 'N' for ambiguous bases) are preserved unchanged.
+///
+/// # Panics
+///
+/// This function does not panic under normal circumstances.
+///
+/// # Example
+///
+/// ```rust, ignore
+/// // Example with a simple DNA sequence:
+/// let mut sequence = b"ATCG".to_vec();
+/// __rev_complement_u8(&mut sequence);
+/// assert_eq!(sequence, b"CGAT".to_vec());
+///
+/// // Example with mixed case:
+/// let mut sequence = b"AtcG".to_vec();
+/// __rev_complement_u8(&mut sequence);
+/// assert_eq!(sequence, b"CGAT".to_vec());
+///
+/// // Example with ambiguous bases:
+/// let mut sequence = b"ATCGN".to_vec();
+/// __rev_complement_u8(&mut sequence);
+/// assert_eq!(sequence, b"NCGAT".to_vec());
+/// ```
+///
+/// # Notes
+///
+/// - The function handles both uppercase and lowercase nucleotide characters
+/// - Ambiguous bases (N) and unrecognized characters remain in their original positions but reversed
+/// - The algorithm is optimized to work in-place with O(1) additional memory usage
+/// - Time complexity is O(n) where n is the length of the sequence
+pub fn __rev_complement_u8(seq: &mut Vec<u8>) {
+    // INFO: A <-> T, C <-> G
+    let complement = |base: u8| match base {
+        b'A' | b'a' => b'T',
+        b'T' | b't' => b'A',
+        b'C' | b'c' => b'G',
+        b'G' | b'g' => b'C',
+        _ => base, // INFO: N or other ambiguous bases remain unchanged
+    };
+
+    let len = seq.len();
+    for i in 0..(len / 2) {
+        let j = len - 1 - i;
+        let temp = complement(seq[i]);
+        seq[i] = complement(seq[j]);
+        seq[j] = temp;
+    }
+
+    // INFO: if the sequence length is odd, complement the middle base
+    if len % 2 == 1 {
+        seq[len / 2] = complement(seq[len / 2]);
+    };
+}
+
+/// Joins all chunked FASTA files into a single FASTA file.
+///
+/// This function takes a vector of tuples, where each tuple contains the path to a
+/// chunked FASTA file and its corresponding chunked BED file. It iterates through
+/// the vector, reads each chunked FASTA file, and writes its contents to a new
+/// FASTA file named "joined.fa".
+///
+/// # Arguments
+///
+/// * `chunked` - A vector of tuples, where each tuple contains the path to a
+///               chunked FASTA file and its corresponding chunked BED file.
+///
+/// # Panics
+///
+/// This function will panic if:
+/// - It fails to open or read from a chunked FASTA file.
+/// - It fails to write to the "joined.fa" file.
+///
+/// # Example
+///
+/// ```rust, ignore
+/// let chunked = vec![
+///     (PathBuf::from("path/to/chunk_1.fa"), PathBuf::from("path/to/chunk_1.bed")),
+///     (PathBuf::from("path/to/chunk_2.fa"), PathBuf::from("path/to/chunk_2.bed")),
+/// ];
+/// __join(chunked);
+/// ```
+pub fn __join(chunked: &Vec<(PathBuf, PathBuf)>, basename: PathBuf) {
+    let mut writer = BufWriter::new(File::create(basename).unwrap());
+    for (chunked_fa, _chunked_bed) in chunked {
+        let mut reader = BufReader::new(File::open(chunked_fa).unwrap());
+        let mut buf = String::new();
+        reader.read_to_string(&mut buf).unwrap();
+        write!(writer, "{}", buf).unwrap();
+    }
+}

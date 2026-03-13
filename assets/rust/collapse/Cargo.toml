@@ -1,0 +1,28 @@
+[package]
+name = "collapse"
+version = "0.0.4"
+authors = ["alejandrogzi <alejandrxgzi@gmail.com>"]
+edition = "2021"
+license = "MIT"
+description = "shrink your .beds"
+homepage = "https://github.com/alejandrogzi/isopipe"
+repository = "https://github.com/alejandrogzi/isopipe"
+readme = "README.md"
+keywords = ["bed", "bioinformatics", "genomics", "collapse"]
+categories = ["command-line-utilities", "science"]
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+simple_logger = { version = "5.0.0" }
+log = { version = "0.4.14" }
+num_cpus = "1.16.0"
+rayon = "1.8.1"
+once_cell = "1.21.3"
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
+dashmap = "5.5.3"
+
+[profile.release]
+lto = true
+opt-level = 3
+codegen-units = 1
+strip = true
