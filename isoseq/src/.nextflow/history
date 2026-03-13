@@ -1,1 +1,0 @@
-2026-03-01 13:49:36	28.2s	magical_torvalds	OK	c3253d05a809d3ee2eed0f243f87aca4	ed390159-9c62-4e41-a72c-9f03017f39ac	nextflow run main.nf -c nextflow.config -profile docker
