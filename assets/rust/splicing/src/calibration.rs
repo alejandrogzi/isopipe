@@ -337,6 +337,19 @@ pub fn derive_spliceai_score(
     Ok(records.len())
 }
 
+/// Derives records for a specific splice site type.
+///
+/// # Arguments
+/// * `label` - "donor" or "acceptor" for logging
+/// * `spliceai_scores` - SpliceAI scores for the strand
+/// * `expected_splice_site` - Expected splice site type (donor/acceptor)
+/// * `bins` - Calibration bins map
+/// * `null_profile` - Null profile map
+/// * `floor` - Minimum output score
+/// * `ceiling` - Maximum output score
+///
+/// # Returns
+/// Vector of derived score records
 fn derive_records(
     label: &str,
     spliceai_scores: &StrandSpliceMap,
@@ -417,6 +430,10 @@ fn derive_records(
     records
 }
 
+/// Creates empty bin counts for all score bins.
+///
+/// # Returns
+/// Vector of BinCounts initialized to zero for each score bin
 fn empty_bin_counts() -> Vec<BinCounts> {
     SCORE_BIN_EDGES
         .windows(2)
@@ -424,6 +441,15 @@ fn empty_bin_counts() -> Vec<BinCounts> {
         .collect()
 }
 
+/// Looks up the calibrated probability for a given raw score and dinucleotide.
+///
+/// # Arguments
+/// * `raw_score` - Raw SpliceAI score (0.0 to 1.0)
+/// * `dinucleotide` - Dinucleotide sequence (e.g., b"GT")
+/// * `bins` - Calibration bins map from dinucleotide to calibration bins
+///
+/// # Returns
+/// Empirical probability for the bin containing the raw score, or 0.0 if bins not found
 fn lookup_calibrated_probability(
     raw_score: f32,
     dinucleotide: &[u8],
@@ -453,6 +479,21 @@ fn lookup_calibrated_probability(
     }
 }
 
+/// Computes the derived splice score from calibrated and null probabilities.
+///
+/// Calculates likelihood ratio: calibrated_probability / null_probability,
+/// converts to log2 scale, rounds and clamps to floor/ceiling.
+///
+/// # Arguments
+/// * `label` - "donor" or "acceptor" for logging
+/// * `parsed` - Parsed SpliceAI record
+/// * `calibrated_probability` - Empirical probability from calibration bins
+/// * `null_probability` - Background probability from null profile
+/// * `floor` - Minimum output score
+/// * `ceiling` - Maximum output score
+///
+/// # Returns
+/// Derived score clamped to [floor, ceiling] range
 fn compute_derived_score(
     label: &str,
     parsed: &ParsedSpliceAiRecord,
@@ -515,6 +556,14 @@ fn compute_derived_score(
     clamped_score
 }
 
+/// Writes derived score records to a TSV file.
+///
+/// # Arguments
+/// * `path` - Output file path
+/// * `records` - Slice of derived score records to write
+///
+/// # Returns
+/// Result indicating success or I/O error
 fn write_derived_scores(path: &Path, records: &[DerivedScoreRecord]) -> io::Result<()> {
     let mut writer = BufWriter::new(File::create(path)?);
 
@@ -551,6 +600,16 @@ pub fn find_bin_index(score: f32) -> usize {
         .unwrap_or(SCORE_BIN_EDGES.len() - 2)
 }
 
+/// Compares two derived score records for sorting.
+///
+/// Sorts by chromosome, then coordinate, then strand, then dinucleotide.
+///
+/// # Arguments
+/// * `left` - First record to compare
+/// * `right` - Second record to compare
+///
+/// # Returns
+/// Ordering of the two records
 fn sort_derived_records(left: &DerivedScoreRecord, right: &DerivedScoreRecord) -> Ordering {
     left.chr
         .cmp(&right.chr)
@@ -559,6 +618,15 @@ fn sort_derived_records(left: &DerivedScoreRecord, right: &DerivedScoreRecord) -
         .then(left.dinucleotide.cmp(&right.dinucleotide))
 }
 
+/// Converts a strand to a numeric rank for sorting.
+///
+/// Forward strand gets rank 0, Reverse strand gets rank 1.
+///
+/// # Arguments
+/// * `strand` - The strand to convert
+///
+/// # Returns
+/// u8 representing the strand rank (0 for Forward, 1 for Reverse)
 fn strand_rank(strand: Strand) -> u8 {
     match strand {
         Strand::Forward => 0,
