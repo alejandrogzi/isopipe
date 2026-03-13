@@ -5,9 +5,9 @@
 FROM rust:1.93.0-bookworm as builder
 WORKDIR /apps
 
-# INFO: moving codebase
-COPY ../rust/splicing/Cargo.toml ../rust/splicing/Cargo.lock ./splicing/
-COPY ../rust/splicing/src ./splicing/src
+# INFO: copy sources from the repo-root build context
+COPY assets/rust/splicing/Cargo.toml assets/rust/splicing/Cargo.lock ./splicing/
+COPY assets/rust/splicing/src ./splicing/src
 
 # INFO: build
 RUN cargo build --release --manifest-path ./splicing/Cargo.toml
