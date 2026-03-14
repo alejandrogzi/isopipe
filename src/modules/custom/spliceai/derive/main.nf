@@ -5,7 +5,7 @@ process SPLICEAI_DERIVE {
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         '' :
-        'ghcr.io/alejandrogzi/isox-rs:main-22010af' }"
+        'ghcr.io/alejandrogzi/isox-rs:latest' }"
 
 
     input:
