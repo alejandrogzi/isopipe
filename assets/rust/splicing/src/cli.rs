@@ -10,6 +10,7 @@ pub const DEFAULT_SCORE_FLOOR: i32 = -4;
 pub const DEFAULT_SCORE_CEILING: i32 = 13;
 
 #[derive(Debug, Parser)]
+#[command(name = "splicing", about = "derive spliceAi scores", version = env!("CARGO_PKG_VERSION"))]
 pub struct Args {
     #[arg(
         short = 'b',
