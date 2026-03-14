@@ -27,7 +27,7 @@ process SPLICEAI_DERIVE {
     splicing \\
         $args \\
         -t ${task.cpus} \\
-        --bigwig_dir ${spliceai} \\
+        --bigwig-dir ${spliceai} \\
         --sequence ${genome} \\
         --regions ${annotation} \\
         --prefix ${prefix}
