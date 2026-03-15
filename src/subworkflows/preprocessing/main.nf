@@ -30,6 +30,7 @@ workflow PREPROCESSING {
       use_splice_scores      // bool
       splice_score_algorithm // string
       bigwigs                // path
+      minisplice             // path
       ch_versions            // [ meta, versions.yml ]
 
     main:
@@ -44,9 +45,11 @@ workflow PREPROCESSING {
           ch_minimap2_index = Channel.value(file(minimap2_index, checkIfExists: true))
               .map { path -> [ [id:path.name], path ] }
       } else {
-          ch_minimap2_index = MINIMAP2_INDEX(
+          MINIMAP2_INDEX(
               ch_genome.genome.map { genome -> [ [id:genome.baseName], genome ] }
           )
+          ch_minimap2_index = MINIMAP2_INDEX.out.index
+          ch_versions = ch_versions.mix(MINIMAP2_INDEX.out.versions)
       }
 
       ch_splice_scores = Channel.empty()
@@ -57,6 +60,7 @@ workflow PREPROCESSING {
                   ch_reference_transcripts,
                   bigwigs,
                   splice_score_algorithm,
+                  minisplice,
                   ch_versions
               )
               ch_splice_scores = SPLICEAI_GENOMIC_SPLICE_SCORES.out.scores
@@ -66,10 +70,14 @@ workflow PREPROCESSING {
                   ch_reference_transcripts,
                   bigwigs,
                   splice_score_algorithm,
+                  minisplice,
                   ch_versions
               )             
               ch_splice_scores = MINISPLICE_GENOMIC_SPLICE_SCORES.out.scores
           }
+      } else {
+          // INFO: keep MINIMAP2_ALIGN schedulable when splice scores are disabled
+          ch_splice_scores = Channel.value([[:], []])
       }
 
       // INFO: isoseq entrypoint
@@ -100,15 +108,14 @@ workflow PREPROCESSING {
               .set { ch_reads }
       }
       
-      ch_versions = ch_versions.mix(MINIMAP2_INDEX.out.versions)
       ch_versions = ch_versions.mix(ch_genome.versions)
 
     emit:
-      genome         = ch_genome.genome
-      database       = ch_database
-      reads          = ch_reads
-      minimap2_index = ch_minimap2_index.index
+      genome                = ch_genome.genome
+      database              = ch_database
+      reads                 = ch_reads
+      minimap2_index        = ch_minimap2_index
       reference_transcripts = ch_reference_transcripts
-      splice_scores  = ch_splice_scores
-      versions = ch_versions
+      splice_scores         = ch_splice_scores
+      versions              = ch_versions
 }
