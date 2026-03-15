@@ -10,8 +10,9 @@ process MINIMAP2_ALIGN {
 
     input:
     tuple val(meta), path(reads)
-    tuple val(meta2), path(reference)
-    tuple val(meta3), path(splice_scores)
+    tuple val(meta1), path(reference)
+    tuple val(meta2), path(splice_scores)
+    tuple val(meta3), path(junc_bed)
 
     output:
     tuple val(meta), path("*.sam")                       , optional: true, emit: sam
@@ -27,10 +28,12 @@ process MINIMAP2_ALIGN {
     def singleton = meta.singleton ? ".singleton" : ""
     def sam = "${meta.id}.${meta.chunk}${singleton}.sam"
     def spsc = splice_scores ? "--spsc=${splice_scores}" : ''
+    def junc = junc_bed ? "--junc-bed ${junc_bed}" : ''
     """
     minimap2 \\
         $args \\
         $spsc \\
+        $junc \\
         -t $task.cpus \\
         ${reference} \\
         ${reads} \\

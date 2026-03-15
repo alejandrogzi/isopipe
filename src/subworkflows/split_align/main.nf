@@ -25,6 +25,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
       ch_splice_scores         // [ meta, scores ]
       cluster_mode             // string [ per_sample, multi_sample, both ]
       entrypoint               // string [ isoseq, map ]
+      minimap2_use_junc_bed    // bool
       ch_versions              // [ meta, versions.yml ]
 
     main:
@@ -41,11 +42,25 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           }
           .set { ch_fastx_gz }
  
-      MINIMAP2_ALIGN(
-        ch_fastx_gz, 
-        ch_minimap2_index,
-        ch_splice_scores
-      )
+      if (minimap2_use_junc_bed) {
+          MINIMAP2_ALIGN(
+            ch_fastx_gz, 
+            ch_minimap2_index,
+            ch_splice_scores,
+            ch_reference_transcripts
+              .map { 
+                junctions -> 
+                [ [id:junctions.baseName], junctions ] 
+              }
+          )
+      } else {
+          MINIMAP2_ALIGN(
+            ch_fastx_gz, 
+            ch_minimap2_index,
+            ch_splice_scores,
+            Channel.value([[:], []])
+          )
+      }
 
       ch_aligned_bam = Channel.empty()
       ch_aligned_bai = Channel.empty()

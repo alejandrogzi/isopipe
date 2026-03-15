@@ -51,6 +51,7 @@ workflow ISOPIPE {
         PREPROCESSING.out.splice_scores,
         params.isoseq_cluster2_mode,
         params.entrypoint,
+        params.minimap2_align_use_junc_bed,
         ch_versions
       )
 
