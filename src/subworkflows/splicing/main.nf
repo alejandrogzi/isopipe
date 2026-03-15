@@ -21,6 +21,7 @@ workflow SPLICING {
       annotation
       bigwigs
       algorithm
+      minisplice
       ch_versions
 
     main:
@@ -45,16 +46,23 @@ workflow SPLICING {
               // ch_versions = ch_versions.mix(SPLICEAI_RUN.out.versions)
           }
       } else if (algorithm == "minisplice") {
-          MINISPLICE_DOWNLOAD()
-          MINISPLICE_PREDICT(
-              genome.map { genome -> [ [id:genome.baseName], genome ] },
-              MINISPLICE_DOWNLOAD.out.model,
-              MINISPLICE_DOWNLOAD.out.calibration
-          )
+          if (minisplice) {
+              Channel.value([
+                      [ id: "minisplice" ],
+                      file(minisplice, checkIfExists: true)
+              ]).set { ch_scores }
+          } else {
+            MINISPLICE_DOWNLOAD()
+            MINISPLICE_PREDICT(
+                genome.map { genome -> [ [id:genome.baseName], genome ] },
+                MINISPLICE_DOWNLOAD.out.model,
+                MINISPLICE_DOWNLOAD.out.calibration
+            )
 
-          ch_scores = MINISPLICE_PREDICT.out.scores
-          ch_versions = ch_versions.mix(MINISPLICE_DOWNLOAD.out.versions)
-          ch_versions = ch_versions.mix(MINISPLICE_PREDICT.out.versions)
+            ch_scores = MINISPLICE_PREDICT.out.scores
+            ch_versions = ch_versions.mix(MINISPLICE_DOWNLOAD.out.versions)
+            ch_versions = ch_versions.mix(MINISPLICE_PREDICT.out.versions)
+          }
       }
 
     emit:
