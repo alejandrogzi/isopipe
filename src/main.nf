@@ -40,6 +40,7 @@ workflow ISOPIPE {
         params.minimap2_align_use_splice_scores,
         params.minimap2_align_splicing_algorithm,
         params.spliceai_bigwigs_dir,
+        params.minisplice_scores_path,
         ch_versions
       )
 
@@ -48,6 +49,8 @@ workflow ISOPIPE {
         PREPROCESSING.out.minimap2_index,
         PREPROCESSING.out.reference_transcripts,
         PREPROCESSING.out.splice_scores,
+        params.isoseq_cluster2_mode,
+        params.entrypoint,
         ch_versions
       )
 
