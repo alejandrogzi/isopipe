@@ -415,14 +415,53 @@ fn derive_records(
                 ceiling,
             );
 
-            records.push(DerivedScoreRecord {
-                chr: parsed.chr,
-                coordinate: parsed.position,
-                strand: parsed.strand,
-                dinucleotide: parsed.dinucleotide,
-                splice_site: parsed.splice_site,
-                derived_score,
-            });
+            // INFO: adding +1 on acceptor(+) and donor(-) to match minisplice coords
+            match parsed.strand {
+                Strand::Forward => match parsed.splice_site {
+                    SpliceSite::Donor => {
+                        records.push(DerivedScoreRecord {
+                            chr: parsed.chr,
+                            coordinate: parsed.position,
+                            strand: parsed.strand,
+                            dinucleotide: parsed.dinucleotide,
+                            splice_site: parsed.splice_site,
+                            derived_score,
+                        });
+                    }
+                    SpliceSite::Acceptor => {
+                        records.push(DerivedScoreRecord {
+                            chr: parsed.chr,
+                            coordinate: parsed.position + 1,
+                            strand: parsed.strand,
+                            dinucleotide: parsed.dinucleotide,
+                            splice_site: parsed.splice_site,
+                            derived_score,
+                        });
+                    }
+                },
+                Strand::Reverse => match parsed.splice_site {
+                    SpliceSite::Donor => {
+                        records.push(DerivedScoreRecord {
+                            chr: parsed.chr,
+                            coordinate: parsed.position + 1,
+                            strand: parsed.strand,
+                            dinucleotide: parsed.dinucleotide,
+                            splice_site: parsed.splice_site,
+                            derived_score,
+                        });
+                    }
+                    SpliceSite::Acceptor => {
+                        records.push(DerivedScoreRecord {
+                            chr: parsed.chr,
+                            coordinate: parsed.position,
+                            strand: parsed.strand,
+                            dinucleotide: parsed.dinucleotide,
+                            splice_site: parsed.splice_site,
+                            derived_score,
+                        });
+                    }
+                },
+            }
         });
     });
 
