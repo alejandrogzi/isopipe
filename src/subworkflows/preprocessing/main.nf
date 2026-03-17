@@ -31,6 +31,7 @@ workflow PREPROCESSING {
       splice_score_algorithm // string
       bigwigs                // path
       minisplice             // path
+      spliceai               // path
       ch_versions            // [ meta, versions.yml ]
 
     main:
@@ -61,6 +62,7 @@ workflow PREPROCESSING {
                   bigwigs,
                   splice_score_algorithm,
                   minisplice,
+                  spliceai,
                   ch_versions
               )
               ch_splice_scores = SPLICEAI_GENOMIC_SPLICE_SCORES.out.scores
@@ -71,6 +73,7 @@ workflow PREPROCESSING {
                   bigwigs,
                   splice_score_algorithm,
                   minisplice,
+                  spliceai,
                   ch_versions
               )             
               ch_splice_scores = MINISPLICE_GENOMIC_SPLICE_SCORES.out.scores

@@ -41,6 +41,7 @@ workflow ISOPIPE {
         params.minimap2_align_splicing_algorithm,
         params.spliceai_bigwigs_dir,
         params.minisplice_scores_path,
+        params.spliceai_scores_path,
         ch_versions
       )
 

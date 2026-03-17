@@ -7,6 +7,7 @@
 include { MINISPLICE_DOWNLOAD } from '../../modules/custom/minisplice/download/main.nf'
 include { MINISPLICE_PREDICT } from '../../modules/custom/minisplice/predict/main.nf'
 include { SPLICEAI_DERIVE } from '../../modules/custom/spliceai/derive/main.nf'
+include { GUNZIP as GUNZIP_SPLICEAI } from '../../modules/custom/gunzip/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -22,35 +23,57 @@ workflow SPLICING {
       bigwigs
       algorithm
       minisplice
+      spliceai
       ch_versions
 
     main:
       if (algorithm == "spliceai") {
-          if (bigwigs) {
-            Channel.value([
-                    [ id: "spliceai" ],
-                    file(bigwigs, checkIfExists: true)
-            ]).set { ch_spliceai_bigwigs }
-
-            SPLICEAI_DERIVE(
-                genome.map { genome -> [ [id:genome.baseName], genome ] },
-                annotation.map { annotation -> [ [id:annotation.baseName], annotation ] },
-                ch_spliceai_bigwigs
-            )
-            ch_scores = SPLICEAI_DERIVE.out.scores
-            ch_versions = ch_versions.mix(SPLICEAI_DERIVE.out.versions)
+          if (spliceai) {
+            def spliceai_scores = file(spliceai, checkIfExists: true)
+            
+            if (spliceai_scores.toString().endsWith(".gz")) {
+                GUNZIP_SPLICEAI([ [ id: "spliceai" ], spliceai_scores ])
+                ch_scores = GUNZIP_SPLICEAI.out.gunzip
+            } else {
+                Channel.value([
+                        [ id: "spliceai" ],
+                        spliceai_scores
+                ]).set { ch_scores }
+            }
           } else {
-              // SPLICEAI_RUN()
+            if (bigwigs) {
+              Channel.value([
+                      [ id: "spliceai" ],
+                      file(bigwigs, checkIfExists: true)
+              ]).set { ch_spliceai_bigwigs }
 
-              // ch_scores = SPLICEAI_RUN.out.scores
-              // ch_versions = ch_versions.mix(SPLICEAI_RUN.out.versions)
+              SPLICEAI_DERIVE(
+                  genome.map { genome -> [ [id:genome.baseName], genome ] },
+                  annotation.map { annotation -> [ [id:annotation.baseName], annotation ] },
+                  ch_spliceai_bigwigs
+              )
+              ch_scores = SPLICEAI_DERIVE.out.scores
+              ch_versions = ch_versions.mix(SPLICEAI_DERIVE.out.versions)
+            } else {
+                // SPLICEAI_RUN()
+
+                // ch_scores = SPLICEAI_RUN.out.scores
+                // ch_versions = ch_versions.mix(SPLICEAI_RUN.out.versions)
+            }
           }
       } else if (algorithm == "minisplice") {
           if (minisplice) {
-              Channel.value([
-                      [ id: "minisplice" ],
-                      file(minisplice, checkIfExists: true)
-              ]).set { ch_scores }
+              def minisplice_scores = file(minisplice, checkIfExists: true)
+              
+              if (minisplice_scores.toString().endsWith(".gz")) {
+                  GUNZIP_MINISPLICE([ [ id: "minisplice" ], minisplice_scores ])
+                  ch_scores = GUNZIP_MINISPLICE.out.gunzip
+              } else {
+                  Channel.value([
+                          [ id: "minisplice" ],
+                          minisplice_scores
+                  ]).set { ch_scores }
+              }
           } else {
             MINISPLICE_DOWNLOAD()
             MINISPLICE_PREDICT(
