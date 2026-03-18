@@ -74,7 +74,7 @@ process FXSPLIT {
 
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
-    def gzip          = reads.name.endsWith('.gz') ? true : false
+    def gzip   = reads.name.endsWith('.gz') ? true : false
     """
     mkdir chunks
 
