@@ -80,19 +80,20 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
 
           ch_versions = ch_versions.mix(SAMTOOLS_BAM.out.versions)
         } else if (cluster_mode == "multi_sample") {
-          MINIMAP2_ALIGN.out.sam
-              .map { meta, sam -> sam }
+          SAMTOOLS_BAM(MINIMAP2_ALIGN.out.sam)
+          SAMTOOLS_BAM.out.bam
+              .map { meta, bam -> bam }
               .collect()
-              .map { sams -> [ 
+              .map { bams -> [ 
                 [
                   id: 'pooled', 
                   single_end: false,
                   singleton: false,
                   chunk: 0
-                ], sams ] }
-              .set { ch_joined_sam }
+                ], bams ] }
+              .set { ch_joined_bam }
 
-          SAMTOOLS_MERGE_BAM_MULTI_SAMPLE(ch_joined_sam)
+          SAMTOOLS_MERGE_BAM_MULTI_SAMPLE(ch_joined_bam)
           ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.bam
           ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.bai
 
@@ -102,11 +103,11 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           ch_aligned_bam = SAMTOOLS_BAM.out.bam
           ch_aligned_bai = SAMTOOLS_BAM.out.bai
 
-          MINIMAP2_ALIGN.out.sam
-              .map { meta, sam -> sam }
+          SAMTOOLS_BAM.out.bam
+              .map { meta, bam -> bam }
               .collect()
-              .map { sams -> [ [id:'pooled'], sams ] }
-              .set { ch_joined_sam }
+              .map { bams -> [ [id:'pooled'], bams ] }
+              .set { ch_joined_bam }
           SAMTOOLS_MERGE_BAM_MULTI_SAMPLE(ch_joined_sam)
 
           ch_aligned_bam = ch_aligned_bam.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.bam)
