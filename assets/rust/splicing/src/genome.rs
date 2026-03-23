@@ -1,5 +1,5 @@
-//! BWT to MS - SpliceAI calibration tool
-//! Calculates derived splice scores using SpliceAI and genomic annotations
+// Copyright (c) 2026 Alejandro Gonzalez-Irribarren <alejandrxgzi@gmail.com>
+// Distributed under the terms of the Apache License, Version 2.0.
 
 use flate2::read::MultiGzDecoder;
 use log::info;

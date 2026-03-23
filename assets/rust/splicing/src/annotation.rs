@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Alejandro Gonzalez-Irribarren <alejandrxgzi@gmail.com>
+// Distributed under the terms of the Apache License, Version 2.0.
+
 use dashmap::{DashMap, DashSet};
 use flate2::read::MultiGzDecoder;
 use genepred::{bed::BedFormat, reader::ReaderError, Bed12, GenePred, Gff, Gtf, Reader, Strand};
