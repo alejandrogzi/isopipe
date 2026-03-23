@@ -20,7 +20,7 @@ process ISOSEQ_CLUSTER2 {
     tuple val(meta), path("*.transcripts.lq.bam.pbi")        , optional: true, emit: lq_pbi
     tuple val(meta), path("*.transcripts.singletons.bam")    , optional: true, emit: singletons_bam
     tuple val(meta), path("*.transcripts.singletons.bam.pbi"), optional: true, emit: singletons_pbi
-    tuple val(meta), path("*.fofn")                       , emit: fofn
+    tuple val(meta), path("*.fofn")                          , emit: fofn
     path  "versions.yml"                                     , emit: versions
 
     when:
