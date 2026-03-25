@@ -83,10 +83,11 @@ workflow ISOPIPE {
           .set { ch_fusion_orf_predictions_bed }
 
       ISOTOOLS_NMD_FILTER(ch_orf_predictions_bed)
-
-      // ISOTOOLS_INTRON_CLASSIFIER(
-      //   ISOTOOLS_NMD_FILTER.out.reads,
-      // )
+      
+      PREPOLISH(
+          ISOTOOLS_NMD_FILTER.out.reads,
+          PREPROCESSING.out.genome,
+      )
 
       // ISOTOOLS_POLISH()
 
