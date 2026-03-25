@@ -1,0 +1,51 @@
+process XLOCI_INTRON {
+    tag "$meta.id"
+    label 'process_low'
+
+    conda "${moduleDir}/environment.yml"
+    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
+        '' :
+        'ghcr.io/alejandrogzi/xloci:latest' }"
+
+    input:
+    tuple val(_), path(genome)
+    tuple val(meta), path(reads)
+
+    output:
+    tuple val(meta), path("*.fa")      , optional: true, emit: fasta
+    tuple val(meta), path("*.tsv")     , optional: true, emit: tsv
+    path  "versions.yml"                               , emit: versions
+
+    when:
+    task.ext.when == null || task.ext.when
+
+    script:
+    def args          = task.ext.args   ?: ''
+    def prefix        = task.ext.prefix ?: "${meta.id}"
+    """
+    xloci \\
+        -f intron \\
+        -s $genome \\
+        -r $reads \\
+        -t $task.cpus \\
+        --prefix ${prefix} \\ 
+        $args
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        xloci: \$( xloci --version | head -n 1 | sed 's/xloci //g' | sed 's/ (.*//g' )
+    END_VERSIONS
+    """
+
+    stub:
+    def prefix = task.ext.prefix ?: "${meta.id}"
+    """
+    touch *.fa
+    touch *.tsv
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        xloci: \$( xloci --version | head -n 1 | sed 's/xloci //g' | sed 's/ (.*//g' )
+    END_VERSIONS
+    """
+}
