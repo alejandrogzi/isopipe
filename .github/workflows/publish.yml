@@ -24,6 +24,9 @@ jobs:
           - name: isox-rs
             dockerfile: assets/docker/rs.Dockerfile
             context: .
+          - name: isox-py
+            dockerfile: assets/docker/py.Dockerfile
+            context: .
 
     steps:
       - uses: actions/checkout@v4
