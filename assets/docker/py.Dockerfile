@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir \
     "intronIC==2.1.4" \
     "numpy >= 2" \
+    "pandas >= 2" \
     "scipy >= 1.2.1" \
     "tensorflow >= 1.13.1" \
     "keras >= 2.2.4" \
