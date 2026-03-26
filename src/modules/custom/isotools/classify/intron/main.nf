@@ -29,7 +29,7 @@ process ISOTOOLS_CLASSIFY_INTRON {
     def repeats   = repeats ? "--repeats $repeats" : ''
     def iic       = intronic ? "--iic $intronic" : ''
     """
-    iso-classify-intron \\
+    iso-classify intron \\
         --isoseq $reads \\
         --sequence $genome \\
         --toga $annotation \\
