@@ -24,12 +24,13 @@ process XLOCI_INTRON {
     def prefix        = task.ext.prefix ?: "${meta.id}"
     """
     xloci \\
+        $args \\
         -f intron \\
+        -o . \\
         -s $genome \\
         -r $reads \\
         -t $task.cpus \\
-        --prefix ${prefix} \\ 
-        $args
+        --prefix ${prefix}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

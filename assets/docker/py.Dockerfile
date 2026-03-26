@@ -20,5 +20,11 @@ RUN pip install --no-cache-dir \
     biogl \
     matplotlib
 
+# APARENT
+COPY assets/py/aparent/aparent.py /usr/local/lib/aparent/aparent.py
+RUN ln -s /usr/local/lib/aparent/aparent.py /usr/local/bin/aparent \
+    && chmod +x /usr/local/lib/aparent/aparent.py
+
 RUN python -c "import pandas; import numpy; import scipy; print('All dependencies OK')"
 RUN intronIC --version
+RUN aparent --version

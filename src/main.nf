@@ -15,6 +15,7 @@ include { SPLIT_ALIGN_CLEAN_CHUNKS } from './subworkflows/split_align/main.nf'
 include { XORF as XORF_PREDICT_ORFS } from '../modules/xorf/src/subworkflows/xorf/main.nf'
 include { XORF as XORF_PREDICT_FUSION_ORFS } from '../modules/xorf/src/subworkflows/xorf/main.nf'
 include { ISOTOOLS_NMD as ISOTOOLS_NMD_FILTER } from './modules/custom/isotools/nmd/main.nf'
+include { PREPOLISH } from './subworkflows/prepolish/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -87,6 +88,11 @@ workflow ISOPIPE {
       PREPOLISH(
           ISOTOOLS_NMD_FILTER.out.reads,
           PREPROCESSING.out.genome,
+          params.global_repeats,
+          PREPROCESSING.out.reference_transcripts,
+          PREPROCESSING.out.bigwigs,
+          params.aparent_predict_weights,
+          ch_versions
       )
 
       // ISOTOOLS_POLISH()
