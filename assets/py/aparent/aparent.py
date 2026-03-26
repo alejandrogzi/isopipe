@@ -3,9 +3,10 @@
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 import argparse
+import os
 import numpy as np
 from typing import List, Tuple, Callable
 from pathlib import Path
@@ -29,7 +30,7 @@ MODEL_PATH = Path(__file__).parent / MODEL
 
 def run() -> None:
     """
-    Run APPARENT to estimate poly(A) tail length from a chunked file
+    Run APARENT to estimate poly(A) tail length from a chunked file
 
     Example
     -------
@@ -45,7 +46,7 @@ def run() -> None:
     encoder = get_aparent_encoder(lib_bias=LIB_BIAS)
 
     (bedgraph, bed) = process_chunk(args, model, encoder)
-    write_results(bedgraph, bed, args.path, args.bedgraph)
+    write_results(bedgraph, bed, args.outdir, args.prefix, args.mode == "bedgraph")
 
 
 def process_chunk(
@@ -59,9 +60,9 @@ def process_chunk(
     args : argparse.Namespace
         Command line arguments
     model : str
-        Path to APPARENT model
+        Path to APARENT model
     encoder : str
-        Path to APPARENT encoder
+        Path to APARENT encoder
 
     Returns
     -------
@@ -71,10 +72,11 @@ def process_chunk(
     -------
     >>> process_chunk(args, model, encoder)
     """
+    print("INFO: processing chunk: " + args.bed)
     graph_lines = []
     bed_lines = []
 
-    for row in open(args.path):
+    for row in open(args.bed):
         fields = row.strip().split("\t")
 
         chrom = fields[0]
@@ -84,7 +86,7 @@ def process_chunk(
         strand = fields[3]
         seq = fields[4]
 
-        peak_ixs, polya_profile = run_apparent(model, encoder, seq)
+        peak_ixs, polya_profile = run_aparent(model, encoder, seq)
 
         if strand == "-":
             for i, peak in enumerate(polya_profile):
@@ -92,7 +94,7 @@ def process_chunk(
                     # peak = 0
                     continue  # WARN: ignoring peaks below threshold
 
-                if if args.mode == "bedgraph":
+                if args.mode == "bedgraph":
                     graph_lines.append(
                         f"{chrom}\t{end - i - 1}\t{end - i}\t{peak}\t{strand}\n"
                     )
@@ -135,14 +137,15 @@ def process_chunk(
                 len(all_peak_ixs) != 1 or peak_ixs[0] not in all_peak_ixs
             ) and args.verbose:
                 print(
-                    f"{name} has divergent peaks / max peaks:\t{all_peak_ixs}\t{peak_ixs}"
+                    f"peak has divergent peaks / max peaks:\t{all_peak_ixs}\t{peak_ixs}"
                 )
 
+    print("INFO: finished processing chunk: " + args.bed)
     return (graph_lines, bed_lines)
 
 
 def write_results(
-    bedgraph: List[str], bed_lines: List[str], path: str, bg_flag: bool
+    bedgraph: List[str], bed_lines: List[str], outdir: str, prefix: str, bg_flag: bool
 ) -> None:
     """
     Write results to output files
@@ -166,28 +169,30 @@ def write_results(
     -------
     >>> write_results(bedgraph, bed_lines, path)
     """
-
-    suffix = path.rsplit("_", 1)[-1]
-    path = path.rsplit("/", 1)[0]
-    bed = f"{path}/tmp_polya_{suffix}.bed"
+    os.makedirs(outdir, exist_ok=True)
+    print("INFO: writing results to: " + outdir)
 
     if bg_flag:
-        bg = f"{path}/tmp_polya_{suffix}.bedGraph"
+        bg = f"{outdir}/{prefix}.aparent.bg"
+        print("INFO: writing bedgraph to: " + bg)
 
         with open(bg, "w") as f:
             f.writelines(bedgraph)
+    else:
+        bed = f"{outdir}/{prefix}.aparent.bed"
+        print("INFO: writing bed to: " + bed)
 
-    with open(bed, "w") as f:
-        f.writelines(bed_lines)
+        with open(bed, "w") as f:
+            f.writelines(bed_lines)
 
     return None
 
 
-def run_apparent(
+def run_aparent(
     model: str, encoder: EncoderType, seq: str
 ) -> Tuple[List[int], List[float]]:
     """
-    Run APPARENT to estimate poly(A) tail length from a chunked file
+    Run APARENT to estimate poly(A) tail length from a chunked file
 
     Parameters
     ----------
@@ -200,9 +205,9 @@ def run_apparent(
 
     Example
     -------
-    >>> run_apparent(path="path/to/chunk/file")
+    >>> run_aparent(path="path/to/chunk/file")
     """
-    peak_ixs, polya_profile = aparent.predictor.find_polya_peaks(
+    peak_ixs, polya_profile = find_polya_peaks(
         model,
         encoder,
         seq,
@@ -347,10 +352,10 @@ def logit(x):
 
 def get_aparent_encoder(lib_bias=None):
     """
-    Get APPARENT encoder with 205bp sequence length
+    Get APARENT encoder with 205bp sequence length
 
     Returns an encoder function for preparing sequences for the
-    APPARENT model with 205bp input length.
+    APARENT model with 205bp input length.
 
     Parameters
     ----------
@@ -394,10 +399,10 @@ def get_aparent_encoder(lib_bias=None):
 
 def get_aparent_legacy_encoder(lib_bias=None):
     """
-    Get legacy APPARENT encoder with 185bp sequence length
+    Get legacy APARENT encoder with 185bp sequence length
 
     Returns an encoder function for preparing sequences for the
-    legacy APPARENT model with 185bp input length.
+    legacy APARENT model with 185bp input length.
 
     Parameters
     ----------
@@ -519,7 +524,7 @@ def find_polya_peaks(
     peak_prominence=(0.01, None),
 ):
     """
-    Find poly(A) peaks in a DNA sequence using APPARENT model
+    Find poly(A) peaks in a DNA sequence using APARENT model
 
     Uses a sliding window approach to predict poly(A) signal locations
     in a DNA sequence and identifies peaks in the prediction profile.
@@ -527,7 +532,7 @@ def find_polya_peaks(
     Parameters
     ----------
     aparent_model : keras.Model
-        Loaded APPARENT model
+        Loaded APARENT model
     aparent_encoder : callable
         Encoder function for preparing sequences
     seq : str
@@ -661,12 +666,12 @@ def score_polya_peaks(
     Score poly(A) peaks for isoform usage prediction
 
     Calculates isoform usage scores for poly(A) peaks using the
-    APPARENT model with multiple window positions around each peak.
+    APARENT model with multiple window positions around each peak.
 
     Parameters
     ----------
     aparent_model : keras.Model
-        Loaded APPARENT model
+        Loaded APARENT model
     aparent_encoder : callable
         Encoder function for preparing sequences
     seq : str
@@ -763,14 +768,28 @@ def parse() -> argparse.Namespace:
     >>> parse()
     """
     parser = argparse.ArgumentParser(
-        description="Run APPARENT to estimate poly(A) tail length from a chunked file"
+        description="Run APARENT to estimate poly(A) tail length from a chunked file"
     )
     parser.add_argument(
-        "-p",
-        "--path",
+        "-b",
+        "--bed",
         type=str,
         help="Path to chunk input file",
         required=True,
+    )
+    parser.add_argument(
+        "-o",
+        "--outdir",
+        type=str,
+        help="Path to output directory",
+        default="aparent",
+    )
+    parser.add_argument(
+        "-p",
+        "--prefix",
+        type=str,
+        help="Prefix for output files",
+        default="peaks",
     )
     parser.add_argument(
         "-v",
@@ -797,7 +816,7 @@ def parse() -> argparse.Namespace:
         "-m",
         "--model",
         type=str,
-        help="Path to APPARENT model",
+        help="Path to APARENT model",
     )
 
     return parser.parse_args()

@@ -4,9 +4,11 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-include { XLOC_INTRON as XLOCI_EXTRACT_INTRONS } from '../../modules/custom/xloci/intron/main.nf'
+include { XLOCI_INTRON as XLOCI_EXTRACT_INTRONS } from '../../modules/custom/xloci/intron/main.nf'
 include { INTRONIC as IIC_PREDICT_SPLICEOSOME } from '../../modules/custom/intronic/main.nf'
 include { ISOTOOLS_CLASSIFY_INTRON } from '../../modules/custom/isotools/classify/intron/main.nf'
+include { APARENT_CHUNK as XISO_APARENT_CHUNK } from '../../modules/custom/aparent/chunk/main.nf'
+include { WGET as WGET_APARENT_WEIGHTS } from '../../modules/nf-core/wget/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -20,32 +22,30 @@ workflow PREPOLISH {
       genome                 // Channel.value(path)
       repeats                // path
       annotation             // Channel.value(path)
-      bigwigs                // path
+      bigwigs                // channel: [ val(meta), [ bigwigs ] ]
+      aparent_weights        // path
       ch_versions            // [ meta, versions.yml ]
 
     main:
       ch_genome = genome.map { genome -> [ [id:genome.baseName], genome ] }
       ch_reference_transcripts = annotation.map { annotation -> [ [id:annotation.baseName], annotation ] }
 
+      ch_aparent_weights = WGET_APARENT_WEIGHTS(
+          Channel.value(
+            aparent_weights
+          ).map { url -> [ [id : url.tokenize('/')[-1]], url ] }
+      )
+
       XLOCI_EXTRACT_INTRONS(ch_genome, reads)
       IIC_PREDICT_SPLICEOSOME(XLOCI_EXTRACT_INTRONS.out.tsv)
     
-      if (bigwigs) {
-          Channel.value([
-              [ id: "spliceai" ],
-              file(bigwigs, checkIfExists: true)
-          ]).set { ch_spliceai_bigwigs }
-      } else {
-          ch_spliceai_bigwigs = Channel.empty()
-      }
-
       if (repeats) {
           Channel.value([
               [ id: "repeats" ],
               file(repeats, checkIfExists: true)
           ]).set { ch_repeats }
       } else {
-          ch_repeats = Channel.empty()
+          ch_repeats = Channel.value([[:], []])
       }
 
       ISOTOOLS_CLASSIFY_INTRON(
@@ -53,22 +53,41 @@ workflow PREPOLISH {
         ch_genome,
         ch_reference_transcripts,
         ch_repeats,
-        ch_spliceai_bigwigs,
+        bigwigs,
         IIC_PREDICT_SPLICEOSOME.out.iic
       )
 
-     // XISO_CHUNK_FOR_APARENT()
-     // APARENT()
+     XISO_APARENT_CHUNK(
+        reads,
+        ch_genome
+     )
 
-      
-      ch_versions = ch_versions.mix(ch_genome.versions)
+     XISO_APARENT_CHUNK.out.chunks
+        .flatMap { 
+            meta, bed ->
+            def beds = bed instanceof List ? bed : [bed]
+            beds.withIndex().collect { it, idx ->
+                [ meta + [ chunk: idx ], it ]
+            }
+        }
+        .set { ch_aparent_chunks }
+
+      APARENT_PREDICT(
+        ch_aparent_chunks, 
+        ch_aparent_weights
+      )
+        .map { meta, bed -> bed }
+        .collect()
+        .map { beds -> [ [id:'aparent'], beds ] }
+        .set { ch_joined_aparent_beds }
+
+      ch_versions = ch_versions.mix(XLOCI_EXTRACT_INTRONS.out.versions)
+      ch_versions = ch_versions.mix(IIC_PREDICT_SPLICEOSOME.out.versions)
+      ch_versions = ch_versions.mix(ISOTOOLS_CLASSIFY_INTRON.out.versions)
+      ch_versions = ch_versions.mix(XISO_APARENT_CHUNK.out.versions)
+      ch_versions = ch_versions.mix(APARENT_PREDICT.out.versions)
 
     emit:
-      genome                = ch_genome.genome
-      database              = ch_database
-      reads                 = ch_reads
-      minimap2_index        = ch_minimap2_index
-      reference_transcripts = ch_reference_transcripts
-      splice_scores         = ch_splice_scores
+      introns               = ISOTOOLS_CLASSIFY_INTRON.out.tsv
       versions              = ch_versions
 }
