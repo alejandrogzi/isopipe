@@ -123,5 +123,6 @@ workflow PREPROCESSING {
       reference_transcripts = ch_reference_transcripts
       splice_scores         = ch_splice_scores
       bigwigs               = ch_spliceai_bigwigs
+      chrom_sizes            = ch_genome.chrom_sizes
       versions              = ch_versions
 }
