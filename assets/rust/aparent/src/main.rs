@@ -22,7 +22,7 @@ const CHUNKS_DIR_NAME: &str = "chunks";
 
 #[derive(Debug, Parser)]
 #[clap(
-    name = "aparent-rs",
+    name = "aparent",
     version = env!("CARGO_PKG_VERSION"),
     author = env!("CARGO_PKG_AUTHORS"),
     about = "chunk wrapper for APARENT"
