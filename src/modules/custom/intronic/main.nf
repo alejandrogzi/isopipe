@@ -5,7 +5,7 @@ process INTRONIC {
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         '' :
-        'ghcr.io/alejandrogzi/isox-py:latest' }"
+        'ghcr.io/alejandrogzi/isox-py:main-1a6abb7' }"
 
     input:
     tuple val(meta), path(introns)
@@ -21,10 +21,10 @@ process INTRONIC {
     def args          = task.ext.args   ?: ''
     def prefix        = task.ext.prefix ?: "${meta.id}"
     """
-    intronIC \\
-        -q $introns \\
-        -n ${prefix} \\ 
-        $args
+    intronIC classify \\
+      -q $introns \\
+      -n ${prefix} \\
+      $args
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
