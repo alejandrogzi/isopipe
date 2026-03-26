@@ -54,6 +54,7 @@ workflow PREPROCESSING {
       }
 
       ch_splice_scores = Channel.empty()
+      ch_spliceai_bigwigs = Channel.value([[:], []])
       if (use_splice_scores) {
           if (splice_score_algorithm == "spliceai") {
               SPLICEAI_GENOMIC_SPLICE_SCORES(
@@ -66,6 +67,7 @@ workflow PREPROCESSING {
                   ch_versions
               )
               ch_splice_scores = SPLICEAI_GENOMIC_SPLICE_SCORES.out.scores
+              ch_spliceai_bigwigs = SPLICEAI_GENOMIC_SPLICE_SCORES.out.bigwigs
           } else if (splice_score_algorithm == "minisplice") {
               MINISPLICE_GENOMIC_SPLICE_SCORES(
                   ch_genome.genome,
@@ -120,5 +122,6 @@ workflow PREPROCESSING {
       minimap2_index        = ch_minimap2_index
       reference_transcripts = ch_reference_transcripts
       splice_scores         = ch_splice_scores
+      bigwigs               = ch_spliceai_bigwigs
       versions              = ch_versions
 }

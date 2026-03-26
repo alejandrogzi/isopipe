@@ -27,6 +27,8 @@ workflow SPLICING {
       ch_versions
 
     main:
+      ch_spliceai_bigwigs = Channel.value([[:], []])
+
       if (algorithm == "spliceai") {
           if (spliceai) {
             def spliceai_scores = file(spliceai, checkIfExists: true)
@@ -90,5 +92,6 @@ workflow SPLICING {
 
     emit:
       scores = ch_scores
+      bigwigs = ch_spliceai_bigwigs
       versions = ch_versions
 }
