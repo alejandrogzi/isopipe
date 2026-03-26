@@ -197,7 +197,9 @@ def write_results(
     if bg_flag:
         bg_forward = f"{outdir}/{prefix}.aparent.forward.bg"
         bg_reverse = f"{outdir}/{prefix}.aparent.reverse.bg"
-        print("INFO: writing bedgraph to: " + bg)
+
+        print("INFO: writing bedgraph to: " + bg_forward)
+        print("INFO: writing bedgraph to: " + bg_reverse)
 
         with open(bg_forward, "w") as f:
             f.writelines(bedgraph_forward)
