@@ -12,7 +12,7 @@ process APARENT_CHUNK {
     tuple val(meta1), path(genome)
 
     output:
-    tuple val(meta), path("*.bed")      , optional: true, emit: chunks
+    tuple val(meta), path("chunks/*.tsv"), optional: true, emit: chunks
     path  "versions.yml"                                , emit: versions
 
     when:
@@ -39,7 +39,8 @@ process APARENT_CHUNK {
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    touch chunks/*.bed
+    mkdir -p chunks
+    touch chunks/${prefix}.00001.tsv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

@@ -8,12 +8,11 @@ process ISOTOOLS_CLASSIFY_INTRON {
         'ghcr.io/alejandrogzi/isotools:latest' }"
 
     input:
-    tuple val(meta), path(reads)
+    tuple val(meta), path(reads), path(intronic)
     tuple val(meta1), path(genome)
     tuple val(meta2), path(annotation)
     tuple val(meta3), path(repeats)
     tuple val(meta4), path(bigwigs)
-    tuple val(meta5), path(intronic)
 
     output:
     tuple val(meta), path("*.tsv")      , optional: true, emit: tsv
@@ -27,7 +26,7 @@ process ISOTOOLS_CLASSIFY_INTRON {
     def prefix    = task.ext.prefix ?: "${meta.id}"
     def spliceai  = bigwigs ? "--bigwig $bigwigs" : ''
     def repeats   = repeats ? "--repeats $repeats" : ''
-    def iic       = intronic ? "--iic $intronic" : ''
+    def iic       = intronic && intronic.size() > 0 ? "--iic $intronic" : ''
     """
     iso-classify intron \\
         --isoseq $reads \\
@@ -47,8 +46,9 @@ process ISOTOOLS_CLASSIFY_INTRON {
     """
 
     stub:
+    def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    touch *.tsv
+    touch ${prefix}.tsv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

@@ -9,6 +9,11 @@ include { INTRONIC as IIC_PREDICT_SPLICEOSOME } from '../../modules/custom/intro
 include { ISOTOOLS_CLASSIFY_INTRON } from '../../modules/custom/isotools/classify/intron/main.nf'
 include { APARENT_CHUNK as XISO_APARENT_CHUNK } from '../../modules/custom/aparent/chunk/main.nf'
 include { WGET as WGET_APARENT_WEIGHTS } from '../../modules/nf-core/wget/main.nf'
+include { APARENT_PREDICT } from '../../modules/custom/aparent/predict/main.nf'
+include { BEDGRAPHTOBIGWIG as BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD } from '../../modules/custom/bigtools/bedgraphtobigwig/main.nf'
+include { BEDGRAPHTOBIGWIG as BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE } from '../../modules/custom/bigtools/bedgraphtobigwig/main.nf'
+include { GAWK_JOIN_BEDGRAPH as GAWK_JOIN_BEDGRAPH_FORWARD } from '../../modules/custom/gawk/join/main.nf'
+include { GAWK_JOIN_BEDGRAPH as GAWK_JOIN_BEDGRAPH_REVERSE } from '../../modules/custom/gawk/join/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -20,6 +25,7 @@ workflow PREPOLISH {
     take:
       reads                  // channel: [ val(meta), [ reads ] ]
       genome                 // Channel.value(path)
+      chrom_sizes            // Channel.value(path)
       repeats                // path
       annotation             // Channel.value(path)
       bigwigs                // channel: [ val(meta), [ bigwigs ] ]
@@ -48,13 +54,23 @@ workflow PREPOLISH {
           ch_repeats = Channel.value([[:], []])
       }
 
+      reads
+        .map { meta, read -> tuple(meta.id, meta, read) }
+        .join(
+          IIC_PREDICT_SPLICEOSOME.out.iic
+            .map { meta, iic -> tuple(meta.id, meta, iic) }
+        )
+        .map { id, read_meta, read, iic_meta, iic ->
+          tuple(read_meta, read, iic)
+        }
+        .set { ch_classify_inputs }
+
       ISOTOOLS_CLASSIFY_INTRON(
-        reads,
+        ch_classify_inputs,
         ch_genome,
         ch_reference_transcripts,
         ch_repeats,
         bigwigs,
-        IIC_PREDICT_SPLICEOSOME.out.iic
       )
 
      XISO_APARENT_CHUNK(
@@ -64,9 +80,9 @@ workflow PREPOLISH {
 
      XISO_APARENT_CHUNK.out.chunks
         .flatMap { 
-            meta, bed ->
-            def beds = bed instanceof List ? bed : [bed]
-            beds.withIndex().collect { it, idx ->
+            meta, chunk_tsv ->
+            def chunk_tsvs = chunk_tsv instanceof List ? chunk_tsv : [chunk_tsv]
+            chunk_tsvs.withIndex().collect { it, idx ->
                 [ meta + [ chunk: idx ], it ]
             }
         }
@@ -74,18 +90,34 @@ workflow PREPOLISH {
 
       APARENT_PREDICT(
         ch_aparent_chunks, 
-        ch_aparent_weights
+        ch_aparent_weights.outfile
       )
-        .map { meta, bed -> bed }
+
+      APARENT_PREDICT.out.bg_forward
+        .map { meta, bg -> bg }
         .collect()
-        .map { beds -> [ [id:'aparent'], beds ] }
-        .set { ch_joined_aparent_beds }
+        .map { bgs -> [ [id:'aparent.forward'], bgs ] }
+        .set { ch_joined_aparent_bgs_forward }
+      GAWK_JOIN_BEDGRAPH_FORWARD(ch_joined_aparent_bgs_forward)
+      BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD(GAWK_JOIN_BEDGRAPH_FORWARD.out.bedgraph, chrom_sizes)
+
+      APARENT_PREDICT.out.bg_reverse
+        .map { meta, bg -> bg }
+        .collect()
+        .map { bgs -> [ [id:'aparent.reverse'], bgs ] }
+        .set { ch_joined_aparent_bgs_reverse }
+      GAWK_JOIN_BEDGRAPH_REVERSE(ch_joined_aparent_bgs_reverse)
+      BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE(GAWK_JOIN_BEDGRAPH_REVERSE.out.bedgraph, chrom_sizes)
 
       ch_versions = ch_versions.mix(XLOCI_EXTRACT_INTRONS.out.versions)
       ch_versions = ch_versions.mix(IIC_PREDICT_SPLICEOSOME.out.versions)
       ch_versions = ch_versions.mix(ISOTOOLS_CLASSIFY_INTRON.out.versions)
       ch_versions = ch_versions.mix(XISO_APARENT_CHUNK.out.versions)
       ch_versions = ch_versions.mix(APARENT_PREDICT.out.versions)
+      ch_versions = ch_versions.mix(GAWK_JOIN_BEDGRAPH_FORWARD.out.versions)
+      ch_versions = ch_versions.mix(GAWK_JOIN_BEDGRAPH_REVERSE.out.versions)
+      ch_versions = ch_versions.mix(BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD.out.versions)
+      ch_versions = ch_versions.mix(BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE.out.versions)
 
     emit:
       introns               = ISOTOOLS_CLASSIFY_INTRON.out.tsv

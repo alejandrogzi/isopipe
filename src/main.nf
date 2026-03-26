@@ -88,6 +88,7 @@ workflow ISOPIPE {
       PREPOLISH(
           ISOTOOLS_NMD_FILTER.out.reads,
           PREPROCESSING.out.genome,
+          PREPROCESSING.out.chrom_sizes,
           params.global_repeats,
           PREPROCESSING.out.reference_transcripts,
           PREPROCESSING.out.bigwigs,

@@ -8,25 +8,26 @@ process APARENT_PREDICT {
         'ghcr.io/alejandrogzi/isox-py:latest' }"
 
     input:
-    tuple val(meta), path(bed)
+    tuple val(meta), path(chunk_tsv)
     tuple val(meta1), path(weights)
 
     output:
-    tuple val(meta), path("*.aparent.bed")  , optional: true, emit: bed
-    tuple val(meta), path("*.aparent.bg")   , optional: true, emit: bg
+    tuple val(meta), path("aparent/*.aparent.bed")  , optional: true, emit: bed
+    tuple val(meta), path("aparent/*.aparent.forward.bg")   , optional: true, emit: bg_forward
+    tuple val(meta), path("aparent/*.aparent.reverse.bg")   , optional: true, emit: bg_reverse
     path "versions.yml"                                     , emit: versions
 
     when:
     task.ext.when == null || task.ext.when
 
     script:
-    prefix   = task.ext.prefix ?: "${meta.id}.${meta.chunk}"
+    def prefix = task.ext.prefix ?: "${meta.id}.${meta.chunk}"
     """
     aparent \\
-        --bed $bed \\
+        --bed $chunk_tsv \\
         --outdir aparent \\
         --prefix $prefix \\
-        --model $aparent_weights
+        --model $weights
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
@@ -35,10 +36,12 @@ process APARENT_PREDICT {
     """
 
     stub:
-    prefix   = task.ext.prefix ?: "${meta.id}.${meta.chunk}"
+    def prefix = task.ext.prefix ?: "${meta.id}.${meta.chunk}"
     """
-    touch aparent/*.aparent.bed 
-    touch aparent/*.aparent.bg
+    mkdir -p aparent
+    touch aparent/${prefix}.aparent.forward.bed 
+    touch aparent/${prefix}.aparent.reverse.bed
+    touch aparent/${prefix}.aparent.bg
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

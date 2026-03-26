@@ -21,10 +21,18 @@ process INTRONIC {
     def args          = task.ext.args   ?: ''
     def prefix        = task.ext.prefix ?: "${meta.id}"
     """
-    intronIC classify \\
-      -q $introns \\
-      -n ${prefix} \\
-      $args
+    if [ ! -s "$introns" ]; then
+        touch ${prefix}.meta.iic
+    else
+        intronIC classify \\
+          -q $introns \\
+          -n ${prefix} \\
+          $args
+
+        if ! compgen -G "*.meta.iic" > /dev/null; then
+            touch ${prefix}.meta.iic
+        fi
+    fi
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
@@ -35,7 +43,7 @@ process INTRONIC {
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    touch *.meta.iic
+    touch ${prefix}.meta.iic
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

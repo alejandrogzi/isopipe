@@ -3,7 +3,7 @@
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 import argparse
 import os
@@ -45,13 +45,20 @@ def run() -> None:
 
     encoder = get_aparent_encoder(lib_bias=LIB_BIAS)
 
-    (bedgraph, bed) = process_chunk(args, model, encoder)
-    write_results(bedgraph, bed, args.outdir, args.prefix, args.mode == "bedgraph")
+    (bedgraph_forward, bedgraph_reverse, bed) = process_chunk(args, model, encoder)
+    write_results(
+        bedgraph_forward,
+        bedgraph_reverse,
+        bed,
+        args.outdir,
+        args.prefix,
+        args.mode == "bedgraph",
+    )
 
 
 def process_chunk(
     args: argparse.Namespace, model: str, encoder: EncoderType
-) -> Tuple[List[str], List[str]]:
+) -> Tuple[List[str], List[str], List[str]]:
     """
     Process chunk file to estimate poly(A) tail length
 
@@ -73,7 +80,8 @@ def process_chunk(
     >>> process_chunk(args, model, encoder)
     """
     print("INFO: processing chunk: " + args.bed)
-    graph_lines = []
+    graph_lines_forward = []
+    graph_lines_reverse = []
     bed_lines = []
 
     for row in open(args.bed):
@@ -89,25 +97,33 @@ def process_chunk(
         peak_ixs, polya_profile = run_aparent(model, encoder, seq)
 
         if strand == "-":
+            # INFO: reverse polya_profile and store length
+            polya_profile = polya_profile[::-1]
+            length = len(polya_profile)
+
             for i, peak in enumerate(polya_profile):
                 if peak < PEAK_THRESHOLD:
+                    length = length - 1
                     # peak = 0
                     continue  # WARN: ignoring peaks below threshold
 
                 if args.mode == "bedgraph":
-                    graph_lines.append(
-                        f"{chrom}\t{end - i - 1}\t{end - i}\t{peak}\t{strand}\n"
+                    graph_lines_reverse.append(
+                        # f"{chrom}\t{end - i - 1}\t{end - i}\t{peak}\t{strand}\n"
+                        f"{chrom}\t{end - length}\t{end - length + 1}\t{peak}\n"
                     )
                 elif args.mode == "bed":
                     line = [
                         chrom,
-                        end - i - 1,
-                        end - i,
+                        end - length,
+                        end - length + 1,
                         f"peak_{i}",
                         peak,
                         strand,
                     ]
                     bed_lines.append("\t".join(map(str, line)) + "\n")
+
+                length = length - 1
         else:
             for i, peak in enumerate(polya_profile):
                 if peak < PEAK_THRESHOLD:
@@ -115,8 +131,9 @@ def process_chunk(
                     continue
 
                 if args.mode == "bedgraph":
-                    graph_lines.append(
-                        f"{chrom}\t{start + i - 1}\t{start + i}\t{peak}\t{strand}\n"
+                    graph_lines_forward.append(
+                        # f"{chrom}\t{start + i - 1}\t{start + i}\t{peak}\t{strand}\n"
+                        f"{chrom}\t{start + i - 1}\t{start + i}\t{peak}\n"
                     )
                 elif args.mode == "bed":
                     line = [
@@ -141,11 +158,16 @@ def process_chunk(
                 )
 
     print("INFO: finished processing chunk: " + args.bed)
-    return (graph_lines, bed_lines)
+    return (graph_lines_forward, graph_lines_reverse, bed_lines)
 
 
 def write_results(
-    bedgraph: List[str], bed_lines: List[str], outdir: str, prefix: str, bg_flag: bool
+    bedgraph_forward: List[str],
+    bedgraph_reverse: List[str],
+    bed_lines: List[str],
+    outdir: str,
+    prefix: str,
+    bg_flag: bool,
 ) -> None:
     """
     Write results to output files
@@ -173,11 +195,15 @@ def write_results(
     print("INFO: writing results to: " + outdir)
 
     if bg_flag:
-        bg = f"{outdir}/{prefix}.aparent.bg"
+        bg_forward = f"{outdir}/{prefix}.aparent.forward.bg"
+        bg_reverse = f"{outdir}/{prefix}.aparent.reverse.bg"
         print("INFO: writing bedgraph to: " + bg)
 
-        with open(bg, "w") as f:
-            f.writelines(bedgraph)
+        with open(bg_forward, "w") as f:
+            f.writelines(bedgraph_forward)
+
+        with open(bg_reverse, "w") as f:
+            f.writelines(bedgraph_reverse)
     else:
         bed = f"{outdir}/{prefix}.aparent.bed"
         print("INFO: writing bed to: " + bed)
