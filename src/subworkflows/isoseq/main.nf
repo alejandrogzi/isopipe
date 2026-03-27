@@ -8,6 +8,7 @@ include { PBCCS } from '../../modules/nf-core/pbccs/main.nf'
 include { PBTK_PBINDEX as PBINDEX } from '../../modules/nf-core/pbtk/pbindex/main.nf'
 include { PBTK_PBMERGE as PBMERGE } from '../../modules/nf-core/pbtk/pbmerge/main.nf'
 include { PBTK_PBMERGE as PBMERGE_MULTI_SAMPLE } from '../../modules/nf-core/pbtk/pbmerge/main.nf'
+include { PBTK_PBMERGE as PBMERGE_MULTI_LIMA } from '../../modules/nf-core/pbtk/pbmerge/main.nf'
 include { LIMA } from '../../modules/nf-core/lima/main.nf'
 include { ISOSEQ_REFINE } from '../../modules/nf-core/isoseq/refine/main.nf'
 include { ISOSEQ_CLUSTER2 } from '../../modules/custom/isoseq/cluster2/main.nf'
@@ -106,7 +107,22 @@ workflow ISOSEQ {
 
       PBMERGE(ch_pbccs_merged) // INFO: merge chunks
       LIMA(PBMERGE.out.bam, ch_primers)  // INFO: remove primers from CCS
-      ISOSEQ_REFINE(LIMA.out.bam, ch_primers) // INFO: discard CCS without polyA tails, remove it from the other
+      LIMA.out.bam
+          .map { meta, bams ->
+              [ meta, bams instanceof List ? bams : [bams] ]
+          }
+          .branch {
+              meta, bams ->
+              merge:  bams.size() > 1
+              single: bams.size() == 1
+          }
+          .set { ch_lima_branched }
+
+      ch_lima_bams = Channel.empty()
+      PBMERGE_MULTI_LIMA(ch_lima_branched.merge)
+      ch_lima_bams = ch_lima_bams.mix(PBMERGE_MULTI_LIMA.out.bam)
+      ch_lima_bams = ch_lima_bams.mix(ch_lima_branched.single.map { meta, bams -> [ meta, bams[0] ] })
+      ISOSEQ_REFINE(ch_lima_bams, ch_primers) // INFO: discard CCS without polyA tails, remove it from the other
 
       // INFO: three possible modes: per_tissue, pan_tissue, both
       ch_pbccs_merged_flnc_clustered_fa = Channel.empty()
