@@ -12,7 +12,7 @@ process APARENT_PREDICT {
     tuple val(meta1), path(weights)
 
     output:
-    tuple val(meta), path("aparent/*.aparent.bed")  , optional: true, emit: bed
+    tuple val(meta), path("aparent/*.aparent.bed")          , optional: true, emit: bed
     tuple val(meta), path("aparent/*.aparent.forward.bg")   , optional: true, emit: bg_forward
     tuple val(meta), path("aparent/*.aparent.reverse.bg")   , optional: true, emit: bg_reverse
     path "versions.yml"                                     , emit: versions

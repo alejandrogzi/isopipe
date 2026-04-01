@@ -3,7 +3,7 @@
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 import argparse
 import os
@@ -198,20 +198,22 @@ def write_results(
         bg_forward = f"{outdir}/{prefix}.aparent.forward.bg"
         bg_reverse = f"{outdir}/{prefix}.aparent.reverse.bg"
 
-        print("INFO: writing bedgraph to: " + bg_forward)
-        print("INFO: writing bedgraph to: " + bg_reverse)
+        if len(bedgraph_forward) > 0:
+            print("INFO: writing bedgraph to: " + bg_forward)
+            with open(bg_forward, "w") as f:
+                f.writelines(bedgraph_forward)
 
-        with open(bg_forward, "w") as f:
-            f.writelines(bedgraph_forward)
-
-        with open(bg_reverse, "w") as f:
-            f.writelines(bedgraph_reverse)
+        if len(bedgraph_reverse) > 0:
+            print("INFO: writing bedgraph to: " + bg_reverse)
+            with open(bg_reverse, "w") as f:
+                f.writelines(bedgraph_reverse)
     else:
         bed = f"{outdir}/{prefix}.aparent.bed"
         print("INFO: writing bed to: " + bed)
 
-        with open(bed, "w") as f:
-            f.writelines(bed_lines)
+        if len(bed_lines) > 0:
+            with open(bed, "w") as f:
+                f.writelines(bed_lines)
 
     return None
 

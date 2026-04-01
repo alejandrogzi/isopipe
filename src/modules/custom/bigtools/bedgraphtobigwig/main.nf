@@ -1,5 +1,5 @@
 process BEDGRAPHTOBIGWIG {
-    tag "$meta.id"
+    tag "$meta.id [$meta.strand]"
     label 'process_medium'
 
     conda "${moduleDir}/environment.yml"
@@ -20,7 +20,7 @@ process BEDGRAPHTOBIGWIG {
 
     script:
     def args = task.ext.args ?: ''
-    def prefix = task.ext.prefix ?: "${meta.id}"
+    def prefix = task.ext.prefix ?: "${meta.id}.${meta.strand}"
     """
     bigtools bedgraphtobigwig \\
         $args \\
