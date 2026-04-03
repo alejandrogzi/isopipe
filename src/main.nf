@@ -15,7 +15,8 @@ include { SPLIT_ALIGN_CLEAN_CHUNKS } from './subworkflows/split_align/main.nf'
 include { XORF as XORF_PREDICT_ORFS } from '../modules/xorf/src/subworkflows/xorf/main.nf'
 include { XORF as XORF_PREDICT_FUSION_ORFS } from '../modules/xorf/src/subworkflows/xorf/main.nf'
 include { ISOTOOLS_NMD as ISOTOOLS_NMD_FILTER } from './modules/custom/isotools/nmd/main.nf'
-include { PREPOLISH } from './subworkflows/prepolish/main.nf'
+include { PREPOLISH as ISOTOOLS_PREPOLISH } from './subworkflows/prepolish/main.nf'
+include { POLISH as ISOTOOLS_POLISH } from './subworkflows/polish/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -84,8 +85,7 @@ workflow ISOPIPE {
           .set { ch_fusion_orf_predictions_bed }
 
       ISOTOOLS_NMD_FILTER(ch_orf_predictions_bed)
-      
-      PREPOLISH(
+      ISOTOOLS_PREPOLISH(
           ISOTOOLS_NMD_FILTER.out.reads,
           PREPROCESSING.out.genome,
           PREPROCESSING.out.chrom_sizes,
@@ -96,7 +96,14 @@ workflow ISOPIPE {
           ch_versions
       )
 
-      // ISOTOOLS_POLISH()
+      ISOTOOLS_POLISH(
+          ISOTOOLS_NMD_FILTER.out.reads,
+          PREPROCESSING.out.reference_transcripts,
+          ISOTOOLS_PREPOLISH.out.introns,
+          ISOTOOLS_PREPOLISH.out.aparent_plus,
+          ISOTOOLS_PREPOLISH.out.aparent_minus,
+          ch_versions
+      )
 
       // INFO: ch_fusion_orf_predictions_bed + ISOTOOLS_NMD_FILTER.out.nmd
       // LOAD_TRACKS()

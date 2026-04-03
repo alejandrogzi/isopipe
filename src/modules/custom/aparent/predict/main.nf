@@ -21,9 +21,11 @@ process APARENT_PREDICT {
     task.ext.when == null || task.ext.when
 
     script:
+    def args   = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}.${meta.chunk}"
     """
     aparent \\
+        $args \\
         --bed $chunk_tsv \\
         --outdir aparent \\
         --prefix $prefix \\
