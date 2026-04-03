@@ -96,22 +96,18 @@ workflow PREPOLISH {
       APARENT_PREDICT.out.bg_forward
         .map { meta, bg -> bg }
         .collect()
-        .map { bgs -> [ [id:'aparent.forward'], bgs ] }
+        .map { bgs -> [ [id:'aparent.forward', strand:'forward'], bgs ] }
         .set { ch_joined_aparent_bgs_forward }
 
-      APARENT_PREDICT.out.bg_forward
-        .map { meta, bg -> [ meta, bg ] }
-        .groupTuple()
-        .map { meta, bgs -> [ [id:"${meta.id}", strand:'forward'], bgs ] }
-        .set { ch_joined_aparent_bgs_forward }
       GAWK_JOIN_BEDGRAPH_FORWARD(ch_joined_aparent_bgs_forward)
       BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD(GAWK_JOIN_BEDGRAPH_FORWARD.out.bedgraph, chrom_sizes)
 
       APARENT_PREDICT.out.bg_reverse
-        .map { meta, bg -> [ meta, bg ] }
-        .groupTuple()
-        .map { meta, bgs -> [ [id:"${meta.id}", strand:'reverse'], bgs ] }
+        .map { meta, bg -> bg  }
+        .collect()
+        .map { bgs -> [ [id:'aparent.reverse', strand:'reverse'], bgs ] }
         .set { ch_joined_aparent_bgs_reverse }
+
       GAWK_JOIN_BEDGRAPH_REVERSE(ch_joined_aparent_bgs_reverse)
       BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE(GAWK_JOIN_BEDGRAPH_REVERSE.out.bedgraph, chrom_sizes)
 

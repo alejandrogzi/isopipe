@@ -1,0 +1,46 @@
+process ISOTOOLS_TRUNCATION_DETECTOR {
+    tag "$meta.id:$meta.chr"
+    label 'process_low'
+
+    conda "${moduleDir}/environment.yml"
+    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
+        '' :
+        'ghcr.io/alejandrogzi/isotools:latest' }"
+
+    input:
+    tuple val(meta), path(bed)
+
+    output:
+    tuple val(meta), path("*.tsv")       , optional: true, emit: descriptor
+    path "versions.yml"                                  , emit: versions
+
+    when:
+    task.ext.when == null || task.ext.when
+
+    script:
+    def args      = task.ext.args ?: ''
+    def prefix    = task.ext.prefix ?: "${meta.id}_${meta.chr}"
+    """
+    iso-utr \\
+        $args \\
+        --ref $bed \\
+        --query $bed \\
+        --threads ${task.cpus} \\
+        --prefix ${prefix}
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        iso-utr: \$( iso-utr --version | sed 's/iso-utr //g' )
+    END_VERSIONS
+    """
+
+    stub:
+    """
+    touch *.tsv
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        iso-utr: \$( iso-utr --version | sed 's/iso-utr //g' )
+    END_VERSIONS
+    """
+}

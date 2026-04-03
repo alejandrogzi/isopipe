@@ -32,14 +32,6 @@ process XLOCI_INTRON {
         -t $task.cpus \\
         --prefix ${prefix}
 
-    if ! compgen -G "*.fa" > /dev/null; then
-        touch ${prefix}.fa
-    fi
-
-    if ! compgen -G "*.tsv" > /dev/null; then
-        touch ${prefix}.tsv
-    fi
-
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         xloci: \$( xloci --version | head -n 1 | sed 's/xloci //g' | sed 's/ (.*//g' )

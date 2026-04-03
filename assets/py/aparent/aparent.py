@@ -3,7 +3,7 @@
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 
 import argparse
 import os
@@ -102,7 +102,7 @@ def process_chunk(
             length = len(polya_profile)
 
             for i, peak in enumerate(polya_profile):
-                if peak < PEAK_THRESHOLD:
+                if peak < args.threshold:
                     length = length - 1
                     # peak = 0
                     continue  # WARN: ignoring peaks below threshold
@@ -126,7 +126,7 @@ def process_chunk(
                 length = length - 1
         else:
             for i, peak in enumerate(polya_profile):
-                if peak < PEAK_THRESHOLD:
+                if peak < args.threshold:
                     # peak = 0
                     continue
 
@@ -847,6 +847,13 @@ def parse() -> argparse.Namespace:
         "--model",
         type=str,
         help="Path to APARENT model",
+    )
+    parser.add_argument(
+        "-t",
+        "--threshold",
+        type=str,
+        default=PEAK_THRESHOLD,
+        help="Peak threshold",
     )
 
     return parser.parse_args()
