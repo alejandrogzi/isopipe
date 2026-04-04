@@ -1,5 +1,5 @@
 process ISOTOOLS_PAS_CALLER {
-    tag "$meta.id:$meta.chr"
+    tag "$meta.id"
     label 'process_low'
 
     conda "${moduleDir}/environment.yml"
@@ -8,7 +8,7 @@ process ISOTOOLS_PAS_CALLER {
         'ghcr.io/alejandrogzi/isotools:latest' }"
 
     input:
-    tuple val(meta), path(bed)
+    tuple val(meta), path(bed), path(_)
     tuple val(meta1), path(annotation)
     tuple val(meta2), path(forward_peaks)
     tuple val(meta3), path(reverse_peaks)
@@ -22,7 +22,7 @@ process ISOTOOLS_PAS_CALLER {
 
     script:
     def args      = task.ext.args ?: ''
-    def prefix    = task.ext.prefix ?: "${meta.id}_${meta.chr}"
+    def prefix    = task.ext.prefix ?: "${meta.id}"
     """
     iso-pas \\
         $args \\

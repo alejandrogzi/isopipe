@@ -1,5 +1,5 @@
 process ISOTOOLS_INTRON_RETENTION {
-    tag "$meta.id:$meta.chr"
+    tag "$meta.id"
     label 'process_low'
 
     conda "${moduleDir}/environment.yml"
@@ -8,8 +8,7 @@ process ISOTOOLS_INTRON_RETENTION {
         'ghcr.io/alejandrogzi/isotools:latest' }"
 
     input:
-    tuple val(meta), path(bed)
-    tuple val(meta1), path(introns)
+    tuple val(meta), path(bed), path(introns)
 
     output:
     tuple val(meta), path("*.tsv")       , optional: true, emit: descriptor
@@ -20,7 +19,7 @@ process ISOTOOLS_INTRON_RETENTION {
 
     script:
     def args      = task.ext.args ?: ''
-    def prefix    = task.ext.prefix ?: "${meta.id}_${meta.chr}"
+    def prefix    = task.ext.prefix ?: "${meta.id}"
     """
     iso-intron \\
         $args \\

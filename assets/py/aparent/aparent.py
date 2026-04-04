@@ -3,7 +3,7 @@
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 
 import argparse
 import os
@@ -851,7 +851,7 @@ def parse() -> argparse.Namespace:
     parser.add_argument(
         "-t",
         "--threshold",
-        type=str,
+        type=float,
         default=PEAK_THRESHOLD,
         help="Peak threshold",
     )
