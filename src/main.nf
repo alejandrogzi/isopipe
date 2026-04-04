@@ -70,6 +70,9 @@ workflow ISOPIPE {
       XORF_PREDICT_ORFS.out.files
           .map { meta, bed, tsv -> [ meta, bed ] }
           .set { ch_orf_predictions_bed }
+      XORF_PREDICT_ORFS.out.files
+          .map { meta, bed, tsv -> [ meta, tsv ] }
+          .set { ch_orf_predictions_tsv }
 
       XORF_PREDICT_FUSION_ORFS(
           SPLIT_ALIGN_CLEAN_CHUNKS.out.fusions,
@@ -96,10 +99,20 @@ workflow ISOPIPE {
           ch_versions
       )
 
+      ISOTOOLS_NMD_FILTER.out.reads
+        .map { meta, read -> tuple(meta.id, meta, read) }
+        .join(
+          ISOTOOLS_PREPOLISH.out.introns
+            .map { meta, introns -> tuple(meta.id, meta, introns) }
+        )
+        .map { id, meta, read, _meta, introns ->
+          tuple(meta, read, introns)
+        }
+        .set { ch_full_length_reads }
+
       ISOTOOLS_POLISH(
-          ISOTOOLS_NMD_FILTER.out.reads,
+          ch_full_length_reads,
           PREPROCESSING.out.reference_transcripts,
-          ISOTOOLS_PREPOLISH.out.introns,
           ISOTOOLS_PREPOLISH.out.aparent_plus,
           ISOTOOLS_PREPOLISH.out.aparent_minus,
           ch_versions

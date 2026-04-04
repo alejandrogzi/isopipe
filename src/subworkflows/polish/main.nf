@@ -16,9 +16,8 @@ include { ISOTOOLS_TRUNCATION_DETECTOR } from '../../modules/custom/isotools/utr
 
 workflow POLISH {
     take:
-      reads                  // channel: [ val(meta), [ reads ] ]
+      reads                  // channel: [ val(meta), [ reads ], [ introns ] ]
       annotation             // Channel.value(path)
-      introns                // channel: [ val(meta), [ introns ] ]
       forward_peaks          // channel: [ val(meta), [ forward_peaks ] ]
       reverse_peaks          // channel: [ val(meta), [ reverse_peaks ] ]
       ch_versions            // [ meta, versions.yml ]
@@ -27,8 +26,7 @@ workflow POLISH {
       ch_reference_transcripts = annotation.map { annotation -> [ [id:annotation.baseName], annotation ] }
 
       ISOTOOLS_INTRON_RETENTION(
-        reads,
-        introns
+        reads
       )
 
       ISOTOOLS_PAS_CALLER(

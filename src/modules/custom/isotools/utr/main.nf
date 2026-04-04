@@ -1,5 +1,5 @@
 process ISOTOOLS_TRUNCATION_DETECTOR {
-    tag "$meta.id:$meta.chr"
+    tag "$meta.id"
     label 'process_low'
 
     conda "${moduleDir}/environment.yml"
@@ -8,7 +8,7 @@ process ISOTOOLS_TRUNCATION_DETECTOR {
         'ghcr.io/alejandrogzi/isotools:latest' }"
 
     input:
-    tuple val(meta), path(bed)
+    tuple val(meta), path(bed), path(_)
 
     output:
     tuple val(meta), path("*.tsv")       , optional: true, emit: descriptor
@@ -19,7 +19,7 @@ process ISOTOOLS_TRUNCATION_DETECTOR {
 
     script:
     def args      = task.ext.args ?: ''
-    def prefix    = task.ext.prefix ?: "${meta.id}_${meta.chr}"
+    def prefix    = task.ext.prefix ?: "${meta.id}"
     """
     iso-utr \\
         $args \\
