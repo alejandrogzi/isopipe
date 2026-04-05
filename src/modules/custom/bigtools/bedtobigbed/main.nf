@@ -1,6 +1,6 @@
-process BEDGRAPHTOBIGWIG {
+process BEDTOBIGBED {
     tag "$meta.id"
-    label 'process_medium'
+    label 'process_low'
 
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
@@ -8,11 +8,12 @@ process BEDGRAPHTOBIGWIG {
         'biocontainers/bigtools:0.5.6--hc1c3326_1' }"
 
     input:
-    tuple val(meta), path(bedgraph)
+    tuple val(meta), path(bed)
     path chrom_sizes
+    path autosql
 
     output:
-    tuple val(meta), path("*.bw"), emit: bigwig
+    tuple val(meta), path("*.bb"), emit: bigbed
     path "versions.yml"          , emit: versions
 
     when:
@@ -22,21 +23,13 @@ process BEDGRAPHTOBIGWIG {
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    bigtools bedgraphtobigwig \\
+    bigtools bedtobigbed \\
         $args \\
-        $bedgraph \\
+        --autosql $autosql \\
+        $bed \\
         $chrom_sizes \\
-        ${prefix}.bw
+        ${prefix}.bb
 
-    if [ ${params.bigtools_keep_bedgraph} == false ]; then
-      if [ -L ${bedgraph} ]; then
-          realpath=\$(readlink -f ${bedgraph})
-          rm -f "\$realpath"
-      else
-          rm -f ${bedgraph}
-      fi
-    fi
-        
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         bigtools: \$(bigtools --version | sed -e "s/bigtools v//g")
@@ -46,7 +39,7 @@ process BEDGRAPHTOBIGWIG {
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    touch ${prefix}.bw
+    touch ${prefix}.bb
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

@@ -12,8 +12,8 @@ include { WGET as WGET_APARENT_WEIGHTS } from '../../modules/nf-core/wget/main.n
 include { APARENT_PREDICT } from '../../modules/custom/aparent/predict/main.nf'
 include { BEDGRAPHTOBIGWIG as BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD } from '../../modules/custom/bigtools/bedgraphtobigwig/main.nf'
 include { BEDGRAPHTOBIGWIG as BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE } from '../../modules/custom/bigtools/bedgraphtobigwig/main.nf'
-include { GAWK_JOIN_BEDGRAPH as GAWK_JOIN_BEDGRAPH_FORWARD } from '../../modules/custom/gawk/join/main.nf'
-include { GAWK_JOIN_BEDGRAPH as GAWK_JOIN_BEDGRAPH_REVERSE } from '../../modules/custom/gawk/join/main.nf'
+include { GAWK_JOIN as GAWK_JOIN_BEDGRAPH_FORWARD } from '../../modules/custom/gawk/join/main.nf'
+include { GAWK_JOIN as GAWK_JOIN_BEDGRAPH_REVERSE } from '../../modules/custom/gawk/join/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -99,8 +99,8 @@ workflow PREPOLISH {
         .map { bgs -> [ [id:'aparent.forward', strand:'forward'], bgs ] }
         .set { ch_joined_aparent_bgs_forward }
 
-      GAWK_JOIN_BEDGRAPH_FORWARD(ch_joined_aparent_bgs_forward)
-      BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD(GAWK_JOIN_BEDGRAPH_FORWARD.out.bedgraph, chrom_sizes)
+      GAWK_JOIN_BEDGRAPH_FORWARD(ch_joined_aparent_bgs_forward, 'bg')
+      BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD(GAWK_JOIN_BEDGRAPH_FORWARD.out.output, chrom_sizes)
 
       APARENT_PREDICT.out.bg_reverse
         .map { meta, bg -> bg  }
@@ -108,8 +108,8 @@ workflow PREPOLISH {
         .map { bgs -> [ [id:'aparent.reverse', strand:'reverse'], bgs ] }
         .set { ch_joined_aparent_bgs_reverse }
 
-      GAWK_JOIN_BEDGRAPH_REVERSE(ch_joined_aparent_bgs_reverse)
-      BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE(GAWK_JOIN_BEDGRAPH_REVERSE.out.bedgraph, chrom_sizes)
+      GAWK_JOIN_BEDGRAPH_REVERSE(ch_joined_aparent_bgs_reverse, 'bg')
+      BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE(GAWK_JOIN_BEDGRAPH_REVERSE.out.output, chrom_sizes)
 
       ch_versions = ch_versions.mix(XLOCI_EXTRACT_INTRONS.out.versions)
       ch_versions = ch_versions.mix(IIC_PREDICT_SPLICEOSOME.out.versions)
