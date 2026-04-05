@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# version 0.0.1
+# version 0.0.2
 
 # ---------- Runtime Stage ----------
 FROM python:3.11-slim
@@ -25,6 +25,12 @@ COPY assets/py/aparent/aparent.py /usr/local/lib/aparent/aparent.py
 RUN ln -s /usr/local/lib/aparent/aparent.py /usr/local/bin/aparent \
     && chmod +x /usr/local/lib/aparent/aparent.py
 
+# VEREDICT
+COPY assets/py/veredict/veredict.py /usr/local/lib/veredict/veredict.py
+RUN ln -s /usr/local/lib/veredict/veredict.py /usr/local/bin/veredict \
+    && chmod +x /usr/local/lib/veredict/veredict.py 
+
 RUN python -c "import pandas; import numpy; import scipy; print('All dependencies OK')"
 RUN intronIC --version
 RUN aparent --version
+RUN veredict --version
