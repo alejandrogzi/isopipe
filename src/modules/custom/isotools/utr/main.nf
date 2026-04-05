@@ -8,7 +8,7 @@ process ISOTOOLS_TRUNCATION_DETECTOR {
         'ghcr.io/alejandrogzi/isotools:latest' }"
 
     input:
-    tuple val(meta), path(bed), path(_)
+    tuple val(meta), path(bed), path(_), path(_)
 
     output:
     tuple val(meta), path("*.tsv")       , optional: true, emit: descriptor

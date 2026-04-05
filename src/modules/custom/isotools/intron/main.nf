@@ -8,7 +8,7 @@ process ISOTOOLS_INTRON_RETENTION {
         'ghcr.io/alejandrogzi/isotools:latest' }"
 
     input:
-    tuple val(meta), path(bed), path(introns)
+    tuple val(meta), path(bed), path(introns), path(_)
 
     output:
     tuple val(meta), path("*.tsv")       , optional: true, emit: descriptor

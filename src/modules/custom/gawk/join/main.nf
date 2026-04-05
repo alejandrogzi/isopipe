@@ -1,4 +1,4 @@
-process GAWK_JOIN_BEDGRAPH {
+process GAWK_JOIN {
     tag "$meta.id"
     label 'process_medium'
 
@@ -8,11 +8,12 @@ process GAWK_JOIN_BEDGRAPH {
         'biocontainers/gawk:5.3.0' }"
 
     input:
-    tuple val(meta), path(bedgraphs, stageAs: "bedgraph/*")
+    tuple val(meta), path(files, stageAs: "input/*")
+    val extension
 
     output:
-    tuple val(meta), path("*.bg"), emit: bedgraph
-    path "versions.yml"          , emit: versions
+    tuple val(meta), path("*.${extension}") , emit: output
+    path "versions.yml"                     , emit: versions
 
     when:
     task.ext.when == null || task.ext.when
@@ -21,7 +22,7 @@ process GAWK_JOIN_BEDGRAPH {
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    gawk 1 bedgraph/* > ${prefix}.bg
+    gawk 1 input/* > ${prefix}.${extension}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
@@ -32,7 +33,7 @@ process GAWK_JOIN_BEDGRAPH {
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    touch ${prefix}.bg
+    touch ${prefix}.${extension}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

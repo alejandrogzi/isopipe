@@ -8,7 +8,7 @@ process ISOTOOLS_PAS_CALLER {
         'ghcr.io/alejandrogzi/isotools:latest' }"
 
     input:
-    tuple val(meta), path(bed), path(_)
+    tuple val(meta), path(bed), path(_), path(_)
     tuple val(meta1), path(annotation)
     tuple val(meta2), path(forward_peaks)
     tuple val(meta3), path(reverse_peaks)
