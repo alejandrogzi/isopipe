@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# version 0.0.2
+# version 0.0.3
 
 # ---------- Build Stage ----------
 FROM rust:1.93.0-bookworm as builder
@@ -23,6 +23,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
     ca-certificates \
     procps \
+    openssh-client \
+    rsync \
     && rm -rf /var/lib/apt/lists/*
 
 

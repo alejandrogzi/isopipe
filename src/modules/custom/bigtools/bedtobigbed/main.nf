@@ -13,7 +13,7 @@ process BEDTOBIGBED {
     path autosql
 
     output:
-    tuple val(meta), path("*.bb"), emit: bigbed
+    tuple val(meta), path("*.bb"), optional: true, emit: bigbed
     path "versions.yml"          , emit: versions
 
     when:
@@ -22,10 +22,11 @@ process BEDTOBIGBED {
     script:
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
+    def as = autosql ? "--autosql $autosql" : ''
     """
     bigtools bedtobigbed \\
         $args \\
-        --autosql $autosql \\
+        $as \\
         $bed \\
         $chrom_sizes \\
         ${prefix}.bb

@@ -18,6 +18,17 @@ include { ISOTOOLS_NMD as ISOTOOLS_NMD_FILTER } from './modules/custom/isotools/
 include { PREPOLISH as ISOTOOLS_PREPOLISH } from './subworkflows/prepolish/main.nf'
 include { POLISH as ISOTOOLS_POLISH } from './subworkflows/polish/main.nf'
 
+include { LOAD_TRACK as LOAD_PASS_TRACK } from './subworkflows/track/main.nf'
+include { LOAD_TRACK as LOAD_TRASH_TRACK } from './subworkflows/track/main.nf'
+include { LOAD_TRACK as LOAD_RETENTIONS_TRACK } from './subworkflows/track/main.nf'
+include { LOAD_TRACK as LOAD_TRUNCATIONS_TRACK } from './subworkflows/track/main.nf'
+include { LOAD_TRACK as LOAD_INTRAPRIMMING_TRACK } from './subworkflows/track/main.nf'
+include { LOAD_TRACK as LOAD_FUSIONS_TRACK } from './subworkflows/track/main.nf'
+include { LOAD_TRACK as LOAD_NMD_TRACK } from './subworkflows/track/main.nf'
+
+include { BEDTOBIGBED as BEDTOBIGBED_FUSIONS } from './modules/custom/bigtools/bedtobigbed/main.nf'
+include { BEDTOBIGBED as BEDTOBIGBED_NMD } from './modules/custom/bigtools/bedtobigbed/main.nf'
+
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     LOCAL SUBWORKFLOWS
@@ -119,13 +130,79 @@ workflow ISOPIPE {
           PREPROCESSING.out.reference_transcripts,
           ISOTOOLS_PREPOLISH.out.aparent_plus,
           ISOTOOLS_PREPOLISH.out.aparent_minus,
-          params.bigtools_bedtobigbed_autosql,
           PREPROCESSING.out.chrom_sizes,
           ch_versions
       )
 
+      autosql = Channel.value(file('${projectDir}/../../assets/as/base.as', checkIfExists: true))
+      BEDTOBIGBED_FUSIONS(ch_fusion_orf_predictions_bed, PREPROCESSING.out.chrom_sizes, autosql)
+      BEDTOBIGBED_NMD(ISOTOOLS_NMD_FILTER.out.nmd, PREPROCESSING.out.chrom_sizes, autosql)
+
       // INFO: ch_fusion_orf_predictions_bed + ISOTOOLS_NMD_FILTER.out.nmd
-      // LOAD_TRACKS()
+      if (params.load_track) {
+          LOAD_PASS_TRACK(
+            ISOTOOLS_POLISH.out.pass,
+            params.load_track_user,
+            params.load_track_server,
+            params.load_track_target_dir,
+            params.load_track_web,
+            ch_versions
+          )
+
+          LOAD_TRASH_TRACK(
+            ISOTOOLS_POLISH.out.trash,
+            params.load_track_user,
+            params.load_track_server,
+            params.load_track_target_dir,
+            params.load_track_web,
+            ch_versions
+          )
+
+          LOAD_RETENTIONS_TRACK(
+            ISOTOOLS_POLISH.out.retentions,
+            params.load_track_user,
+            params.load_track_server,
+            params.load_track_target_dir,
+            params.load_track_web,
+            ch_versions
+          )
+
+          LOAD_TRUNCATIONS_TRACK(
+            ISOTOOLS_POLISH.out.truncations,
+            params.load_track_user,
+            params.load_track_server,
+            params.load_track_target_dir,
+            params.load_track_web,
+            ch_versions
+          )
+
+          LOAD_INTRAPRIMMING_TRACK(
+            ISOTOOLS_POLISH.out.intraprimming,
+            params.load_track_user,
+            params.load_track_server,
+            params.load_track_target_dir,
+            params.load_track_web,
+            ch_versions
+          )
+
+          LOAD_FUSIONS_TRACK(
+            BEDTOBIGBED_FUSIONS.out.bigbed,
+            params.load_track_user,
+            params.load_track_server,
+            params.load_track_target_dir,
+            params.load_track_web,
+            ch_versions
+          )
+
+          LOAD_NMD_TRACK(
+            ISOTOOLS_NMD_FILTER.out.nmd,
+            params.load_track_user,
+            params.load_track_server,
+            params.load_track_target_dir,
+            params.load_track_web,
+            ch_versions
+          )
+      }
 }
 
 /*
