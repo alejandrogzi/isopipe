@@ -20,8 +20,10 @@ include { BEDTOBIGBED as BEDTOBIGBED_TRASH } from '../../modules/custom/bigtools
 include { BEDTOBIGBED as BEDTOBIGBED_RETENTIONS } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
 include { BEDTOBIGBED as BEDTOBIGBED_TRUNCATIONS } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
 include { BEDTOBIGBED as BEDTOBIGBED_INTRAPRIMMING } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
+include { BEDTOBIGBED as BEDTOBIGBED_DUPLICATES } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
 
 include { PUBLISH as PUBLISH_BIGBEDS } from '../../modules/custom/publish/main.nf'
+include { DETACH_DUPLICATES } from '../../modules/custom/detach/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -76,7 +78,9 @@ workflow POLISH {
           }
           .set { ch_pass }
       JOIN_VEREDICT_PASSES(ch_pass, 'bed')
-      BEDTOBIGBED_PASSES(JOIN_VEREDICT_PASSES.out.output, chrom_sizes, autosql)
+      DETACH_DUPLICATES(JOIN_VEREDICT_PASSES.out.output)
+      BEDTOBIGBED_PASSES(DETACH_DUPLICATES.out.pass, chrom_sizes, autosql)
+      BEDTOBIGBED_DUPLICATES(DETACH_DUPLICATES.out.duplicates, chrom_sizes, autosql)
 
       ISOTOOLS_PLUGIN_VEREDICT.out.trash
           .map { meta, trash -> [ meta.name, meta, trash ] }    
@@ -120,6 +124,7 @@ workflow POLISH {
 
       ch_bbs = Channel.empty()
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_PASSES.out.bigbed)
+      ch_bbs = ch_bbs.mix(BEDTOBIGBED_DUPLICATES.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_TRASH.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_RETENTIONS.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_TRUNCATIONS.out.bigbed)

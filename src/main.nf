@@ -26,8 +26,13 @@ include { LOAD_TRACK as LOAD_INTRAPRIMMING_TRACK } from './subworkflows/track/ma
 include { LOAD_TRACK as LOAD_FUSIONS_TRACK } from './subworkflows/track/main.nf'
 include { LOAD_TRACK as LOAD_NMD_TRACK } from './subworkflows/track/main.nf'
 
+include { GAWK_JOIN as JOIN_FUSIONS } from './modules/custom/gawk/join/main.nf'
+include { GAWK_JOIN as JOIN_NMD } from './modules/custom/gawk/join/main.nf'
+
 include { BEDTOBIGBED as BEDTOBIGBED_FUSIONS } from './modules/custom/bigtools/bedtobigbed/main.nf'
 include { BEDTOBIGBED as BEDTOBIGBED_NMD } from './modules/custom/bigtools/bedtobigbed/main.nf'
+
+include { PUBLISH as PUBLISH_ADDITIONAL_BIGBEDS } from './modules/custom/publish/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -39,6 +44,7 @@ workflow ISOPIPE {
     main: 
       ch_versions = Channel.empty()
       ch_reads = Channel.empty()
+      autosql = Channel.value(file('${projectDir}/../../assets/as/base.as', checkIfExists: true))
 
       PREPROCESSING(
         params.entrypoint,
@@ -92,10 +98,36 @@ workflow ISOPIPE {
           params.xorf_predict_keep_raw
       )
       XORF_PREDICT_FUSION_ORFS.out.files
-          .map { meta, bed, tsv -> [ meta, bed ] }
+          .map { meta, bed, tsv -> [ meta.name, meta, bed ] }    
+          .groupTuple()                                      
+          .map { name, metas, files ->
+              [ [ id: name + '.fusions', name: name ], files ]
+          }
           .set { ch_fusion_orf_predictions_bed }
+      JOIN_FUSIONS(ch_fusion_orf_predictions_bed, 'bed')
+      BEDTOBIGBED_FUSIONS(JOIN_FUSIONS.out.output, PREPROCESSING.out.chrom_sizes, autosql)
 
       ISOTOOLS_NMD_FILTER(ch_orf_predictions_bed)
+
+      ISOTOOLS_NMD_FILTER.out.nmd
+          .map { meta, bed -> [ meta.name, meta, bed ] }    
+          .groupTuple()                                      
+          .map { name, metas, files ->
+              [ [ id: name + '.nmd', name: name ], files ]
+          }
+          .set { ch_nmd_bed }
+      JOIN_NMD(ch_nmd_bed, 'bed')
+      BEDTOBIGBED_NMD(JOIN_NMD.out.output, PREPROCESSING.out.chrom_sizes, autosql)
+
+      ch_additional_bbs = Channel.empty()
+      ch_additional_bbs = ch_additional_bbs.mix(BEDTOBIGBED_FUSIONS.out.bigbed)
+      ch_additional_bbs = ch_additional_bbs.mix(BEDTOBIGBED_NMD.out.bigbed)
+      ch_additional_bbs.map { meta, file -> [meta.name, meta, file] }
+         .groupTuple()
+         .map { name, metas, files -> [ [ id: name ], files] }
+         .set { ch_additional_bbs }
+      PUBLISH_ADDITIONAL_BIGBEDS(ch_additional_bbs)
+
       ISOTOOLS_PREPOLISH(
           ISOTOOLS_NMD_FILTER.out.reads,
           PREPROCESSING.out.genome,
@@ -133,10 +165,6 @@ workflow ISOPIPE {
           PREPROCESSING.out.chrom_sizes,
           ch_versions
       )
-
-      autosql = Channel.value(file('${projectDir}/../../assets/as/base.as', checkIfExists: true))
-      BEDTOBIGBED_FUSIONS(ch_fusion_orf_predictions_bed, PREPROCESSING.out.chrom_sizes, autosql)
-      BEDTOBIGBED_NMD(ISOTOOLS_NMD_FILTER.out.nmd, PREPROCESSING.out.chrom_sizes, autosql)
 
       // INFO: ch_fusion_orf_predictions_bed + ISOTOOLS_NMD_FILTER.out.nmd
       if (params.load_track) {
