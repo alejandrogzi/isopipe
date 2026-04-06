@@ -12,7 +12,7 @@ process GAWK_JOIN {
     val extension
 
     output:
-    tuple val(meta), path("*.${extension}") , emit: output
+    tuple val(meta), path("*.${extension}") , optional: true, emit: output
     path "versions.yml"                     , emit: versions
 
     when:
@@ -23,6 +23,15 @@ process GAWK_JOIN {
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
     gawk 1 input/* > ${prefix}.${extension}
+
+    if [[ ! -s "${prefix}.${extension}" ]]; then
+        rm ${prefix}.${extension}
+    else
+      if [[ ${extension} == "bed" ]]; then
+          sort -k1,1 -k2,2n ${prefix}.${extension} > ${prefix}.sorted.${extension}
+          mv ${prefix}.sorted.${extension} ${prefix}.${extension}
+      fi
+    fi
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
