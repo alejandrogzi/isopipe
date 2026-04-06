@@ -36,8 +36,17 @@ workflow PREPROCESSING {
 
     main:
       ch_genome = GENOME(genome)
-      ch_reference_transcripts = Channel.value(file(annotation, checkIfExists: true))
       ch_database = Channel.value(file(protein_database, checkIfExists: true))
+
+      ch_reference_transcripts = Channel.value(file(annotation, checkIfExists: true))
+      if (annotation.endsWith(".gtf.gz")
+        | annotation.endsWith(".gtf") 
+        | annotation.endsWith(".gff.gz") 
+        | annotation.endsWith(".gff")) {
+          GXF2BED(ch_reference_transcripts
+            .map { gtf -> [ [id:gtf.baseName], gtf ] })
+          ch_reference_transcripts = GXF2BED.out.bed
+      }
 
       ch_reads = Channel.empty()
 
