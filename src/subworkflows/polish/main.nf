@@ -6,6 +6,7 @@
 
 include { ISOTOOLS_INTRON_RETENTION } from '../../modules/custom/isotools/intron/main.nf'
 include { ISOTOOLS_PAS_CALLER } from '../../modules/custom/isotools/pas/main.nf'
+include { ISOTOOLS_ORPHAN as ISOTOOLS_ORPHAN_FINDER } from '../../modules/custom/isotools/orphan/main.nf'
 include { ISOTOOLS_TRUNCATION_DETECTOR } from '../../modules/custom/isotools/utr/main.nf'
 include { VEREDICT as ISOTOOLS_PLUGIN_VEREDICT } from '../../modules/custom/veredict/main.nf'
 
@@ -21,6 +22,7 @@ include { BEDTOBIGBED as BEDTOBIGBED_RETENTIONS } from '../../modules/custom/big
 include { BEDTOBIGBED as BEDTOBIGBED_TRUNCATIONS } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
 include { BEDTOBIGBED as BEDTOBIGBED_INTRAPRIMMING } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
 include { BEDTOBIGBED as BEDTOBIGBED_DUPLICATES } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
+include { BEDTOBIGBED as BEDTOBIGBED_ORPHANS } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
 
 include { PUBLISH as PUBLISH_BIGBEDS } from '../../modules/custom/publish/main.nf'
 include { DETACH_DUPLICATES } from '../../modules/custom/detach/main.nf'
@@ -79,8 +81,10 @@ workflow POLISH {
           .set { ch_pass }
       JOIN_VEREDICT_PASSES(ch_pass, 'bed')
       DETACH_DUPLICATES(JOIN_VEREDICT_PASSES.out.output)
-      BEDTOBIGBED_PASSES(DETACH_DUPLICATES.out.pass, chrom_sizes, autosql)
+      ISOTOOLS_ORPHAN_FINDER(DETACH_DUPLICATES.out.pass, ch_reference_transcripts)
+      BEDTOBIGBED_PASSES(ISOTOOLS_ORPHAN_FINDER.out.pass, chrom_sizes, autosql)
       BEDTOBIGBED_DUPLICATES(DETACH_DUPLICATES.out.duplicates, chrom_sizes, autosql)
+      BEDTOBIGBED_ORPHANS(ISOTOOLS_ORPHAN_FINDER.out.orphans, chrom_sizes, autosql)
 
       ISOTOOLS_PLUGIN_VEREDICT.out.trash
           .map { meta, trash -> [ meta.name, meta, trash ] }    
@@ -125,6 +129,7 @@ workflow POLISH {
       ch_bbs = Channel.empty()
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_PASSES.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_DUPLICATES.out.bigbed)
+      ch_bbs = ch_bbs.mix(BEDTOBIGBED_ORPHANS.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_TRASH.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_RETENTIONS.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_TRUNCATIONS.out.bigbed)
@@ -138,10 +143,14 @@ workflow POLISH {
 
     emit:
       pass                  = BEDTOBIGBED_PASSES.out.bigbed
+      duplicates            = BEDTOBIGBED_DUPLICATES.out.bigbed
+      orphans               = BEDTOBIGBED_ORPHANS.out.bigbed
       trash                 = BEDTOBIGBED_TRASH.out.bigbed
       retentions            = BEDTOBIGBED_RETENTIONS.out.bigbed
       truncations           = BEDTOBIGBED_TRUNCATIONS.out.bigbed
       intraprimming         = BEDTOBIGBED_INTRAPRIMMING.out.bigbed
       bigbeds               = ch_bbs
+      additional_columns    = ISOTOOLS_PLUGIN_VEREDICT.out.additional_bed_columns
+      sample                = ch_bbs.map { meta, file -> meta.id }
       versions              = ch_versions
 }

@@ -19,6 +19,7 @@ workflow LOAD_TRACK {
       server                 // string
       target_dir             // string
       web                    // string
+      species                // string
       ch_versions            // [ meta, versions.yml ]
 
     main:
@@ -27,7 +28,8 @@ workflow LOAD_TRACK {
         user,
         server,
         target_dir,
-        web
+        web,
+        species,
       )
 
       ch_versions = ch_versions.mix(RSYNC_SSH.out.versions)
