@@ -5,7 +5,7 @@ process SPLICEAI_PREDICT {
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         '' :
-        'ghcr.io/alejandrogzi/spliceai:latest' }"
+        'ghcr.io/alejandrogzi/spliceai:main-642e232' }"
 
     input:
     tuple val(meta), path(fasta)

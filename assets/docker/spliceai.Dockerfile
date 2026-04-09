@@ -27,6 +27,11 @@ RUN pip install --no-cache-dir \
 COPY --from=rust-builder /build/spliceai/target/release/spliceai-chunk /usr/local/bin/spliceai-chunk
 COPY assets/py/spliceai/spliceai.py /usr/local/bin/spliceai.py
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN chmod 0755 /usr/local/bin/spliceai.py \
     && printf '%s\n' \
         '#!/bin/sh' \
