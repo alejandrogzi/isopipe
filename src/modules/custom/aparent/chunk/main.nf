@@ -13,7 +13,7 @@ process APARENT_CHUNK {
 
     output:
     tuple val(meta), path("chunks/*.tsv"), optional: true, emit: chunks
-    path  "versions.yml"                                , emit: versions
+    path  "versions.yml"                                 , emit: versions
 
     when:
     task.ext.when == null || task.ext.when

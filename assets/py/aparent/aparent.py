@@ -59,8 +59,7 @@ def run() -> None:
 def process_chunk(
     args: argparse.Namespace, model: str, encoder: EncoderType
 ) -> Tuple[List[str], List[str], List[str]]:
-    """
-    Process chunk file to estimate poly(A) tail length
+    """Process chunk file to estimate poly(A) tail length.
 
     Parameters
     ----------
@@ -68,16 +67,18 @@ def process_chunk(
         Command line arguments
     model : str
         Path to APARENT model
-    encoder : str
-        Path to APARENT encoder
+    encoder : EncoderType
+        Encoder function for sequences
 
     Returns
     -------
-    Tuple[List[str], List[str]]
+    Tuple[List[str], List[str], List[str]]
+        (bedgraph_forward, bedgraph_reverse, bed_lines)
 
     Example
     -------
     >>> process_chunk(args, model, encoder)
+    ['chr1\t100\t101\t0.5\n']
     """
     print("INFO: processing chunk: " + args.bed)
     graph_lines_forward = []
@@ -169,27 +170,26 @@ def write_results(
     prefix: str,
     bg_flag: bool,
 ) -> None:
-    """
-    Write results to output files
+    """Write results to output files.
 
     Parameters
     ----------
-    bedgraph : List[str]
-        List of bedgraph lines
-
+    bedgraph_forward : List[str]
+        Forward strand bedgraph lines
+    bedgraph_reverse : List[str]
+        Reverse strand bedgraph lines
     bed_lines : List[str]
-        List of bed lines
-
-    path : str
-        Path to chunk input file
-
-    Returns
-    -------
-    None
+        BED format lines
+    outdir : str
+        Output directory path
+    prefix : str
+        Prefix for output filenames
+    bg_flag : bool
+        Write bedgraph format if True, BED format if False
 
     Example
     -------
-    >>> write_results(bedgraph, bed_lines, path)
+    >>> write_results(["chr1\t100\t101\t0.5\n"], [], [], "output", "sample", True)
     """
     os.makedirs(outdir, exist_ok=True)
     print("INFO: writing results to: " + outdir)
@@ -221,21 +221,27 @@ def write_results(
 def run_aparent(
     model: str, encoder: EncoderType, seq: str
 ) -> Tuple[List[int], List[float]]:
-    """
-    Run APARENT to estimate poly(A) tail length from a chunked file
+    """Run APARENT to predict poly(A) peaks for a sequence.
 
     Parameters
     ----------
-    path : str
-        Path to chunk input file
+    model : str
+        Path to APARENT Keras model
+    encoder : EncoderType
+        Encoder function for sequences
+    seq : str
+        DNA sequence to analyze
 
     Returns
     -------
     Tuple[List[int], List[float]]
+        Peak indices and poly(A) signal profile
 
     Example
     -------
-    >>> run_aparent(path="path/to/chunk/file")
+    >>> peaks, profile = run_aparent(model, encoder, "ACGT...")
+    >>> len(peaks)
+    3
     """
     peak_ixs, polya_profile = find_polya_peaks(
         model,

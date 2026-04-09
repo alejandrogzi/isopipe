@@ -5,7 +5,7 @@ from __future__ import annotations
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 import argparse
 import logging
@@ -93,6 +93,7 @@ OUTPUT_FILENAMES: Dict[str, str] = {
     "retentions": "retentions.bed",
     "truncations": "truncations.bed",
     "intraprimming": "intraprimming.bed",
+    "rt": "rt.bed",
 }
 
 
@@ -226,7 +227,14 @@ def parse_args() -> argparse.Namespace:
 
 
 def run(args: argparse.Namespace) -> None:
-    """Load, merge, filter, bucket, and write the BED12 annotation outputs."""
+    """Load, merge, filter, bucket, and write the BED12 annotation outputs.
+
+    Example
+    -------
+    >>> args = parse_args()
+    >>> run(args)
+    INFO: Loaded 100 BED12 rows from reads.bed
+    """
 
     outdir = args.outdir
     outdir.mkdir(parents=True, exist_ok=True)
@@ -257,7 +265,24 @@ def run(args: argparse.Namespace) -> None:
 
 
 def read_bed12(path: PathLike) -> pd.DataFrame:
-    """Read a BED12 file and validate its column count and unique IDs."""
+    """Read a BED12 file and validate its column count and unique IDs.
+
+    Parameters
+    ----------
+    path : PathLike
+        Path to BED12 file
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with BED12 columns
+
+    Example
+    -------
+    >>> df = read_bed12("reads.bed")
+    >>> df.shape[1]
+    12
+    """
 
     bed = pd.read_csv(
         path,
@@ -278,7 +303,13 @@ def read_bed12(path: PathLike) -> pd.DataFrame:
 
 
 def read_status_table(path: PathLike, spec: StatusInputSpec) -> pd.DataFrame:
-    """Read one status TSV with the fixed `id status code html` layout."""
+    """Read one status TSV with the fixed `id status code html` layout.
+
+    Example input (TSV):
+        read1   PASS    .   <html>content</html>
+
+    Returns:
+        DataFrame with id and columns like R_status, R_code, R_html (using prefix from spec)"""
 
     records: List[Dict[str, str]] = []
     with Path(path).open("r", encoding="utf-8") as handle:
@@ -309,7 +340,13 @@ def read_status_table(path: PathLike, spec: StatusInputSpec) -> pd.DataFrame:
 
 
 def read_orf_table(path: PathLike) -> pd.DataFrame:
-    """Read the ORF TSV, keep the requested columns, and add an HTML summary."""
+    """Read the ORF TSV, keep the requested columns, and add an HTML summary.
+
+    Example input (TSV):
+        chr1    100     200     read1  +   0.5   0.3   ...  0.8    COMPLETE
+
+    Returns:
+        DataFrame with O_ prefixed columns, e.g., O_id, O_chr, O_strand, O_prob_coding, O_html"""
 
     orfs = pd.read_csv(path, sep="\t", dtype=str, keep_default_na=False)
     missing_columns = [
@@ -336,7 +373,23 @@ def read_orf_table(path: PathLike) -> pd.DataFrame:
 
 
 def normalize_orf_type(value: str) -> str:
-    """Normalize numeric ORF type values into readable labels."""
+    """Normalize numeric ORF type values into readable labels.
+
+    Parameters
+    ----------
+    value : str
+        ORF type value (numeric or string)
+
+    Returns
+    -------
+    str
+        Normalized ORF type label (e.g., "COMPLETE")
+
+    Example
+    -------
+    >>> normalize_orf_type("1")
+    'COMPLETE'
+    """
 
     text = str(value).strip()
     if not text:
@@ -353,7 +406,24 @@ def normalize_orf_type(value: str) -> str:
 
 
 def render_orf_html(row: Mapping[str, str]) -> str:
-    """Render one ORF row as a compact HTML table."""
+    """Render one ORF row as a compact HTML table.
+
+    Parameters
+    ----------
+    row : Mapping[str, str]
+        ORF row data as column-value mapping
+
+    Returns
+    -------
+    str
+        HTML table representation
+
+    Example
+    -------
+    >>> html = render_orf_html({"id": "r1", "orf_type": "COMPLETE"})
+    >>> "<table" in html
+    True
+    """
 
     html_parts = [
         "<h2>ORF</h2>",
@@ -371,7 +441,23 @@ def render_orf_html(row: Mapping[str, str]) -> str:
 
 
 def format_html_value(value: str) -> str:
-    """Escape one value for HTML output while keeping empty strings empty."""
+    """Escape one value for HTML output while keeping empty strings empty.
+
+    Parameters
+    ----------
+    value : str
+        Value to escape for HTML
+
+    Returns
+    -------
+    str
+        HTML-safe string
+
+    Example
+    -------
+    >>> format_html_value("<test>")
+    '&lt;test&gt;'
+    """
 
     if value is None:
         return ""
@@ -386,7 +472,29 @@ def merge_inputs(
     status_tables: Sequence[Tuple[StatusInputSpec, pd.DataFrame]],
     orfs: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Merge BED12 reads with all mandatory status tables and ORF annotations."""
+    """Merge BED12 reads with all mandatory status tables and ORF annotations.
+
+    Parameters
+    ----------
+    reads : pd.DataFrame
+        BED12 reads DataFrame
+    status_tables : Sequence[Tuple[StatusInputSpec, pd.DataFrame]]
+        List of (spec, DataFrame) tuples for status tables
+    orfs : pd.DataFrame
+        ORF annotations DataFrame
+
+    Returns
+    -------
+    pd.DataFrame
+        Merged DataFrame with all annotations
+
+    Example
+    -------
+    >>> reads = pd.DataFrame({"id": ["read1"], "chr": ["chr1"]})
+    >>> status_tables = [(spec_R, pd.DataFrame({"id": ["read1"], "R_status": ["PASS"]}))]
+    >>> orfs = pd.DataFrame({"id": ["read1"], "O_prob_coding": ["0.8"]})
+    >>> result = merge_inputs(reads, status_tables, orfs)
+    """
 
     schema = reads.copy()
     for spec, table in status_tables:
@@ -401,7 +509,18 @@ def merge_inputs(
 
 
 def validate_orf_identity(schema: pd.DataFrame) -> None:
-    """Ensure the merged ORF row still refers to the same BED12 record."""
+    """Ensure the merged ORF row still refers to the same BED12 record.
+
+    Parameters
+    ----------
+    schema : pd.DataFrame
+        Merged DataFrame with BED12 and ORF columns
+
+    Raises
+    ------
+    ValueError
+        If ORF chr/strand/id don't match BED12 chr/strand/id
+    """
 
     identity_pairs = (
         ("id", "O_id"),
@@ -427,7 +546,22 @@ def validate_id_alignment(
     other_ids: Sequence[str],
     label: str,
 ) -> None:
-    """Validate that one annotation table has exactly the same IDs as the reads."""
+    """Validate that one annotation table has exactly the same IDs as the reads.
+
+    Parameters
+    ----------
+    read_ids : Sequence[str]
+        IDs from the reads file
+    other_ids : Sequence[str]
+        IDs from the annotation table
+    label : str
+        Label for error messages (e.g., "orfs", "retentions")
+
+    Raises
+    ------
+    ValueError
+        If ID sets don't match
+    """
 
     read_id_set = set(read_ids)
     other_id_set = set(other_ids)
@@ -450,13 +584,39 @@ def validate_id_alignment(
 
 
 def sample_ids(values: Sequence[str], limit: int = 5) -> List[str]:
-    """Return a short sample of IDs for error messages."""
+    """Return a short sample of IDs for error messages.
+
+    Parameters
+    ----------
+    values : Sequence[str]
+        List of ID strings
+    limit : int, optional
+        Maximum number of IDs to return (default: 5)
+
+    Returns
+    -------
+    List[str]
+        Sample of up to `limit` IDs
+    """
 
     return list(values[:limit])
 
 
 def assert_unique_ids(frame: pd.DataFrame, label: str) -> None:
-    """Raise if a table contains duplicated IDs."""
+    """Raise if a table contains duplicated IDs.
+
+    Parameters
+    ----------
+    frame : pd.DataFrame
+        DataFrame with an "id" column
+    label : str
+        Label for error messages
+
+    Raises
+    ------
+    ValueError
+        If duplicated IDs are found
+    """
 
     duplicates = frame["id"][frame["id"].duplicated(keep=False)]
     if duplicates.empty:
@@ -469,7 +629,13 @@ def assert_unique_ids(frame: pd.DataFrame, label: str) -> None:
 
 
 def build_status_columns() -> List[str]:
-    """Build the merged status/code/html column order."""
+    """Build the merged status/code/html column order.
+
+    Returns
+    -------
+    List[str]
+        Column names like R_status, R_code, R_html, T_status, etc.
+    """
 
     status_columns: List[str] = []
     for spec in STATUS_INPUT_SPECS:
@@ -480,7 +646,13 @@ def build_status_columns() -> List[str]:
 
 
 def build_schema_columns() -> List[str]:
-    """Build the internal merged schema column order."""
+    """Build the internal merged schema column order.
+
+    Returns
+    -------
+    List[str]
+        Full column list: BED12 + status + ORF + HTML
+    """
 
     status_columns = build_status_columns()
     orf_columns = [ORF_RENAME_MAP[column] for column in ORF_COLUMNS_TO_KEEP]
@@ -488,13 +660,39 @@ def build_schema_columns() -> List[str]:
 
 
 def build_output_columns() -> List[str]:
-    """Build the final emitted BED12 plus annotation column order."""
+    """Build the final emitted BED12 plus annotation column order.
+
+    Returns
+    -------
+    List[str]
+        Column list: BED12 + status + HTML
+    """
 
     return BED12_COLS + build_status_columns() + [ORF_HTML_COL]
 
 
 def filter_by_orf_score(schema: pd.DataFrame, threshold: float) -> pd.DataFrame:
-    """Keep only rows whose ORF `prob_coding` is at or above the requested threshold."""
+    """Keep only rows whose ORF `prob_coding` is at or above the requested threshold.
+
+    Parameters
+    ----------
+    schema : pd.DataFrame
+        Merged DataFrame with O_prob_coding column
+    threshold : float
+        Minimum prob_coding value to retain
+
+    Returns
+    -------
+    pd.DataFrame
+        Filtered DataFrame
+
+    Example
+    -------
+    >>> schema = pd.DataFrame({"id": ["r1", "r2"], "O_prob_coding": ["0.8", "0.1"]})
+    >>> filter_by_orf_score(schema, 0.3)
+        id O_prob_coding
+    0  r1           0.8
+    """
 
     scores = pd.to_numeric(schema["O_prob_coding"], errors="coerce")
     invalid_rows = schema.loc[scores.isna(), "id"].tolist()
@@ -518,29 +716,60 @@ def filter_by_orf_score(schema: pd.DataFrame, threshold: float) -> pd.DataFrame:
 
 
 def bucket_rows(schema: pd.DataFrame, flaws: int) -> Dict[str, pd.DataFrame]:
-    """Split the filtered schema into pass, trash, and single-failure buckets."""
+    """Split the filtered schema into RT, pass, trash, and single-failure buckets.
+
+    Parameters
+    ----------
+    schema : pd.DataFrame
+        Filtered DataFrame with status columns
+    flaws : int
+        Minimum failed status columns to route to trash
+
+    Returns
+    -------
+    Dict[str, pd.DataFrame]
+        Dictionary with keys: rt, pass, trash, retentions, truncations, intraprimming
+
+    Example
+    -------
+    >>> schema = pd.DataFrame({
+    ...     "id": ["r1", "r2", "r3"],
+    ...     "R_status": ["PASS", "FAIL", "PASS"],
+    ...     "T_status": ["PASS", "FAIL", "FAIL"],
+    ...     "I_status": ["PASS", "PASS", "PASS"],
+    ...     "R_code": [".", "K", "."],
+    ... })
+    >>> buckets = bucket_rows(schema, flaws=2)
+    >>> list(buckets.keys())
+    ['rt', 'pass', 'trash', 'retentions', 'truncations', 'intraprimming']
+    """
+
+    # RT routing takes precedence over flaw-based bucketing.
+    rt_mask = schema["R_code"].str.contains("K", regex=False, na=False)
+    remaining_schema = schema.loc[~rt_mask].copy()
 
     status_columns = [spec.status_column for spec in STATUS_INPUT_SPECS]
-    status_frame = schema.loc[:, status_columns].copy()
+    status_frame = remaining_schema.loc[:, status_columns].copy()
     fail_mask = status_frame.ne("PASS")
     fail_counts = fail_mask.sum(axis=1)
     single_failure_mask = fail_counts.eq(1) & fail_counts.lt(flaws)
     ambiguous_mask = fail_counts.gt(1) & fail_counts.lt(flaws)
 
     if ambiguous_mask.any():
-        ambiguous_ids = schema.loc[ambiguous_mask, "id"].tolist()
+        ambiguous_ids = remaining_schema.loc[ambiguous_mask, "id"].tolist()
         raise ValueError(
             "Rows with multiple failed status columns do not map to a unique output "
             f"bucket when --flaws={flaws}. Sample IDs: {sample_ids(ambiguous_ids)}"
         )
 
     buckets: Dict[str, pd.DataFrame] = {
-        "pass": schema.loc[fail_counts.eq(0)].copy(),
-        "trash": schema.loc[fail_counts.ge(flaws)].copy(),
+        "rt": schema.loc[rt_mask].copy(),
+        "pass": remaining_schema.loc[fail_counts.eq(0)].copy(),
+        "trash": remaining_schema.loc[fail_counts.ge(flaws)].copy(),
     }
 
     for spec in STATUS_INPUT_SPECS:
-        buckets[spec.bucket_name] = schema.loc[
+        buckets[spec.bucket_name] = remaining_schema.loc[
             single_failure_mask & fail_mask[spec.status_column]
         ].copy()
 
@@ -555,7 +784,23 @@ def write_outputs(
     outdir: Path,
     prefix: str,
 ) -> None:
-    """Write the five requested BED12-plus output files without headers."""
+    """Write the five requested BED12-plus output files without headers.
+
+    Parameters
+    ----------
+    buckets : Mapping[str, pd.DataFrame]
+        Dictionary of bucket name to DataFrame
+    outdir : Path
+        Output directory
+    prefix : str
+        Prefix for output filenames
+
+    Example
+    -------
+    >>> buckets = {"pass": df_pass, "trash": df_trash, "rt": df_rt}
+    >>> write_outputs(buckets, Path("output"), "sample")
+    # writes sample.pass.bed, sample.trash.bed, sample.rt.bed, etc.
+    """
 
     output_columns = build_output_columns()
     empty_frame = pd.DataFrame(columns=output_columns)

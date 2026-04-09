@@ -5,7 +5,7 @@ process INTRONIC {
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         '' :
-        'ghcr.io/alejandrogzi/isox-py:main-1a6abb7' }"
+        'ghcr.io/alejandrogzi/isox-py:latest' }"
 
     input:
     tuple val(meta), path(introns)
