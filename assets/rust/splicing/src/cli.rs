@@ -20,7 +20,7 @@ pub struct Args {
         long = "bigwig-dir",
         required = true,
         value_name = "PATH",
-        help = "Path to directory containing BigWig files"
+        help = "Path to directory containing SpliceAI BigWig files; filenames must include donor/acceptor and plus/minus tokens"
     )]
     pub bw_dir: PathBuf,
 

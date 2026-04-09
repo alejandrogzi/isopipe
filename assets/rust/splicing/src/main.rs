@@ -46,7 +46,10 @@ fn main() {
     let acceptor_profile = build_null_profile("acceptor", &acceptors, &dinucleotide_count);
 
     let (spliceai_donor_scores, spliceai_acceptor_scores) =
-        get_splice_scores(args.bw_dir, chroms, genome);
+        get_splice_scores(args.bw_dir, chroms, genome).unwrap_or_else(|e| {
+            error!("ERROR: failed to load SpliceAI BigWigs: {}", e);
+            std::process::exit(1);
+        });
 
     let donor_bins = make_bins(
         &spliceai_donor_scores,
