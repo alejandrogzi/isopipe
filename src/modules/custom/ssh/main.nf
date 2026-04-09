@@ -13,6 +13,7 @@ process RSYNC_SSH {
     val server
     val target_dir
     val web
+    val species
 
     output:
     path "versions.yml", emit: versions
@@ -23,20 +24,20 @@ process RSYNC_SSH {
     script:
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
-    def bb = bigbed.baseName
+    def bb = bigbed.baseName + '.bb'
     """
     ssh \\
     ${user}@${server} \\
-    mkdir -p ${target_dir}/isopipe
+    mkdir -p ${target_dir}/${species}/isopipe
 
     rsync \\
     -av \\
     ${bigbed} \\
-    ${user}@${server}:${target_dir}/isopipe/${bb}
+    ${user}@${server}:${target_dir}/${species}/isopipe/${bb}
 
     ssh \\
     ${user}@${server} \\
-    ln -sf ${target_dir}/isopipe/${bb} ${web}/${bb}
+    ln -sf ${target_dir}/${species}/isopipe/${bb} ${web}/${species}/${bb}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
