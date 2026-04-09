@@ -1,20 +1,19 @@
-process SPLICEAI_DERIVE {
+process SPLICEAI_CHUNK {
     tag "$meta.id"
-    label 'process_medium'
+    label 'process_low'
 
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         '' :
-        'ghcr.io/alejandrogzi/isox-rs:latest' }"
+        'ghcr.io/alejandrogzi/spliceai:latest' }"
 
     input:
     tuple val(meta), path(genome)
-    tuple val(meta1), path(annotation)
-    tuple val(meta2), path(spliceai)
 
     output:
-    tuple val(meta), path("*.derived.tsv"), emit: scores
-    path "versions.yml", emit: versions
+    tuple val(meta), path("chunks/*.fa"),    emit: fasta
+    tuple val(meta), path("chunks/*.fa.gz"), emit: fasta_gz
+    path "versions.yml",                     emit: versions
 
     when:
     task.ext.when == null || task.ext.when
@@ -23,27 +22,25 @@ process SPLICEAI_DERIVE {
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    splicing \\
+    spliceai chunk \\
         $args \\
         -t ${task.cpus} \\
-        --bigwig-dir ${spliceai} \\
-        --sequence ${genome} \\
-        --regions ${annotation} \\
-        --prefix ${prefix}
+        --sequence ${genome}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        splicing: \$( splicing --version | sed 's/splicing //g' )
+        spliceai chunk: \$( spliceai chunk --version | sed 's/spliceai chunk //g' )
     END_VERSIONS
     """
 
     stub:
     """
-    touch *.derived.tsv
+    touch chunks/*.fa
+    touch chunks/*.fa.gz
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        splicing: \$( splicing --version | sed 's/splicing //g' )
+        spliceai chunk: \$( spliceai chunk --version | sed 's/spliceai chunk //g' )
     END_VERSIONS
     """
 }
