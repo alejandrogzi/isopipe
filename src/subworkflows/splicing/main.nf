@@ -8,6 +8,7 @@ include { MINISPLICE_DOWNLOAD } from '../../modules/custom/minisplice/download/m
 include { MINISPLICE_PREDICT } from '../../modules/custom/minisplice/predict/main.nf'
 include { SPLICEAI_DERIVE } from '../../modules/custom/spliceai/derive/main.nf'
 include { GUNZIP as GUNZIP_SPLICEAI } from '../../modules/custom/gunzip/main.nf'
+include { SPLICEAI as SPLICEAI_RUN } from '../spliceai/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -18,13 +19,15 @@ include { GUNZIP as GUNZIP_SPLICEAI } from '../../modules/custom/gunzip/main.nf'
 
 workflow SPLICING {
     take:
-      genome
-      annotation
-      bigwigs
-      algorithm
-      minisplice
-      spliceai
-      ch_versions
+      genome         // channel: [ val(meta), [ genome ] ]
+      annotation     // channel: [ val(meta), [ annotation ] ]
+      bigwigs        // path
+      algorithm      // string
+      minisplice     // path
+      spliceai       // path
+      chromsizes     // channel: [  chromsizes ]
+      compression    // bool
+      ch_versions    // channel: [ path(version) ]
 
     main:
       ch_spliceai_bigwigs = Channel.value([[:], []])
@@ -57,10 +60,22 @@ workflow SPLICING {
               ch_scores = SPLICEAI_DERIVE.out.scores
               ch_versions = ch_versions.mix(SPLICEAI_DERIVE.out.versions)
             } else {
-                // SPLICEAI_RUN()
+                SPLICEAI_RUN(
+                    genome.map { genome -> [ [id:genome.baseName], genome ] },
+                    chromsizes,
+                    compression,
+                    ch_versions
+                )
 
-                // ch_scores = SPLICEAI_RUN.out.scores
-                // ch_versions = ch_versions.mix(SPLICEAI_RUN.out.versions)
+                SPLICEAI_DERIVE(
+                    genome.map { genome -> [ [id:genome.baseName], genome ] },
+                    annotation.map { annotation -> [ [id:annotation.baseName], annotation ] },
+                    SPLICEAI_RUN.out.spliceai
+                )
+
+                ch_scores = SPLICEAI_DERIVE.out.scores
+                ch_versions = ch_versions.mix(SPLICEAI_RUN.out.versions)
+                ch_versions = ch_versions.mix(SPLICEAI_DERIVE.out.versions)
             }
           }
       } else if (algorithm == "minisplice") {

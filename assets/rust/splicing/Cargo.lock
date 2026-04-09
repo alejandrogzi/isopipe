@@ -474,9 +474,9 @@ dependencies = [
 
 [[package]]
 name = "genepred"
-version = "0.0.10"
+version = "0.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f159c120fafdabbd7ebbb601a2b785ffbbb40e370a30e7662a76a51832dd5f3d"
+checksum = "09823e7cec06bf04ef2634f443e6c886b54ae0704893d74e0be903cdb285783d"
 dependencies = [
  "memchr",
  "memmap2",
@@ -1137,7 +1137,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "splicing"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "bigtools",
  "bytecount",
@@ -1286,9 +1286,9 @@ dependencies = [
 
 [[package]]
 name = "twobit"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccd5793b6a7a2c3cace1e9826ec03449a632b228c5e2d1e63a2d77ab663d9006"
+checksum = "839fd1c744d3725577ea85b53bf18cab09b49524dbb3aef779e6bc3c4b369035"
 
 [[package]]
 name = "ufmt"

@@ -1,8 +1,8 @@
 # Isopipe track description
-track HLIsoClassAnnot
+track {TRACK}
 compositeTrack on
 shortLabel HL ISOPIPE annotations
-longLabel Isopipe annotation track
+longLabel HL Isopipe annotation track
 group genes
 priority 2
 visibility pack
@@ -10,122 +10,123 @@ itemRgb on
 type bigBed 37
 searchPriority 2.07207
 
-        track HLIsoClassAnnotPass
-        parent HLIsoClassAnnot
-        subtrack HLIsoClassAnnot
+        track {PREFIX}.pass
+        parent {TRACK}
+        subtrack {TRACK}        
         shortLabel HL pass
         longLabel HL_Pass
         group genes
         priority 1
         visibility pack
         itemRgb On
-        type bigBed 37
-        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.pass.bb
+        type bigBed {ADDITIONAL_COLUMNS}
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.pass.bb
 
-        track HLIsoClassAnnotFusions
-        parent HLIsoClassAnnot
-        subtrack HLIsoClassAnnot
-        shortLabel HL fusions
-        longLabel HL_Fusions
-        group genes
-        priority 1
-        visibility pack
-        itemRgb On
-        type bigBed 37
-        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.fusions.bb
-
-        track HLIsoClassAnnotRetention
-        parent HLIsoClassAnnot
-        subtrack HLIsoClassAnnot
+        track {PREFIX}.retention
+        parent {TRACK}
+        subtrack {TRACK}
         shortLabel HL retention
         longLabel HL_Retention
         group genes
         priority 1
         visibility pack
         itemRgb On
-        type bigBed 37
-        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.retention.bb
+        type bigBed {ADDITIONAL_COLUMNS}
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.retention.bb
 
-        track HLIsoClassAnnotIntrprimming
-        parent HLIsoClassAnnot
-        subtrack HLIsoClassAnnot
+        track {PREFIX}.intraprimming
+        parent {TRACK}
+        subtrack {TRACK}
         shortLabel HL intraprimming
         longLabel HL_Intraprimming
         group genes
         priority 1
         visibility pack
         itemRgb On
-        type bigBed 37
-        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.intraprimming.bb
+        type bigBed {ADDITIONAL_COLUMNS}
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.intraprimming.bb
 
-        track HLIsoClassAnnotNmd
-        parent HLIsoClassAnnot
-        subtrack HLIsoClassAnnot
-        shortLabel HL nmd
-        longLabel HL_Nmd
-        group genes
-        priority 1
-        visibility pack
-        itemRgb On
-        type bigBed 37
-        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.nmd.bb
-
-        track HLIsoClassAnnotTruncation
-        parent HLIsoClassAnnot
-        subtrack HLIsoClassAnnot
+        track {PREFIX}.truncation
+        parent {TRACK}
+        subtrack {TRACK}
         shortLabel HL truncation
         longLabel HL_Truncation
         group genes
         priority 1
         visibility pack
         itemRgb On
-        type bigBed 37
-        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.truncation.bb
+        type bigBed {ADDITIONAL_COLUMNS}
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.truncation.bb
 
-        track HLIsoClassAnnotRT
-        parent HLIsoClassAnnot
-        subtrack HLIsoClassAnnot
+        track {PREFIX}.rt
+        parent {TRACK}
+        subtrack {TRACK}
         shortLabel HL rt
         longLabel HL_rt
         group genes
         priority 1
         visibility pack
         itemRgb On
-        type bigBed 37
-        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.rt_reads.bb
+        type bigBed {ADDITIONAL_COLUMNS}
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.rt.bb
 
-        track HLIsoClassAnnotTrash
-        parent HLIsoClassAnnot
-        subtrack HLIsoClassAnnot
+        track {PREFIX}.trash
+        parent {TRACK}
+        subtrack {TRACK}
         shortLabel HL trash
         longLabel HL_trash
         group genes
         priority 1
         visibility pack
         itemRgb On
-        type bigBed 37
-        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.trash.bb
+        type bigBed {ADDITIONAL_COLUMNS}
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.trash.bb
 
-        track HLIsoClassAnnotOrphans
-        parent HLIsoClassAnnot
-        subtrack HLIsoClassAnnot
-        shortLabel HL trash
-        longLabel HL_trash
+        track {PREFIX}.orphans
+        parent {TRACK}
+        subtrack {TRACK}
+        shortLabel HL orphans
+        longLabel HL_orphans
         group genes
         priority 1
         visibility pack
         itemRgb On
-        type bigBed 37
-        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.orphans.bb
+        type bigBed {ADDITIONAL_COLUMNS}
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.orphans.bb
 
-        track HLIsoClassAnnotDuplicates
-        parent HLIsoClassAnnot
-        subtrack HLIsoClassAnnot
-        shortLabel HL trash
-        longLabel HL_trash
+        track {PREFIX}.duplicates
+        parent {TRACK}
+        subtrack {TRACK}
+        shortLabel HL duplicates
+        longLabel HL_duplicates
         group genes
         priority 1
         visibility pack
         itemRgb On
-        type bigBed 37
-        bigDataUrl {BROWSER}/{SPECIES}/HLIsoClassAnnot.duplicates.bb
+        type bigBed {ADDITIONAL_COLUMNS}
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.duplicates.bb
+
+        track {PREFIX}.fusions
+        parent {TRACK}
+        subtrack {TRACK}
+        shortLabel HL fusions
+        longLabel HL_fusions
+        group genes
+        priority 1
+        visibility pack
+        itemRgb On
+        type bigBed 12
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.fusions.bb
+
+        track {PREFIX}.nmd
+        parent {TRACK}
+        subtrack {TRACK}
+        shortLabel HL nmd
+        longLabel HL_nmd
+        group genes
+        priority 1
+        visibility pack
+        itemRgb On
+        type bigBed 12
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.nmd.bb
+

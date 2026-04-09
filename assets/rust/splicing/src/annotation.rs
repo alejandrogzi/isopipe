@@ -88,6 +88,11 @@ pub fn get_ss_from_annotation(
 /// * `acceptors` - Output map for acceptor dinucleotide counts
 /// * `ss_donors` - Set of donor coordinates
 /// * `ss_acceptors` - Set of acceptor coordinates
+///
+/// # Example
+/// ```rust,ignore
+/// process_reader::<Gtf>(&path, &genome, &donors, &acceptors, &ss_donors, &ss_acceptors);
+/// ```
 fn process_reader<R>(
     regions: &Path,
     genome: &HashMap<Vec<u8>, Vec<u8>>,

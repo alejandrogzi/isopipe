@@ -32,6 +32,7 @@ workflow PREPROCESSING {
       bigwigs                // path
       minisplice             // path
       spliceai               // path
+      compression            // bool
       ch_versions            // [ meta, versions.yml ]
 
     main:
@@ -73,6 +74,8 @@ workflow PREPROCESSING {
                   splice_score_algorithm,
                   minisplice,
                   spliceai,
+                  ch_genome.chrom_sizes,
+                  compression,
                   ch_versions
               )
               ch_splice_scores = SPLICEAI_GENOMIC_SPLICE_SCORES.out.scores
@@ -85,6 +88,8 @@ workflow PREPROCESSING {
                   splice_score_algorithm,
                   minisplice,
                   spliceai,
+                  ch_genome.chrom_sizes,
+                  compression,
                   ch_versions
               )             
               ch_splice_scores = MINISPLICE_GENOMIC_SPLICE_SCORES.out.scores
@@ -132,6 +137,6 @@ workflow PREPROCESSING {
       reference_transcripts = ch_reference_transcripts
       splice_scores         = ch_splice_scores
       bigwigs               = ch_spliceai_bigwigs
-      chrom_sizes            = ch_genome.chrom_sizes
+      chrom_sizes           = ch_genome.chrom_sizes
       versions              = ch_versions
 }

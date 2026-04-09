@@ -20,6 +20,17 @@ const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 const TWOBIT_MAGIC: [u8; 4] = [0x1a, 0x41, 0x27, 0x43];
 const TWOBIT_MAGIC_REV: [u8; 4] = [0x43, 0x27, 0x41, 0x1a];
 
+/// Counts a dinucleotide pair and its reverse complement.
+///
+/// # Arguments
+/// * `local` - Map to update
+/// * `pair` - 2-byte dinucleotide slice
+///
+/// # Example
+/// ```rust,ignore
+/// let mut counts = HashMap::new();
+/// count_dinucleotide_pair(&mut counts, b"AC");
+/// ```
 fn count_dinucleotide_pair(local: &mut HashMap<Vec<u8>, usize>, pair: &[u8]) {
     let forward = vec![pair[0].to_ascii_uppercase(), pair[1].to_ascii_uppercase()];
     *local.entry(forward).or_insert(0) += 1;

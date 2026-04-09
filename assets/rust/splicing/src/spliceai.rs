@@ -10,20 +10,12 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::{
     collections::HashMap,
-    fs::File,
-    io::{BufWriter, Write},
+    fs::{self, File},
+    io::{self, BufWriter, Write},
+    path::{Path, PathBuf},
 };
 
 use crate::utils::{build_coordinate_key, reverse_complement_in_place, uppercase_in_place};
-
-/// SpliceAI acceptor BigWig filename for minus strand.
-pub const ACCEPTOR_MINUS: &str = "spliceAiAcceptorMinus.bw";
-/// SpliceAI acceptor BigWig filename for plus strand.
-pub const ACCEPTOR_PLUS: &str = "spliceAiAcceptorPlus.bw";
-/// SpliceAI donor BigWig filename for minus strand.
-pub const DONOR_MINUS: &str = "spliceAiDonorMinus.bw";
-/// SpliceAI donor BigWig filename for plus strand.
-pub const DONOR_PLUS: &str = "spliceAiDonorPlus.bw";
 
 /// Type alias: (plus_strand_map, minus_strand_map) for both strands.
 pub type SpliceMap = (StrandSpliceMap, StrandSpliceMap);
@@ -36,67 +28,76 @@ pub type SpliceScores = (Vec<StrandSpliceMap>, Vec<StrandSpliceMap>);
 
 /// Fetches and processes splice scores from BigWig files.
 ///
-/// This is a convenience function that wraps `make_splice_map`, handling the case where
-/// no splice score files are provided. If files are provided, it calls `make_splice_map` to
-/// load the data; otherwise, it returns empty maps.
+/// This is a convenience wrapper around `make_splice_map`.
 ///
 /// # Arguments
 ///
-/// * `splice_scores`: An `Option<T>` with the path to the directory containing splice score BigWigs.
-/// * `chrs`: A `Vec<String>` of chromosome names to process.
+/// * `bigwigs`: Path to the directory containing SpliceAI BigWig files.
+/// * `chrs`: Chromosome names to process.
+/// * `genome`: Genome sequence keyed by chromosome name.
 ///
 /// # Returns
 ///
-/// * A `SpliceScores` type, which is a tuple of two vectors of `StrandSpliceMap`.
+/// * A `Result` containing donor and acceptor `StrandSpliceMap`s.
+///
+/// # Errors
+///
+/// Returns `SpliceAiFileError` if the directory does not contain exactly one donor/acceptor
+/// file for each plus/minus strand combination.
 ///
 /// # Example
 ///
 /// ```rust,ignore
-/// let scores = get_splice_scores(splice_scores, chrs);
+/// let scores = get_splice_scores(splice_scores, chrs, genome)?;
 /// ```
 pub fn get_splice_scores<T: AsRef<std::path::Path> + std::fmt::Debug>(
     bigwigs: T,
     chrs: Vec<Vec<u8>>,
     genome: HashMap<Vec<u8>, Vec<u8>>,
-) -> (StrandSpliceMap, StrandSpliceMap) {
+) -> Result<(StrandSpliceMap, StrandSpliceMap), SpliceAiFileError> {
     // INFO: DashMap<String, DashSet<Vec<u8>>> -> chr -> [ b'pos -> score' ]
     make_splice_map(bigwigs, chrs, genome)
 }
 
 /// Creates `StrandSpliceMap`s for both plus and minus strands by parsing BigWig files.
 ///
-/// This function takes a directory containing BigWig files for donor and acceptor splice scores for both
-/// strands. It then uses `rayon` to parallelize the parsing of these files into `DashMap`s,
-/// which are a thread-safe hash map, and returns the results.
+/// This function scans a directory for four SpliceAI BigWig files covering donor/acceptor
+/// scores on the plus/minus strands. Filenames are matched case-insensitively and may include
+/// arbitrary prefixes or suffixes as long as the basename contains exactly one splice-site token
+/// (`donor` or `acceptor`) and exactly one strand token (`plus` or `minus`).
+///
+/// Supported BigWig extensions are `.bw` and `.bigWig` in any letter casing. Once the four
+/// required files are resolved, the function uses `rayon` to parallelize parsing into
+/// thread-safe `DashMap`s.
 ///
 /// # Arguments
 ///
-/// * `dir`: The path to the directory containing the BigWig files.
-/// * `chrs`: A `Vec<String>` of chromosome names to process.
+/// * `dir`: The path to the directory containing the SpliceAI BigWig files.
+/// * `chrs`: Chromosome names to process.
+/// * `genome`: Genome sequence keyed by chromosome name.
 ///
 /// # Returns
 ///
-/// * A tuple of two `Vec<StrandSpliceMap>`, where the first vector is for the plus strand
-///   (donor and acceptor) and the second is for the minus strand.
+/// * A `Result` containing donor and acceptor `StrandSpliceMap`s.
+///
+/// # Errors
+///
+/// Returns `SpliceAiFileError` if the directory is invalid, if a candidate filename is
+/// ambiguous, if a required combination is missing, or if duplicate files match the same
+/// donor/acceptor and strand classification.
 ///
 /// # Example
 ///
 /// ```rust,ignore
-/// let (plus_scores, minus_scores) = make_splice_map(dir, chrs);
+/// let (donor_scores, acceptor_scores) = make_splice_map(dir, chrs, genome)?;
 /// ```
 pub fn make_splice_map<T: AsRef<std::path::Path> + std::fmt::Debug>(
     dir: T,
     chrs: Vec<Vec<u8>>,
     genome: HashMap<Vec<u8>, Vec<u8>>,
-) -> (StrandSpliceMap, StrandSpliceMap) {
-    let plus = vec![
-        dir.as_ref().join(DONOR_PLUS),
-        dir.as_ref().join(ACCEPTOR_PLUS),
-    ];
-    let minus = vec![
-        dir.as_ref().join(DONOR_MINUS),
-        dir.as_ref().join(ACCEPTOR_MINUS),
-    ];
+) -> Result<(StrandSpliceMap, StrandSpliceMap), SpliceAiFileError> {
+    let resolved = discover_spliceai_bigwigs(dir.as_ref())?;
+    let (plus, minus) = resolved.into_strand_paths();
 
     info!("Parsing BigWigs...");
     let (plus, minus) = rayon::join(
@@ -110,7 +111,7 @@ pub fn make_splice_map<T: AsRef<std::path::Path> + std::fmt::Debug>(
     let donor_scores = merge_splice_maps(plus_donor, minus_donor);
     let acceptor_scores = merge_splice_maps(plus_acceptor, minus_acceptor);
 
-    (donor_scores, acceptor_scores)
+    Ok((donor_scores, acceptor_scores))
 }
 
 /// Merges two strand-specific splice maps (e.g., plus and minus strands).
@@ -142,6 +143,19 @@ fn merge_splice_maps(primary: StrandSpliceMap, secondary: StrandSpliceMap) -> St
     merged
 }
 
+/// DNA strand orientation for splice sites.
+///
+/// # Variants
+/// - Forward: Plus strand (+)
+/// - Reverse: Minus strand (-)
+///
+/// # Example
+/// ```rust,ignore
+/// use splicing::spliceai::Strand;
+///
+/// let forward = Strand::Forward;
+/// let reverse = Strand::Reverse;
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Strand {
     Forward,
@@ -157,6 +171,15 @@ impl std::fmt::Display for Strand {
     }
 }
 
+impl Strand {
+    fn token(self) -> &'static str {
+        match self {
+            Strand::Forward => "plus",
+            Strand::Reverse => "minus",
+        }
+    }
+}
+
 // public enums
 /// Splice site type
 ///
@@ -165,7 +188,7 @@ impl std::fmt::Display for Strand {
 /// # Example
 ///
 /// ```rust, no_run
-/// use bwtoms::spliceai::SpliceSite;
+/// use splicing::spliceai::SpliceSite;
 ///
 /// let donor = SpliceSite::Donor;
 /// let acceptor = SpliceSite::Acceptor;
@@ -185,6 +208,344 @@ impl std::fmt::Display for SpliceSite {
     }
 }
 
+impl SpliceSite {
+    fn token(self) -> &'static str {
+        match self {
+            SpliceSite::Donor => "donor",
+            SpliceSite::Acceptor => "acceptor",
+        }
+    }
+}
+
+/// Classification of a SpliceAI BigWig file by splice site type and strand.
+///
+/// Combines SpliceSite (donor/acceptor) with Strand (forward/reverse).
+///
+/// # Fields
+/// - `splice_site`: Donor or Acceptor
+/// - `strand`: Forward or Reverse
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct BigWigClass {
+    splice_site: SpliceSite,
+    strand: Strand,
+}
+
+impl BigWigClass {
+    const fn new(splice_site: SpliceSite, strand: Strand) -> Self {
+        Self {
+            splice_site,
+            strand,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match (self.splice_site, self.strand) {
+            (SpliceSite::Donor, Strand::Forward) => "donor plus",
+            (SpliceSite::Donor, Strand::Reverse) => "donor minus",
+            (SpliceSite::Acceptor, Strand::Forward) => "acceptor plus",
+            (SpliceSite::Acceptor, Strand::Reverse) => "acceptor minus",
+        }
+    }
+}
+
+const EXPECTED_BIGWIGS: [BigWigClass; 4] = [
+    BigWigClass::new(SpliceSite::Donor, Strand::Forward),
+    BigWigClass::new(SpliceSite::Acceptor, Strand::Forward),
+    BigWigClass::new(SpliceSite::Donor, Strand::Reverse),
+    BigWigClass::new(SpliceSite::Acceptor, Strand::Reverse),
+];
+
+/// Resolved paths to the four required SpliceAI BigWig files.
+///
+/// # Fields
+/// - `donor_plus`: Path to donor scores on forward strand
+/// - `acceptor_plus`: Path to acceptor scores on forward strand
+/// - `donor_minus`: Path to donor scores on reverse strand
+/// - `acceptor_minus`: Path to acceptor scores on reverse strand
+#[derive(Debug, Clone)]
+struct ResolvedBigWigs {
+    donor_plus: PathBuf,
+    acceptor_plus: PathBuf,
+    donor_minus: PathBuf,
+    acceptor_minus: PathBuf,
+}
+
+impl ResolvedBigWigs {
+    fn into_strand_paths(self) -> (Vec<PathBuf>, Vec<PathBuf>) {
+        (
+            vec![self.donor_plus, self.acceptor_plus],
+            vec![self.donor_minus, self.acceptor_minus],
+        )
+    }
+}
+
+/// Errors raised while discovering the four required SpliceAI BigWig files.
+#[derive(Debug)]
+pub enum SpliceAiFileError {
+    InvalidDirectory {
+        path: PathBuf,
+    },
+    ReadDirectory {
+        path: PathBuf,
+        source: io::Error,
+    },
+    ReadDirectoryEntry {
+        path: PathBuf,
+        source: io::Error,
+    },
+    InvalidFilename {
+        path: PathBuf,
+        reason: &'static str,
+    },
+    DuplicateClassification {
+        classification: &'static str,
+        paths: Vec<PathBuf>,
+    },
+    MissingClassifications {
+        path: PathBuf,
+        classifications: Vec<&'static str>,
+    },
+}
+
+impl std::fmt::Display for SpliceAiFileError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidDirectory { path } => {
+                write!(
+                    f,
+                    "SpliceAI BigWig path '{}' is not a directory",
+                    path.display()
+                )
+            }
+            Self::ReadDirectory { path, source } => write!(
+                f,
+                "failed to read SpliceAI BigWig directory '{}': {}",
+                path.display(),
+                source
+            ),
+            Self::ReadDirectoryEntry { path, source } => write!(
+                f,
+                "failed to read an entry from SpliceAI BigWig directory '{}': {}",
+                path.display(),
+                source
+            ),
+            Self::InvalidFilename { path, reason } => write!(
+                f,
+                "invalid SpliceAI BigWig filename '{}': {}",
+                path.display(),
+                reason
+            ),
+            Self::DuplicateClassification {
+                classification,
+                paths,
+            } => write!(
+                f,
+                "multiple SpliceAI BigWig files matched {}: {}",
+                classification,
+                display_paths(paths)
+            ),
+            Self::MissingClassifications {
+                path,
+                classifications,
+            } => write!(
+                f,
+                "missing required SpliceAI BigWig files in '{}': {}",
+                path.display(),
+                classifications.join(", ")
+            ),
+        }
+    }
+}
+
+impl std::error::Error for SpliceAiFileError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::ReadDirectory { source, .. } => Some(source),
+            Self::ReadDirectoryEntry { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}
+
+/// Scans a directory and resolves exactly four SpliceAI BigWig files.
+///
+/// Filenames are matched after removing non-alphanumeric characters and lowercasing the stem, so
+/// patterns like `prefixDonorPlusSuffix.bw`, `ACCEPTOR_MINUS.bigWig`, and
+/// `run42spliceaiacceptorplusv2.BW` are all supported.
+///
+/// BigWig files that do not contain any of the required tokens are ignored. Files with partial or
+/// ambiguous token matches are rejected with `SpliceAiFileError::InvalidFilename`.
+fn discover_spliceai_bigwigs(dir: &Path) -> Result<ResolvedBigWigs, SpliceAiFileError> {
+    if !dir.is_dir() {
+        return Err(SpliceAiFileError::InvalidDirectory {
+            path: dir.to_path_buf(),
+        });
+    }
+
+    let mut matches: HashMap<BigWigClass, Vec<PathBuf>> = HashMap::new();
+
+    for entry in fs::read_dir(dir).map_err(|source| SpliceAiFileError::ReadDirectory {
+        path: dir.to_path_buf(),
+        source,
+    })? {
+        let entry = entry.map_err(|source| SpliceAiFileError::ReadDirectoryEntry {
+            path: dir.to_path_buf(),
+            source,
+        })?;
+        let path = entry.path();
+
+        if !path.is_file() || !is_bigwig_path(&path) {
+            continue;
+        }
+
+        if let Some(classification) = classify_bigwig_path(&path)? {
+            matches.entry(classification).or_default().push(path);
+        }
+    }
+
+    for classification in EXPECTED_BIGWIGS {
+        if let Some(paths) = matches.get_mut(&classification) {
+            paths.sort();
+
+            if paths.len() > 1 {
+                return Err(SpliceAiFileError::DuplicateClassification {
+                    classification: classification.label(),
+                    paths: paths.clone(),
+                });
+            }
+        }
+    }
+
+    let missing = EXPECTED_BIGWIGS
+        .iter()
+        .copied()
+        .filter(|classification| !matches.contains_key(classification))
+        .map(BigWigClass::label)
+        .collect::<Vec<_>>();
+
+    if !missing.is_empty() {
+        return Err(SpliceAiFileError::MissingClassifications {
+            path: dir.to_path_buf(),
+            classifications: missing,
+        });
+    }
+
+    Ok(ResolvedBigWigs {
+        donor_plus: take_classified_path(
+            &mut matches,
+            BigWigClass::new(SpliceSite::Donor, Strand::Forward),
+        ),
+        acceptor_plus: take_classified_path(
+            &mut matches,
+            BigWigClass::new(SpliceSite::Acceptor, Strand::Forward),
+        ),
+        donor_minus: take_classified_path(
+            &mut matches,
+            BigWigClass::new(SpliceSite::Donor, Strand::Reverse),
+        ),
+        acceptor_minus: take_classified_path(
+            &mut matches,
+            BigWigClass::new(SpliceSite::Acceptor, Strand::Reverse),
+        ),
+    })
+}
+
+fn take_classified_path(
+    matches: &mut HashMap<BigWigClass, Vec<PathBuf>>,
+    classification: BigWigClass,
+) -> PathBuf {
+    matches
+        .remove(&classification)
+        .and_then(|mut paths| paths.pop())
+        .unwrap_or_else(|| {
+            panic!(
+                "ERROR: missing validated SpliceAI BigWig classification {}",
+                classification.label()
+            )
+        })
+}
+
+fn classify_bigwig_path(path: &Path) -> Result<Option<BigWigClass>, SpliceAiFileError> {
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| SpliceAiFileError::InvalidFilename {
+            path: path.to_path_buf(),
+            reason: "filename stem is not valid UTF-8",
+        })?;
+
+    classify_bigwig_stem(path, stem)
+}
+
+fn classify_bigwig_stem(path: &Path, stem: &str) -> Result<Option<BigWigClass>, SpliceAiFileError> {
+    let normalized = normalize_bigwig_stem(stem);
+    let has_donor = normalized.contains(SpliceSite::Donor.token());
+    let has_acceptor = normalized.contains(SpliceSite::Acceptor.token());
+    let has_plus = normalized.contains(Strand::Forward.token());
+    let has_minus = normalized.contains(Strand::Reverse.token());
+
+    let site_count = usize::from(has_donor) + usize::from(has_acceptor);
+    let strand_count = usize::from(has_plus) + usize::from(has_minus);
+
+    if site_count == 0 && strand_count == 0 {
+        return Ok(None);
+    }
+
+    if site_count != 1 || strand_count != 1 {
+        return Err(SpliceAiFileError::InvalidFilename {
+            path: path.to_path_buf(),
+            reason: classification_error_reason(site_count, strand_count),
+        });
+    }
+
+    let splice_site = if has_donor {
+        SpliceSite::Donor
+    } else {
+        SpliceSite::Acceptor
+    };
+    let strand = if has_plus {
+        Strand::Forward
+    } else {
+        Strand::Reverse
+    };
+
+    Ok(Some(BigWigClass::new(splice_site, strand)))
+}
+
+fn classification_error_reason(site_count: usize, strand_count: usize) -> &'static str {
+    match (site_count, strand_count) {
+        (0, 1) | (0, 2) => "missing donor/acceptor token",
+        (1, 0) | (2, 0) => "missing plus/minus token",
+        (2, 1) => "contains both donor and acceptor tokens",
+        (1, 2) => "contains both plus and minus tokens",
+        (2, 2) => "contains both donor/acceptor and plus/minus token pairs",
+        _ => "must contain exactly one donor/acceptor token and one plus/minus token",
+    }
+}
+
+fn normalize_bigwig_stem(stem: &str) -> String {
+    stem.chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .map(|character| character.to_ascii_lowercase())
+        .collect()
+}
+
+fn is_bigwig_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("bw") || extension.eq_ignore_ascii_case("bigwig")
+        })
+}
+
+fn display_paths(paths: &[PathBuf]) -> String {
+    paths
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// Converts a vector of BigWig files into a vector of thread-safe maps.
 ///
 /// This function is designed to be run in parallel for plus and minus strands. It iterates through
@@ -194,12 +555,11 @@ impl std::fmt::Display for SpliceSite {
 /// # Arguments
 ///
 /// * `bigwigs`: A `Vec` of paths to the BigWig files (e.g., donor and acceptor).
-/// * `chrs`: A slice of `String` representing the chromosomes to be processed.
+/// * `chrs`: Chromosome names to be processed.
 ///
 /// # Returns
 ///
-/// * A `Vec<DashMap<String, DashMap<usize, f32>>>` where the outer vector corresponds to donor/acceptor
-///   sites, the middle map keys are chromosome names, and the inner map keys are genomic positions with their scores.
+/// * A `Vec<StrandSpliceMap>` where the outer vector corresponds to donor/acceptor sites.
 ///
 /// # Example
 ///
@@ -539,24 +899,6 @@ fn parse_splice_site(field: &[u8]) -> Option<SpliceSite> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_spliceai_record_extracts_expected_fields() {
-        let parsed = parse_spliceai_record(b"chr1:42(-)\tA\t0.75\tag").unwrap();
-
-        assert_eq!(parsed.coordinate_key, b"chr1:42(-)".to_vec());
-        assert_eq!(parsed.chr, b"chr1".to_vec());
-        assert_eq!(parsed.position, 42);
-        assert_eq!(parsed.strand, Strand::Reverse);
-        assert_eq!(parsed.splice_site, SpliceSite::Acceptor);
-        assert_eq!(parsed.score, 0.75);
-        assert_eq!(parsed.dinucleotide, b"AG".to_vec());
-    }
-}
-
 /// Writes the results to files.
 ///
 /// This function takes two vectors of `StrandSpliceMap`s and writes the results to files.
@@ -627,4 +969,163 @@ pub fn write_results(
         });
     });
     minus_file.flush().unwrap();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        env, fs,
+        fs::File,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new() -> Self {
+            let unique = format!(
+                "splicing-spliceai-test-{}-{}",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            );
+            let path = env::temp_dir().join(unique);
+            fs::create_dir_all(&path).unwrap();
+
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+
+        fn touch(&self, filename: &str) {
+            File::create(self.path.join(filename)).unwrap();
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[test]
+    fn parse_spliceai_record_extracts_expected_fields() {
+        let parsed = parse_spliceai_record(b"chr1:42(-)\tA\t0.75\tag").unwrap();
+
+        assert_eq!(parsed.coordinate_key, b"chr1:42(-)".to_vec());
+        assert_eq!(parsed.chr, b"chr1".to_vec());
+        assert_eq!(parsed.position, 42);
+        assert_eq!(parsed.strand, Strand::Reverse);
+        assert_eq!(parsed.splice_site, SpliceSite::Acceptor);
+        assert_eq!(parsed.score, 0.75);
+        assert_eq!(parsed.dinucleotide, b"AG".to_vec());
+    }
+
+    #[test]
+    fn classify_bigwig_stem_accepts_affixes_casing_and_extensions() {
+        let donor_plus = classify_bigwig_path(Path::new("run42spliceAiDONORPLUSv2.bigWig"))
+            .unwrap()
+            .unwrap();
+        let acceptor_minus = classify_bigwig_path(Path::new("prefix_acceptor-minus_suffix.BW"))
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(
+            donor_plus,
+            BigWigClass::new(SpliceSite::Donor, Strand::Forward)
+        );
+        assert_eq!(
+            acceptor_minus,
+            BigWigClass::new(SpliceSite::Acceptor, Strand::Reverse)
+        );
+    }
+
+    #[test]
+    fn classify_bigwig_stem_rejects_partial_matches() {
+        let error = classify_bigwig_path(Path::new("spliceai_donor_only.bw")).unwrap_err();
+
+        match error {
+            SpliceAiFileError::InvalidFilename { reason, .. } => {
+                assert_eq!(reason, "missing plus/minus token");
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn discover_spliceai_bigwigs_resolves_mixed_extensions_and_affixes() {
+        let dir = TempDir::new();
+        dir.touch("run42DonorPlusv2.BW");
+        dir.touch("prefix_acceptor-plus_suffix.bigWig");
+        dir.touch("sampleDONORMINUSextra.bw");
+        dir.touch("xxAcceptorMinusyy.bigwig");
+
+        let resolved = discover_spliceai_bigwigs(dir.path()).unwrap();
+
+        assert_eq!(
+            resolved.donor_plus.file_name().unwrap(),
+            "run42DonorPlusv2.BW"
+        );
+        assert_eq!(
+            resolved.acceptor_plus.file_name().unwrap(),
+            "prefix_acceptor-plus_suffix.bigWig"
+        );
+        assert_eq!(
+            resolved.donor_minus.file_name().unwrap(),
+            "sampleDONORMINUSextra.bw"
+        );
+        assert_eq!(
+            resolved.acceptor_minus.file_name().unwrap(),
+            "xxAcceptorMinusyy.bigwig"
+        );
+    }
+
+    #[test]
+    fn discover_spliceai_bigwigs_rejects_duplicate_classifications() {
+        let dir = TempDir::new();
+        dir.touch("sample_donor_plus_v1.bw");
+        dir.touch("sample_donor_plus_v2.bigwig");
+        dir.touch("sample_acceptor_plus.bw");
+        dir.touch("sample_donor_minus.bw");
+        dir.touch("sample_acceptor_minus.bw");
+
+        let error = discover_spliceai_bigwigs(dir.path()).unwrap_err();
+
+        match error {
+            SpliceAiFileError::DuplicateClassification {
+                classification,
+                paths,
+            } => {
+                assert_eq!(classification, "donor plus");
+                assert_eq!(paths.len(), 2);
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn discover_spliceai_bigwigs_rejects_missing_classifications() {
+        let dir = TempDir::new();
+        dir.touch("sample_donor_plus.bw");
+        dir.touch("sample_acceptor_plus.bw");
+        dir.touch("sample_acceptor_minus.bw");
+
+        let error = discover_spliceai_bigwigs(dir.path()).unwrap_err();
+
+        match error {
+            SpliceAiFileError::MissingClassifications {
+                classifications, ..
+            } => {
+                assert_eq!(classifications, vec!["donor minus"]);
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
 }

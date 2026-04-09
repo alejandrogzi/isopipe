@@ -69,6 +69,7 @@ pub struct DerivedScoreRecord {
     pub derived_score: i32,
 }
 
+/// Converts derived score record to tab-separated bytes.
 impl DerivedScoreRecord {
     fn as_tsv_bytes(&self) -> Vec<u8> {
         format!(

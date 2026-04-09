@@ -1,6 +1,6 @@
 [package]
 name = "splicing"
-version = "0.0.3"
+version = "0.0.4"
 edition = "2024"
 
 [dependencies]
@@ -15,8 +15,8 @@ memmap2 = "0.9.4"
 rayon = "1.10.0"
 flate2 = "1.0.20"
 bytecount = "0.6"
-twobit = "0.2.1"
-genepred = { version = "0.0.10", features = ["mmap", "rayon"] }
+twobit = "0.2.2"
+genepred = { version = "0.0.11", features = ["mmap", "rayon"] }
 
 [profile.release]
 lto = true

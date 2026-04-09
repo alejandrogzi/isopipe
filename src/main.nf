@@ -11,20 +11,25 @@ nextflow.enable.dsl=2
 */
 
 include { PREPROCESSING } from './subworkflows/preprocessing/main.nf'
+
 include { SPLIT_ALIGN_CLEAN_CHUNKS } from './subworkflows/split_align/main.nf'
-include { XORF as XORF_PREDICT_ORFS } from '../modules/xorf/src/subworkflows/xorf/main.nf'
-include { XORF as XORF_PREDICT_FUSION_ORFS } from '../modules/xorf/src/subworkflows/xorf/main.nf'
-include { ISOTOOLS_NMD as ISOTOOLS_NMD_FILTER } from './modules/custom/isotools/nmd/main.nf'
+
 include { PREPOLISH as ISOTOOLS_PREPOLISH } from './subworkflows/prepolish/main.nf'
 include { POLISH as ISOTOOLS_POLISH } from './subworkflows/polish/main.nf'
 
 include { LOAD_TRACK as LOAD_PASS_TRACK } from './subworkflows/track/main.nf'
+include { LOAD_TRACK as LOAD_DUPLICATES_TRACK } from './subworkflows/track/main.nf'
 include { LOAD_TRACK as LOAD_TRASH_TRACK } from './subworkflows/track/main.nf'
 include { LOAD_TRACK as LOAD_RETENTIONS_TRACK } from './subworkflows/track/main.nf'
 include { LOAD_TRACK as LOAD_TRUNCATIONS_TRACK } from './subworkflows/track/main.nf'
 include { LOAD_TRACK as LOAD_INTRAPRIMMING_TRACK } from './subworkflows/track/main.nf'
 include { LOAD_TRACK as LOAD_FUSIONS_TRACK } from './subworkflows/track/main.nf'
 include { LOAD_TRACK as LOAD_NMD_TRACK } from './subworkflows/track/main.nf'
+
+include { XORF as XORF_PREDICT_ORFS } from '../modules/xorf/src/subworkflows/xorf/main.nf'
+include { XORF as XORF_PREDICT_FUSION_ORFS } from '../modules/xorf/src/subworkflows/xorf/main.nf'
+
+include { ISOTOOLS_NMD as ISOTOOLS_NMD_FILTER } from './modules/custom/isotools/nmd/main.nf'
 
 include { GAWK_JOIN as JOIN_FUSIONS } from './modules/custom/gawk/join/main.nf'
 include { GAWK_JOIN as JOIN_NMD } from './modules/custom/gawk/join/main.nf'
@@ -33,6 +38,7 @@ include { BEDTOBIGBED as BEDTOBIGBED_FUSIONS } from './modules/custom/bigtools/b
 include { BEDTOBIGBED as BEDTOBIGBED_NMD } from './modules/custom/bigtools/bedtobigbed/main.nf'
 
 include { PUBLISH as PUBLISH_ADDITIONAL_BIGBEDS } from './modules/custom/publish/main.nf'
+include { TRACKDB } from './modules/custom/track/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -44,7 +50,9 @@ workflow ISOPIPE {
     main: 
       ch_versions = Channel.empty()
       ch_reads = Channel.empty()
+
       autosql = Channel.value(file('${projectDir}/../../assets/as/base.as', checkIfExists: true))
+      track = Channel.value(file('${projectDir}/../../assets/as/track.as', checkIfExists: true))
 
       PREPROCESSING(
         params.entrypoint,
@@ -61,6 +69,7 @@ workflow ISOPIPE {
         params.spliceai_bigwigs_dir,
         params.minisplice_scores_path,
         params.spliceai_scores_path,
+        params.spliceai_chunk_compression,
         ch_versions
       )
 
@@ -166,14 +175,33 @@ workflow ISOPIPE {
           ch_versions
       )
 
-      // INFO: ch_fusion_orf_predictions_bed + ISOTOOLS_NMD_FILTER.out.nmd
       if (params.load_track) {
+          TRACKDB(
+            track,
+            params.load_track_browser,
+            params.global_species_name,
+            params.load_track_name,
+            ISOTOOLS_POLISH.out.additional_columns,
+            ISOTOOLS_POLISH.out.sample,
+          )
+
           LOAD_PASS_TRACK(
             ISOTOOLS_POLISH.out.pass,
             params.load_track_user,
             params.load_track_server,
             params.load_track_target_dir,
             params.load_track_web,
+            params.global_species_name,
+            ch_versions
+          )
+
+          LOAD_DUPLICATES_TRACK(
+            ISOTOOLS_POLISH.out.duplicates,
+            params.load_track_user,
+            params.load_track_server,
+            params.load_track_target_dir,
+            params.load_track_web,
+            params.global_species_name,
             ch_versions
           )
 
@@ -183,6 +211,7 @@ workflow ISOPIPE {
             params.load_track_server,
             params.load_track_target_dir,
             params.load_track_web,
+            params.global_species_name,
             ch_versions
           )
 
@@ -192,6 +221,7 @@ workflow ISOPIPE {
             params.load_track_server,
             params.load_track_target_dir,
             params.load_track_web,
+            params.global_species_name,
             ch_versions
           )
 
@@ -201,6 +231,7 @@ workflow ISOPIPE {
             params.load_track_server,
             params.load_track_target_dir,
             params.load_track_web,
+            params.global_species_name,
             ch_versions
           )
 
@@ -210,6 +241,7 @@ workflow ISOPIPE {
             params.load_track_server,
             params.load_track_target_dir,
             params.load_track_web,
+            params.global_species_name,
             ch_versions
           )
 
@@ -219,6 +251,7 @@ workflow ISOPIPE {
             params.load_track_server,
             params.load_track_target_dir,
             params.load_track_web,
+            params.global_species_name,
             ch_versions
           )
 
@@ -228,9 +261,18 @@ workflow ISOPIPE {
             params.load_track_server,
             params.load_track_target_dir,
             params.load_track_web,
+            params.global_species_name,
             ch_versions
           )
       }
+
+
+      ch_versions = ch_versions.mix(TRACKDB.out.versions)
+      ch_versions = ch_versions.mix(ISOTOOLS_NMD_FILTER.out.versions)
+      ch_versions = ch_versions.mix(JOIN_FUSIONS.out.versions)
+      ch_versions = ch_versions.mix(JOIN_NMD.out.versions)
+      ch_versions = ch_versions.mix(BEDTOBIGBED_FUSIONS.out.versions)
+      ch_versions = ch_versions.mix(BEDTOBIGBED_NMD.out.versions)
 }
 
 /*
