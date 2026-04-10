@@ -13,7 +13,7 @@ process UCSC_WIGTOBIGWIG {
     path sizes
 
     output:
-    tuple val(meta), path("${prefix}.bw"), emit: bw
+    tuple val(meta), path("${prefix}.bw"), emit: bigwig
     tuple val("${task.process}"), val('ucsc'), val('482'), topic: versions, emit: versions
     // WARN: Version information not provided by tool on CLI. Please update this string when bumping container versions.
 
