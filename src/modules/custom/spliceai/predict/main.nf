@@ -5,7 +5,7 @@ process SPLICEAI_PREDICT {
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         '' :
-        'ghcr.io/alejandrogzi/spliceai:main-642e232' }"
+        'ghcr.io/alejandrogzi/spliceai:main-c258f79' }"
 
     input:
     tuple val(meta), path(fasta)
@@ -23,12 +23,11 @@ process SPLICEAI_PREDICT {
 
     script:
     def args = task.ext.args ?: ''
-    def prefix = task.ext.prefix ?: "${meta.id}"
     """
     spliceai predict \\
         $args \\
         --outdir spliceai \\
-        --sequence ${genome}
+        --sequence ${fasta}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
