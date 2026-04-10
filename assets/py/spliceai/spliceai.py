@@ -677,7 +677,7 @@ def parser() -> argparse.Namespace:
     cli.add_argument(
         "-f",
         "--offset",
-        required=True,
+        required=False,
         type=non_negative_int,
         default=DEFAULT_FLANK_SIZE,
         metavar="INT",

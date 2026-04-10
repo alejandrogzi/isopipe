@@ -5,14 +5,14 @@ process SPLICEAI_CHUNK {
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         '' :
-        'ghcr.io/alejandrogzi/spliceai:main-642e232' }"
+        'ghcr.io/alejandrogzi/spliceai:main-c258f79' }"
 
     input:
     tuple val(meta), path(genome)
 
     output:
-    tuple val(meta), path("chunks/*.fa"),    emit: fasta
-    tuple val(meta), path("chunks/*.fa.gz"), emit: fasta_gz
+    tuple val(meta), path("chunks/*.fa"),    optional: true, emit: fasta
+    tuple val(meta), path("chunks/*.fa.gz"), optional: true, emit: fasta_gz
     path "versions.yml",                     emit: versions
 
     when:

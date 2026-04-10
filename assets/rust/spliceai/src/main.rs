@@ -21,5 +21,5 @@ fn main() {
         });
 
     core::run(args.sequence.clone(), args.config());
-    log::info!("Finished xloci in {:?}", start.elapsed());
+    log::info!("Finished chunking in {:?}", start.elapsed());
 }
