@@ -13,7 +13,7 @@ process ISOTOOLS_ORPHAN {
 
     output:
     tuple val(meta), path("*/*orphan_free.bed")       , optional: true, emit: pass
-    tuple val(meta1), path("*/*orphans.bed")          , optional: true, emit: orphans
+    tuple val(meta2), path("*/*orphans.bed")          , optional: true, emit: orphans
     path "versions.yml"                               , emit: versions
 
     when:
@@ -23,8 +23,8 @@ process ISOTOOLS_ORPHAN {
     def args      = task.ext.args ?: ''
     def prefix    = task.ext.prefix ?: "${meta.id}"
 
-    meta1 = meta.clone()
-    meta1.id = meta.id.split('.')[0] + '.orphans'
+    meta2 = meta.clone()
+    meta2.id = meta.id + '.orphans'
     """
     cut -f1-12 ${bed} > tmp.bed
 

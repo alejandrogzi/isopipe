@@ -19,6 +19,7 @@ include { POLISH as ISOTOOLS_POLISH } from './subworkflows/polish/main.nf'
 
 include { LOAD_TRACK as LOAD_PASS_TRACK } from './subworkflows/track/main.nf'
 include { LOAD_TRACK as LOAD_DUPLICATES_TRACK } from './subworkflows/track/main.nf'
+include { LOAD_TRACK as LOAD_ORPHANS_TRACK } from './subworkflows/track/main.nf'
 include { LOAD_TRACK as LOAD_TRASH_TRACK } from './subworkflows/track/main.nf'
 include { LOAD_TRACK as LOAD_RETENTIONS_TRACK } from './subworkflows/track/main.nf'
 include { LOAD_TRACK as LOAD_TRUNCATIONS_TRACK } from './subworkflows/track/main.nf'
@@ -28,6 +29,9 @@ include { LOAD_TRACK as LOAD_NMD_TRACK } from './subworkflows/track/main.nf'
 
 include { XORF as XORF_PREDICT_ORFS } from '../modules/xorf/src/subworkflows/xorf/main.nf'
 include { XORF as XORF_PREDICT_FUSION_ORFS } from '../modules/xorf/src/subworkflows/xorf/main.nf'
+
+include { WGET as WGET_APARENT_WEIGHTS } from './modules/nf-core/wget/main.nf'
+include { WGET as WGET_SAMBA_WEIGHTS } from './modules/nf-core/wget/main.nf'
 
 include { ISOTOOLS_NMD as ISOTOOLS_NMD_FILTER } from './modules/custom/isotools/nmd/main.nf'
 
@@ -84,13 +88,26 @@ workflow ISOPIPE {
         ch_versions
       )
 
+      ch_samba_weights = Channel.empty()
+      if (params.xorf_samba_local_weights) {
+        ch_samba_weights = Channel.value(
+          file(params.xorf_samba_local_weights, checkIfExists: true)
+        ).map { path -> [ [id : path.baseName ], path ] }
+      } else {
+        ch_samba_weights = WGET_SAMBA_WEIGHTS(
+          Channel.value(
+            params.xorf_samba_weights
+          ).map { url -> [ [id : url.tokenize('/')[-1]], url ] }
+        )
+      }
+
       XORF_PREDICT_ORFS(
           SPLIT_ALIGN_CLEAN_CHUNKS.out.reads,
           PREPROCESSING.out.genome,
           PREPROCESSING.out.database,
           params.global_output_dir,
           params.xorf_chunk_size,
-          params.xorf_samba_weights,
+          ch_samba_weights,
           params.xorf_predict_keep_raw
       )
       XORF_PREDICT_ORFS.out.files
@@ -103,7 +120,7 @@ workflow ISOPIPE {
           PREPROCESSING.out.database,
           params.global_output_dir,
           params.xorf_chunk_size,
-          params.xorf_samba_weights,
+          ch_samba_weights,
           params.xorf_predict_keep_raw
       )
       XORF_PREDICT_FUSION_ORFS.out.files
@@ -137,6 +154,19 @@ workflow ISOPIPE {
          .set { ch_additional_bbs }
       PUBLISH_ADDITIONAL_BIGBEDS(ch_additional_bbs)
 
+      ch_aparent_weights = Channel.empty()
+      if (params.aparent_predict_weights_local_path) {
+          ch_aparent_weights = Channel.value(
+            file(params.aparent_predict_weights_local_path, checkIfExists: true)
+          ).map { path -> [ [id : path.baseName ], path ] }
+      } else {
+          ch_aparent_weights = WGET_APARENT_WEIGHTS(
+              Channel.value(
+                aparent_weights
+              ).map { url -> [ [id : url.tokenize('/')[-1]], url ] }
+          )
+      }
+
       ISOTOOLS_PREPOLISH(
           ISOTOOLS_NMD_FILTER.out.reads,
           PREPROCESSING.out.genome,
@@ -144,7 +174,7 @@ workflow ISOPIPE {
           params.global_repeats,
           PREPROCESSING.out.reference_transcripts,
           PREPROCESSING.out.bigwigs,
-          params.aparent_predict_weights,
+          ch_aparent_weights,
           ch_versions
       )
 
@@ -197,6 +227,16 @@ workflow ISOPIPE {
 
           LOAD_DUPLICATES_TRACK(
             ISOTOOLS_POLISH.out.duplicates,
+            params.load_track_user,
+            params.load_track_server,
+            params.load_track_target_dir,
+            params.load_track_web,
+            params.global_species_name,
+            ch_versions
+          )
+
+          LOAD_ORPHANS_TRACK(
+            ISOTOOLS_POLISH.out.orphans,
             params.load_track_user,
             params.load_track_server,
             params.load_track_target_dir,

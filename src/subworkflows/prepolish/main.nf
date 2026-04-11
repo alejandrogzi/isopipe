@@ -8,7 +8,6 @@ include { XLOCI_INTRON as XLOCI_EXTRACT_INTRONS } from '../../modules/custom/xlo
 include { INTRONIC as IIC_PREDICT_SPLICEOSOME } from '../../modules/custom/intronic/main.nf'
 include { ISOTOOLS_CLASSIFY_INTRON } from '../../modules/custom/isotools/classify/intron/main.nf'
 include { APARENT_CHUNK as XISO_APARENT_CHUNK } from '../../modules/custom/aparent/chunk/main.nf'
-include { WGET as WGET_APARENT_WEIGHTS } from '../../modules/nf-core/wget/main.nf'
 include { APARENT_PREDICT } from '../../modules/custom/aparent/predict/main.nf'
 include { BEDGRAPHTOBIGWIG as BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD } from '../../modules/custom/bigtools/bedgraphtobigwig/main.nf'
 include { BEDGRAPHTOBIGWIG as BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE } from '../../modules/custom/bigtools/bedgraphtobigwig/main.nf'
@@ -29,18 +28,12 @@ workflow PREPOLISH {
       repeats                // path
       annotation             // Channel.value(path)
       bigwigs                // channel: [ val(meta), [ bigwigs ] ]
-      aparent_weights        // path
+      aparent_weights        // channel: [ val(meta), [ aparent_weights ] ]
       ch_versions            // [ meta, versions.yml ]
 
     main:
       ch_genome = genome.map { genome -> [ [id:genome.baseName], genome ] }
       ch_reference_transcripts = annotation.map { annotation -> [ [id:annotation.baseName], annotation ] }
-
-      ch_aparent_weights = WGET_APARENT_WEIGHTS(
-          Channel.value(
-            aparent_weights
-          ).map { url -> [ [id : url.tokenize('/')[-1]], url ] }
-      )
 
       XLOCI_EXTRACT_INTRONS(ch_genome, reads)
       IIC_PREDICT_SPLICEOSOME(XLOCI_EXTRACT_INTRONS.out.tsv)
@@ -90,7 +83,7 @@ workflow PREPOLISH {
 
       APARENT_PREDICT(
         ch_aparent_chunks, 
-        ch_aparent_weights.outfile
+        aparent_weights
       )
 
       APARENT_PREDICT.out.bg_forward
