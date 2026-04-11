@@ -94,11 +94,12 @@ workflow ISOPIPE {
           file(params.xorf_samba_local_weights, checkIfExists: true)
         ).map { path -> [ [id : path.baseName ], path ] }
       } else {
-        ch_samba_weights = WGET_SAMBA_WEIGHTS(
+        WGET_SAMBA_WEIGHTS(
           Channel.value(
             params.xorf_samba_weights
           ).map { url -> [ [id : url.tokenize('/')[-1]], url ] }
         )
+        ch_samba_weights = WGET_SAMBA_WEIGHTS.out.outfile
       }
 
       XORF_PREDICT_ORFS(
@@ -160,11 +161,12 @@ workflow ISOPIPE {
             file(params.aparent_predict_weights_local_path, checkIfExists: true)
           ).map { path -> [ [id : path.baseName ], path ] }
       } else {
-          ch_aparent_weights = WGET_APARENT_WEIGHTS(
+          WGET_APARENT_WEIGHTS(
               Channel.value(
-                aparent_weights
+                params.aparent_predict_weights
               ).map { url -> [ [id : url.tokenize('/')[-1]], url ] }
           )
+          ch_aparent_weights = WGET_APARENT_WEIGHTS.out.outfile
       }
 
       ISOTOOLS_PREPOLISH(
