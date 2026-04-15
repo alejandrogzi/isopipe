@@ -79,6 +79,7 @@ workflow ISOPIPE {
 
       SPLIT_ALIGN_CLEAN_CHUNKS(
         PREPROCESSING.out.reads, 
+        PREPROCESSING.out.genome,
         PREPROCESSING.out.minimap2_index,
         PREPROCESSING.out.reference_transcripts,
         PREPROCESSING.out.splice_scores,
@@ -109,7 +110,8 @@ workflow ISOPIPE {
           params.global_output_dir,
           params.xorf_chunk_size,
           ch_samba_weights,
-          params.xorf_predict_keep_raw
+          params.xorf_predict_keep_raw,
+          params.xorf_selenocysteine_codons
       )
       XORF_PREDICT_ORFS.out.files
           .map { meta, bed, tsv -> [ meta, bed ] }
@@ -122,7 +124,8 @@ workflow ISOPIPE {
           params.global_output_dir,
           params.xorf_chunk_size,
           ch_samba_weights,
-          params.xorf_predict_keep_raw
+          params.xorf_predict_keep_raw,
+          params.xorf_selenocysteine_codons
       )
       XORF_PREDICT_FUSION_ORFS.out.files
           .map { meta, bed, tsv -> [ meta.name, meta, bed ] }    

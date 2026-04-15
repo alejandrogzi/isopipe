@@ -8,8 +8,7 @@ process ISOTOOLS_SEGMENT {
         'ghcr.io/alejandrogzi/isotools:latest' }"
 
     input:
-    tuple val(meta), path(bam)
-    tuple val(meta2), path(bai)
+    tuple val(meta), path(bam), path(bai)
 
     output:
     tuple val(meta), path("*.hq.bam")                    , optional: true, emit: hq_bam
