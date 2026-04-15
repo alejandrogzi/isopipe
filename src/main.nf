@@ -306,10 +306,11 @@ workflow ISOPIPE {
             params.global_species_name,
             ch_versions
           )
+
+          ch_versions = ch_versions.mix(TRACKDB.out.versions)
       }
 
 
-      ch_versions = ch_versions.mix(TRACKDB.out.versions)
       ch_versions = ch_versions.mix(ISOTOOLS_NMD_FILTER.out.versions)
       ch_versions = ch_versions.mix(JOIN_FUSIONS.out.versions)
       ch_versions = ch_versions.mix(JOIN_NMD.out.versions)
