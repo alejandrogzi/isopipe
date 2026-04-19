@@ -35,7 +35,7 @@ process SAMTOOLS_MERGE {
         ${meta.id}.bam
 
     # INFO: clean up intermediate sorted BAMs and their indices
-    if [ $keep_temp == true ]; then
+    if [ $keep_temp == false ]; then
         rm -rf bam/
     fi
 
