@@ -26,15 +26,18 @@ process ISOTOOLS_CIGAR {
     tuple val(meta3), path(annotation)
 
     output:
-    tuple val(meta), path("*.aligned.bam"), path("*.aligned.bam.bai"),    optional: true, emit: aligned
-    tuple val(meta), path("*.extended.bam"), path("*.extended.bam.bai"),  optional: true, emit: extended
-    path "versions.yml"                        , emit: versions
+    tuple val(meta), path("*.aligned.bam"), path("*.aligned.bam.bai"),             optional: true, emit: aligned
+    tuple val(meta_extended), path("*.extended.bam"), path("*.extended.bam.bai"),  optional: true, emit: extended
+    path "versions.yml",                                                           emit: versions
 
     when:
     task.ext.when == null || task.ext.when
 
     script:
     def args      = task.ext.args ?: ''
+
+    meta_extended = meta.clone()
+    meta_extended.id = meta.id + '.extended'
     """
     iso-cigar \\
         $args \\
