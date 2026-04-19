@@ -10,11 +10,12 @@ process ISOTOOLS_ORPHAN {
     input:
     tuple val(meta), path(bed)
     tuple val(meta1), path(reference)
+    tuple val(meta2), path(splice_scores)
 
     output:
-    tuple val(meta), path("*/*orphan_free.bed")       , optional: true, emit: pass
-    tuple val(meta2), path("*/*orphans.bed")          , optional: true, emit: orphans
-    path "versions.yml"                               , emit: versions
+    tuple val(meta), path("*/*.hq.bed")             , optional: true, emit: hq
+    tuple val(meta_scraps), path("*/*.scraps.bed")  , optional: true, emit: scraps
+    path "versions.yml"                             , emit: versions
 
     when:
     task.ext.when == null || task.ext.when
@@ -22,39 +23,43 @@ process ISOTOOLS_ORPHAN {
     script:
     def args      = task.ext.args ?: ''
     def prefix    = task.ext.prefix ?: "${meta.id}"
+    def scores    = splice_scores ? "--splicing-scores $splice_scores" : ''
 
-    meta2 = meta.clone()
-    meta2.id = meta.id + '.orphans'
+    meta_scraps = meta.clone()
+    meta_scraps.id = meta.id + '.scraps'
     """
+    # INFO: specific for isopipe -> input is bed12+n
     cut -f1-12 ${bed} > tmp.bed
 
     iso-orphan \\
         $args \\
+        $scores \\
         --ref $reference \\
         --query tmp.bed \\
         --all \\
         --threads ${task.cpus} \\
         --prefix ${prefix} 
 
-    if [ ! -s orphans/${prefix}.orphan_free.bed ]; then
-        rm orphans/${prefix}.orphan_free.bed
+    # INFO: rehydrate bed12+n
+    if [ ! -s orphans/${prefix}.hq.bed ]; then
+        rm orphans/${prefix}.hq.bed
     else
         grep -f \\
-        <(cut -f4 orphans/${prefix}.orphan_free.bed) ${bed} \\
-        > tmp.bed && \\
-        mv tmp.bed orphans/${prefix}.orphan_free.bed
+        <(cut -f4 orphans/${prefix}.hq.bed) ${bed} \\
+        > tmp.hq.bed && \\
+        sort -k1,1 -k2,2n tmp.hq.bed >| orphans/${prefix}.hq.bed
     fi
 
-    if [ ! -s orphans/${prefix}.orphans.bed ]; then
-        rm orphans/${prefix}.orphans.bed
+    if [ ! -s orphans/${prefix}.scraps.bed ]; then
+        rm orphans/${prefix}.scraps.bed
     else
         grep -f \\
-        <(cut -f4 orphans/${prefix}.orphans.bed) ${bed} \\
-        > tmp.bed && \\
-        mv tmp.bed orphans/${prefix}.orphans.bed
+        <(cut -f4 orphans/${prefix}.scraps.bed) ${bed} \\
+        > tmp.scraps.bed && \\
+        sort -k1,1 -k2,2n tmp.scraps.bed >| orphans/${prefix}.scraps.bed
     fi
 
-    rm tmp.bed
+    rm tmp*
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
@@ -64,8 +69,8 @@ process ISOTOOLS_ORPHAN {
 
     stub:
     """
-    touch orphans/${prefix}.orphan_free.bed
-    touch orphans/${prefix}.orphans.bed
+    touch orphans/${prefix}.hq.bed
+    touch orphans/${prefix}.scraps.bed
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

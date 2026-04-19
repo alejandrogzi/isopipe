@@ -33,6 +33,14 @@ workflow SPLICING {
       ch_spliceai_bigwigs = Channel.value([[:], []])
 
       if (algorithm == "spliceai") {
+          // INFO: if derived file is given
+          if (bigwigs) {
+            Channel.value([
+                    [ id: "spliceai" ],
+                    file(bigwigs, checkIfExists: true)
+            ]).set { ch_spliceai_bigwigs }
+          }
+
           if (spliceai) {
             def spliceai_scores = file(spliceai, checkIfExists: true)
             
@@ -46,12 +54,8 @@ workflow SPLICING {
                 ]).set { ch_scores }
             }
           } else {
+            // INFO: if bigwig dir is given
             if (bigwigs) {
-              Channel.value([
-                      [ id: "spliceai" ],
-                      file(bigwigs, checkIfExists: true)
-              ]).set { ch_spliceai_bigwigs }
-
               SPLICEAI_DERIVE(
                   genome.map { genome -> [ [id:genome.baseName], genome ] },
                   annotation.map { annotation -> [ [id:annotation.baseName], annotation ] },

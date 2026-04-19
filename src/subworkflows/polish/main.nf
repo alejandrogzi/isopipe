@@ -40,6 +40,7 @@ workflow POLISH {
       forward_peaks          // channel: [ val(meta), [ forward_peaks ] ]
       reverse_peaks          // channel: [ val(meta), [ reverse_peaks ] ]
       chrom_sizes            // path
+      splice_scores          // channel: [ val(meta), [ splice_scores ] ]
       ch_versions            // [ meta, versions.yml ]
 
     main:
@@ -81,10 +82,10 @@ workflow POLISH {
           .set { ch_pass }
       JOIN_VEREDICT_PASSES(ch_pass, 'bed')
       DETACH_DUPLICATES(JOIN_VEREDICT_PASSES.out.output)
-      ISOTOOLS_ORPHAN_FINDER(DETACH_DUPLICATES.out.pass, ch_reference_transcripts)
-      BEDTOBIGBED_PASSES(ISOTOOLS_ORPHAN_FINDER.out.pass, chrom_sizes, autosql)
+      ISOTOOLS_ORPHAN_FINDER(DETACH_DUPLICATES.out.pass, ch_reference_transcripts, splice_scores)
+      BEDTOBIGBED_PASSES(ISOTOOLS_ORPHAN_FINDER.out.hq, chrom_sizes, autosql)
       BEDTOBIGBED_DUPLICATES(DETACH_DUPLICATES.out.duplicates, chrom_sizes, autosql)
-      BEDTOBIGBED_ORPHANS(ISOTOOLS_ORPHAN_FINDER.out.orphans, chrom_sizes, autosql)
+      BEDTOBIGBED_ORPHANS(ISOTOOLS_ORPHAN_FINDER.out.scraps, chrom_sizes, autosql)
 
       ISOTOOLS_PLUGIN_VEREDICT.out.trash
           .map { meta, trash -> [ meta.name, meta, trash ] }    

@@ -1,7 +1,7 @@
 #!/usr/bin/env nextflow
 nextflow.enable.dsl=2
 
-// Copyright (c) 2025 Alejandro Gonzalez-Irribarren <alejandrxgzi@gmail.com>
+// Copyright (c) 2025 Alejandro Gonzales-Irribarren <alejandrxgzi@gmail.com>
 // Distributed under the terms of the Apache License, Version 2.0.
 
 /*
@@ -207,6 +207,7 @@ workflow ISOPIPE {
           ISOTOOLS_PREPOLISH.out.aparent_plus,
           ISOTOOLS_PREPOLISH.out.aparent_minus,
           PREPROCESSING.out.chrom_sizes,
+          PREPROCESSING.out.bigwigs,
           ch_versions
       )
 
