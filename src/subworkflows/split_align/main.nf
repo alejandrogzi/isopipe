@@ -144,11 +144,16 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
                   [ meta + [ chr: it.name.split('@')[0] ], it ]
               }
           }
-          .map { meta, bed -> [ [ meta.chr, meta.id ], meta, bed ] }
+          // INFO: fmt -> chr1@pooled.hq.bed OR chr1@pooled.extended.hq.bed
+          .map { meta, bed ->
+              def sampleId = bed.name.split('@')[1].split('\\.')[0]  // → "pooled"
+              [ [ meta.chr, sampleId ], meta, bed ]
+          }
           .groupTuple(by: 0)
           .map { chr, metas, beds ->
               def meta = metas[0]
-              def group_meta = [ id: meta.id, single_end: true, chr: meta.chr ]
+              def sampleId = beds[0].name.split('@')[1].split('\\.')[0]  // → "pooled"
+              def group_meta = [ id: sampleId, single_end: true, chr: meta.chr ]
               [ group_meta, beds ]
           }
           .set { ch_hq_bed_per_chr }
