@@ -19,6 +19,7 @@ use rayon::prelude::*;
 use twobit::TwoBitFile;
 
 const CHUNKS_DIR_NAME: &str = "chunks";
+const MIN_INTERVAL_SIZE: usize = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct IntervalKey {
@@ -545,6 +546,10 @@ fn interval_record(chrom: &[u8], start: u64, end: u64, strand: genepred::Strand)
 }
 
 /// Splits a span into non-overlapping windows capped at `max_interval_size`.
+///
+/// Tails shorter than `MIN_INTERVAL_SIZE` are merged into the previous window,
+/// so the final window can exceed `max_interval_size` by at most
+/// `MIN_INTERVAL_SIZE - 1`.
 fn split_interval(start: u64, end: u64, max_interval_size: usize) -> Vec<(u64, u64)> {
     if start >= end {
         return Vec::new();
@@ -552,16 +557,29 @@ fn split_interval(start: u64, end: u64, max_interval_size: usize) -> Vec<(u64, u
 
     let max_interval_size =
         u64::try_from(max_interval_size).expect("max interval size does not fit in u64");
+    let min_interval_size =
+        u64::try_from(MIN_INTERVAL_SIZE).expect("min interval size does not fit in u64");
 
     if end - start <= max_interval_size {
         return vec![(start, end)];
     }
 
-    let mut windows = Vec::new();
+    let mut windows: Vec<(u64, u64)> = Vec::new();
     let mut chunk_start = start;
 
     while chunk_start < end {
-        let chunk_end = (chunk_start + max_interval_size).min(end);
+        let remaining = end - chunk_start;
+
+        if remaining <= max_interval_size {
+            if remaining < min_interval_size && !windows.is_empty() {
+                windows.last_mut().unwrap().1 = end;
+            } else {
+                windows.push((chunk_start, end));
+            }
+            break;
+        }
+
+        let chunk_end = chunk_start + max_interval_size;
         windows.push((chunk_start, chunk_end));
         chunk_start = chunk_end;
     }
@@ -1042,6 +1060,16 @@ mod tests {
     }
 
     #[test]
+    fn split_interval_merges_tails_shorter_than_min_interval_size() {
+        assert_eq!(split_interval(190, 291, 50), vec![(190, 240), (240, 291)]);
+        assert_eq!(split_interval(0, 1009, 500), vec![(0, 500), (500, 1009)]);
+        assert_eq!(
+            split_interval(0, 1010, 500),
+            vec![(0, 500), (500, 1000), (1000, 1010)]
+        );
+    }
+
+    #[test]
     fn interval_sequence_reverse_complements_reverse_strand() {
         let sequence = b"AACCGGTT";
 
@@ -1124,6 +1152,54 @@ mod tests {
         );
         assert!(records.iter().all(|(_, start, end, _, seq)| {
             (*end - *start) <= 50 && seq.len() == (*end - *start) as usize
+        }));
+
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn run_merges_tiny_tail_after_bucketing() {
+        let dir = temp_dir("tiny-tail");
+        let bed = dir.join("input.bed");
+        let genome = dir.join("genome.fa");
+        let output = dir.join("output.tsv");
+
+        write_text_file(
+            &bed,
+            "chr1\t100\t281\ttx1\t0\t+\t120\t200\t0,0,0\t1\t181,\t0,\n",
+        );
+        write_text_file(&genome, &format!(">chr1\n{}\n", "ACGTTGCA".repeat(64)));
+
+        run(Args {
+            bed,
+            genome,
+            upstream: 10,
+            downstream: 10,
+            output: output.clone(),
+            chunks: None,
+            prefix: "part".to_string(),
+            gz: false,
+            threads: 1,
+            level: log::Level::Error,
+            max_interval_size: 50,
+        })
+        .unwrap();
+
+        let records = read_output_records(&output);
+        assert_eq!(
+            records
+                .iter()
+                .map(|(chrom, start, end, strand, _)| {
+                    (chrom.clone(), *start, *end, strand.clone())
+                })
+                .collect::<Vec<_>>(),
+            vec![
+                ("chr1".to_string(), 190, 240, "+".to_string()),
+                ("chr1".to_string(), 240, 291, "+".to_string()),
+            ]
+        );
+        assert!(records.iter().all(|(_, start, end, _, seq)| {
+            (*end - *start) >= MIN_INTERVAL_SIZE as u64 && seq.len() == (*end - *start) as usize
         }));
 
         fs::remove_dir_all(dir).unwrap();
