@@ -12,7 +12,7 @@ Distributed under the terms of the Apache License, Version 2.0.
 
 process ISOTOOLS_ADAPTER {
     tag "$meta.id"
-    label 'process_low'
+    label 'custom_process_low'
 
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
