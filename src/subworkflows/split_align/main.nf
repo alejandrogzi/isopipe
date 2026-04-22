@@ -14,6 +14,7 @@ include { ISOTOOLS_SEGMENT as ISOTOOLS_SEGMENT_POLYA } from '../../modules/custo
 include { ISOTOOLS_SEGMENT as ISOTOOLS_SEGMENT_POLYA_CIGAR_EXTENDED } from '../../modules/custom/isotools/segment/main.nf'
 include { ISOTOOLS_FUSION as ISOTOOLS_FUSION_DETECTOR } from '../../modules/custom/isotools/fusion/main.nf'
 include { ISOTOOLS_CIGAR as ISOTOOLS_CIGAR_EXTENSION } from '../../modules/custom/isotools/cigar/main.nf'
+include { ISOTOOLS_ADAPTER as ISOTOOLS_REMOVE_ADAPTERS } from '../../modules/custom/isotools/adapter/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -31,6 +32,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
       cluster_mode             // string [ per_sample, multi_sample, both ]
       entrypoint               // string [ isoseq, map ]
       minimap2_use_junc_bed    // bool
+      remove_adapters          // bool
       ch_versions              // [ meta, versions.yml ]
 
     main:
@@ -122,6 +124,16 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.versions)
         }
       }
+
+      if (remove_adapters) {
+        ISOTOOLS_REMOVE_ADAPTERS(
+          ch_aligned_bam,
+          ch_aligned_bai,
+        )
+        ch_aligned_bam = ISOTOOLS_REMOVE_ADAPTERS.out.bam
+        ch_aligned_bai = ISOTOOLS_REMOVE_ADAPTERS.out.bai
+        ch_versions = ch_versions.mix(ISOTOOLS_REMOVE_ADAPTERS.out.versions)
+      } 
 
       ISOTOOLS_CIGAR_EXTENSION(
         ch_aligned_bam, 
