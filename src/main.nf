@@ -86,6 +86,7 @@ workflow ISOPIPE {
         params.isoseq_cluster2_mode,
         params.entrypoint,
         params.minimap2_align_use_junc_bed,
+        params.isotools_adapter_remove_adapters,
         ch_versions
       )
 

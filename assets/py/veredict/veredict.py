@@ -5,7 +5,7 @@ from __future__ import annotations
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.4"
+__version__ = "0.0.5"
 
 import argparse
 import logging
@@ -505,6 +505,15 @@ def merge_inputs(
     schema = schema.merge(orfs, on="id", how="left", validate="one_to_one")
     validate_orf_identity(schema)
 
+    # INFO: since we avoid raising errors for missing IDs, we safely drop np.nan values
+    log.warning(
+        f"WARN: dropped {len(schema) - len(schema.dropna(subset=['O_chr', 'O_strand', 'O_id']))} rows with missing ORF annotations"
+    )
+    log.warning(
+        f"WARN: these rows will be dropped: {schema.loc[schema.isna().any(axis=1)].to_dict(orient='records')}"
+    )
+    schema = schema.dropna(subset=["O_chr", "O_strand", "O_id"])
+
     return schema.loc[:, build_schema_columns()]
 
 
@@ -535,9 +544,9 @@ def validate_orf_identity(schema: pd.DataFrame) -> None:
                 .head(5)
                 .to_dict(orient="records")
             )
-            raise ValueError(
-                f"Merged ORF column {right} does not match BED12 column {left}. "
-                f"Examples: {examples}"
+            log.warning(
+                f"WARN: Merged ORF column {right} does not match BED12 column {left}. "
+                f"WARN: Examples: {examples}"
             )
 
 
@@ -576,11 +585,15 @@ def validate_id_alignment(
         details.append(
             f"missing {len(missing_ids)} read IDs, e.g. {sample_ids(missing_ids)}"
         )
+
+        # INFO: avoding raising error; these IDs will likely be in NMD
+        log.warning(f"WARN: {label} ID set does not match reads: {'; '.join(details)}")
+        return
     if extra_ids:
         details.append(
             f"has {len(extra_ids)} unexpected IDs, e.g. {sample_ids(extra_ids)}"
         )
-    raise ValueError(f"{label} ID set does not match reads: {'; '.join(details)}")
+        raise ValueError(f"{label} ID set does not match reads: {'; '.join(details)}")
 
 
 def sample_ids(values: Sequence[str], limit: int = 5) -> List[str]:
