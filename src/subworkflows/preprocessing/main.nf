@@ -7,6 +7,7 @@
 include { ISOSEQ } from '../isoseq/main.nf'
 include { GENOME } from '../genome/main.nf'
 include { MINIMAP2_INDEX } from '../../modules/nf-core/minimap2/index/main.nf'
+include { GENEPRED_LINT } from '../../modules/custom/genepred/lint/main.nf'
 include { SPLICING as MINISPLICE_GENOMIC_SPLICE_SCORES } from '../splicing/main.nf'
 include { SPLICING as SPLICEAI_GENOMIC_SPLICE_SCORES } from '../splicing/main.nf'
 
@@ -40,6 +41,8 @@ workflow PREPROCESSING {
       ch_database = Channel.value(file(protein_database, checkIfExists: true))
 
       ch_reference_transcripts = Channel.value(file(annotation, checkIfExists: true))
+      GENEPRED_LINT(ch_reference_transcripts.map { file -> [ [ id:file.baseName ], file ] })
+
       if (annotation.endsWith(".gtf.gz")
         | annotation.endsWith(".gtf") 
         | annotation.endsWith(".gff.gz") 
