@@ -1,4 +1,6 @@
+##########################################################
 # Isopipe track description
+##########################################################
 track {TRACK}
 compositeTrack on
 shortLabel HL ISOPIPE annotations
@@ -130,3 +132,94 @@ searchPriority 2.07207
         type bigBed 12
         bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.nmd.bb
 
+##########################################################
+# Isopipe bigWig track description [ spliceAi + aparent ]
+##########################################################
+track {BIGWIG_TRACK}
+compositeTrack on
+shortLabel HL ISOPIPE bigWig track
+longLabel HL Isopipe bigWig track
+group genes
+priority 2
+visibility full
+itemRgb on
+type bigWig
+searchPriority 2.07207
+
+        track {PREFIX}.aparent.forward
+        parent {BIGWIG_TRACK}
+        subtrack {BIGWIG_TRACK}
+        shortLabel HL aparent forward
+        longLabel HL_aparent_forward
+        group genes
+        priority 1
+        visibility full
+        itemRgb On
+        type bigWig
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.aparent.forward.bw
+        color 58,130,27
+
+        track {PREFIX}.aparent.reverse
+        parent {BIGWIG_TRACK}
+        subtrack {BIGWIG_TRACK}
+        shortLabel HL aparent reverse
+        longLabel HL_aparent_reverse
+        group genes
+        priority 1
+        visibility full
+        itemRgb On
+        type bigWig
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.aparent.reverse.bw
+        color 212,154,25
+
+        track {PREFIX}.spliceai.donor.forward
+        parent {BIGWIG_TRACK}
+        subtrack {BIGWIG_TRACK}
+        shortLabel HL spliceai donor forward
+        longLabel HL_spliceai_donor_forward
+        group genes
+        priority 1
+        visibility full
+        itemRgb On
+        type bigWig
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.spliceai.donor.forward.bw
+        color 38,53,201
+
+        track {PREFIX}.spliceai.donor.reverse
+        parent {BIGWIG_TRACK}
+        subtrack {BIGWIG_TRACK}
+        shortLabel HL spliceai donor reverse
+        longLabel HL_spliceai_donor_reverse
+        group genes
+        priority 1
+        visibility full
+        itemRgb On
+        type bigWig
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.spliceai.donor.reverse.bw
+        color 114,33,148
+
+        track {PREFIX}.spliceai.acceptor.forward 
+        parent {BIGWIG_TRACK}
+        subtrack {BIGWIG_TRACK}
+        shortLabel HL spliceai acceptor forward
+        longLabel HL_spliceai_acceptor_forward
+        group genes
+        priority 1
+        visibility full
+        itemRgb On
+        type bigWig
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.spliceai.acceptor.forward.bw
+        color 38,53,201
+
+        track {PREFIX}.spliceai.acceptor.reverse
+        parent {BIGWIG_TRACK}
+        subtrack {BIGWIG_TRACK}
+        shortLabel HL aparent forward
+        longLabel HL_aparent_forward
+        group genes
+        priority 1
+        visibility full
+        itemRgb On
+        type bigWig
+        bigDataUrl {BROWSER}/{SPECIES}/{PREFIX}.aparent.forward.bw
+        color 114,33,148

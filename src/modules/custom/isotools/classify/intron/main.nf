@@ -1,6 +1,6 @@
 process ISOTOOLS_CLASSIFY_INTRON {
     tag "$meta.id"
-    label 'custom_process_low'
+    label 'process_high_low_memory_fast'
 
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
