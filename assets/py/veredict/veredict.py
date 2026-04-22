@@ -5,7 +5,7 @@ from __future__ import annotations
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 
 import argparse
 import logging
@@ -580,20 +580,21 @@ def validate_id_alignment(
     if not missing_ids and not extra_ids:
         return
 
+    # INFO: avoding raising error; these IDs will likely be in NMD
     details: List[str] = []
     if missing_ids:
         details.append(
             f"missing {len(missing_ids)} read IDs, e.g. {sample_ids(missing_ids)}"
         )
 
-        # INFO: avoding raising error; these IDs will likely be in NMD
         log.warning(f"WARN: {label} ID set does not match reads: {'; '.join(details)}")
         return
     if extra_ids:
         details.append(
-            f"has {len(extra_ids)} unexpected IDs, e.g. {sample_ids(extra_ids)}"
+            f"has extra {len(extra_ids)} unexpected IDs, e.g. {sample_ids(extra_ids)}"
         )
-        raise ValueError(f"{label} ID set does not match reads: {'; '.join(details)}")
+        log.warning(f"{label} ID set does not match reads: {'; '.join(details)}")
+        return
 
 
 def sample_ids(values: Sequence[str], limit: int = 5) -> List[str]:
