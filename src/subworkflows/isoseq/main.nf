@@ -28,6 +28,7 @@ workflow ISOSEQ {
       global_primers         // path
       ccs_chunk              // int
       isoseq_cluster2_mode   // string
+      prefix                 // string
 
     main:
       ch_versions = Channel.empty()
@@ -140,7 +141,7 @@ workflow ISOSEQ {
         ISOSEQ_REFINE.out.bam
           .map { meta, bam -> bam  }
           .collect()
-          .map { bams -> [ [id:'pooled'], bams ] }
+          .map { bams -> [ [ id: prefix ], bams ] }
           .set { ch_pooled_bams }
 
         PBMERGE_MULTI_SAMPLE(ch_pooled_bams)
@@ -162,7 +163,7 @@ workflow ISOSEQ {
         ISOSEQ_REFINE.out.bam
           .map { meta, bam -> bam  }
           .collect()
-          .map { bams -> [ [id:'pooled', single_end:true], bams ] }
+          .map { bams -> [ [id: prefix, single_end:true], bams ] }
           .set { ch_pooled_bams }
 
         PBMERGE_MULTI_SAMPLE(ch_pooled_bams)

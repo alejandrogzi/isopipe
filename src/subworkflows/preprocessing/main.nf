@@ -34,6 +34,7 @@ workflow PREPROCESSING {
       minisplice             // path
       spliceai               // path
       compression            // bool
+      global_prefix          // string
       ch_versions            // [ meta, versions.yml ]
 
     main:
@@ -108,7 +109,8 @@ workflow PREPROCESSING {
               global_input_dir,
               global_primers,
               ccs_chunk,
-              isoseq_cluster2_mode
+              isoseq_cluster2_mode,
+              global_prefix
           )
 
           ch_reads = ch_reads.mix(ISOSEQ.out.reads)

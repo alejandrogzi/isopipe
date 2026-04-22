@@ -74,6 +74,7 @@ workflow ISOPIPE {
         params.minisplice_scores_path,
         params.spliceai_scores_path,
         params.spliceai_chunk_compression,
+        params.global_prefix,
         ch_versions
       )
 
@@ -87,6 +88,7 @@ workflow ISOPIPE {
         params.entrypoint,
         params.minimap2_align_use_junc_bed,
         params.isotools_adapter_remove_adapters,
+        params.global_prefix,
         ch_versions
       )
 

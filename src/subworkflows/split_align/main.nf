@@ -33,6 +33,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
       entrypoint               // string [ isoseq, map ]
       minimap2_use_junc_bed    // bool
       remove_adapters          // bool
+      prefix                   // string
       ch_versions              // [ meta, versions.yml ]
 
     main:
@@ -93,7 +94,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
               .collect()
               .map { bams -> [ 
                 [
-                  id: 'pooled', 
+                  id: prefix, 
                   single_end: false,
                   singleton: false,
                   chunk: 0
@@ -113,7 +114,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           SAMTOOLS_BAM.out.bam
               .map { meta, bam -> bam }
               .collect()
-              .map { bams -> [ [id:'pooled'], bams ] }
+              .map { bams -> [ [ id: prefix ], bams ] }
               .set { ch_joined_bam }
           SAMTOOLS_MERGE_BAM_MULTI_SAMPLE(ch_joined_sam)
 
