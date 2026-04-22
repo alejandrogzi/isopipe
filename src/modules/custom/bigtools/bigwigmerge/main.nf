@@ -26,15 +26,6 @@ process BIGWIGMERGE {
         $bigwigs \\
         ${prefix}.bw
 
-    if [ ${params.bigtools_bigwigmerge_keep_bigwigs} == false ]; then
-      if [ -L ${bigwigs} ]; then
-          realpath=\$(readlink -f ${bigwigs})
-          rm -f "\$realpath"
-      else
-          rm -f ${bigwigs}
-      fi
-    fi
-        
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         bigtools: \$(bigtools --version | sed -e "s/bigtools v//g")

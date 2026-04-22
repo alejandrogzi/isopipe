@@ -7,10 +7,16 @@
 include { XLOCI_INTRON as XLOCI_EXTRACT_INTRONS } from '../../modules/custom/xloci/intron/main.nf'
 include { INTRONIC as IIC_PREDICT_SPLICEOSOME } from '../../modules/custom/intronic/main.nf'
 include { ISOTOOLS_CLASSIFY_INTRON } from '../../modules/custom/isotools/classify/intron/main.nf'
+
 include { APARENT_CHUNK as XISO_APARENT_CHUNK } from '../../modules/custom/aparent/chunk/main.nf'
 include { APARENT_PREDICT } from '../../modules/custom/aparent/predict/main.nf'
+
 include { BEDGRAPHTOBIGWIG as BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD } from '../../modules/custom/bigtools/bedgraphtobigwig/main.nf'
 include { BEDGRAPHTOBIGWIG as BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE } from '../../modules/custom/bigtools/bedgraphtobigwig/main.nf'
+
+include { BIGWIGMERGE as BIGTOOLS_BIGWIGMERGE_FORWARD } from '../../modules/custom/bigtools/bigwigmerge/main.nf'
+include { BIGWIGMERGE as BIGTOOLS_BIGWIGMERGE_REVERSE } from '../../modules/custom/bigtools/bigwigmerge/main.nf'
+
 include { GAWK_JOIN as GAWK_JOIN_BEDGRAPH_FORWARD } from '../../modules/custom/gawk/join/main.nf'
 include { GAWK_JOIN as GAWK_JOIN_BEDGRAPH_REVERSE } from '../../modules/custom/gawk/join/main.nf'
 
@@ -86,37 +92,39 @@ workflow PREPOLISH {
         aparent_weights
       )
 
-      APARENT_PREDICT.out.bg_forward
-        .map { meta, bg -> bg }
+      BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD(
+        APARENT_PREDICT.out.bg_forward, chrom_sizes
+      )
+      BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD.out.bigwig
+        .map { meta, bw -> bw }
         .collect()
-        .map { bgs -> [ [id:'aparent.forward', strand:'forward'], bgs ] }
-        .set { ch_joined_aparent_bgs_forward }
+        .map { bws -> [ [id:'aparent.forward', strand:'forward'], bws ] }
+        .set { ch_joined_aparent_bws_forward }
+      BIGTOOLS_BIGWIGMERGE_FORWARD(ch_joined_aparent_bws_forward)
 
-      GAWK_JOIN_BEDGRAPH_FORWARD(ch_joined_aparent_bgs_forward, 'bg')
-      BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD(GAWK_JOIN_BEDGRAPH_FORWARD.out.output, chrom_sizes)
-
-      APARENT_PREDICT.out.bg_reverse
-        .map { meta, bg -> bg  }
+      BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE(
+        APARENT_PREDICT.out.bg_reverse, chrom_sizes
+      )
+      BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE.out.bigwig
+        .map { meta, bw -> bw }
         .collect()
-        .map { bgs -> [ [id:'aparent.reverse', strand:'reverse'], bgs ] }
-        .set { ch_joined_aparent_bgs_reverse }
-
-      GAWK_JOIN_BEDGRAPH_REVERSE(ch_joined_aparent_bgs_reverse, 'bg')
-      BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE(GAWK_JOIN_BEDGRAPH_REVERSE.out.output, chrom_sizes)
+        .map { bws -> [ [id:'aparent.reverse', strand:'reverse'], bws ] }
+        .set { ch_joined_aparent_bws_reverse }
+      BIGTOOLS_BIGWIGMERGE_REVERSE(ch_joined_aparent_bws_reverse)
 
       ch_versions = ch_versions.mix(XLOCI_EXTRACT_INTRONS.out.versions)
       ch_versions = ch_versions.mix(IIC_PREDICT_SPLICEOSOME.out.versions)
       ch_versions = ch_versions.mix(ISOTOOLS_CLASSIFY_INTRON.out.versions)
       ch_versions = ch_versions.mix(XISO_APARENT_CHUNK.out.versions)
       ch_versions = ch_versions.mix(APARENT_PREDICT.out.versions)
-      ch_versions = ch_versions.mix(GAWK_JOIN_BEDGRAPH_FORWARD.out.versions)
-      ch_versions = ch_versions.mix(GAWK_JOIN_BEDGRAPH_REVERSE.out.versions)
       ch_versions = ch_versions.mix(BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD.out.versions)
       ch_versions = ch_versions.mix(BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE.out.versions)
+      ch_versions = ch_versions.mix(BIGTOOLS_BIGWIGMERGE_FORWARD.out.versions)
+      ch_versions = ch_versions.mix(BIGTOOLS_BIGWIGMERGE_REVERSE.out.versions)
 
     emit:
       introns               = ISOTOOLS_CLASSIFY_INTRON.out.tsv
-      aparent_plus          = BIGTOOLS_BEDGRAPHTOBIGWIG_FORWARD.out.bigwig
-      aparent_minus         = BIGTOOLS_BEDGRAPHTOBIGWIG_REVERSE.out.bigwig
+      aparent_plus          = BIGTOOLS_BIGWIGMERGE_FORWARD.out.bigwig
+      aparent_minus         = BIGTOOLS_BIGWIGMERGE_REVERSE.out.bigwig
       versions              = ch_versions
 }
