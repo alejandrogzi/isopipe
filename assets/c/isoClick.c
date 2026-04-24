@@ -22,31 +22,17 @@ struct isoClassDataBB *isoClassDataBBLoad(char **row, bits16 fieldCount)
     struct isoClassDataBB *ret;
     AllocVar(ret);
     ret->R_read_status = cloneString(row[1]);
-    ret->R_read_intron_status = cloneString(row[2]);
+    ret->R_read_code = cloneString(row[2]);
     ret->R_metadata_html = cloneString(row[3]);
-    ret->R_retentions_html = cloneString(row[4]);
-    ret->R_retains_rt_intron_html = cloneString(row[5]);
-    ret->R_rt_html = cloneString(row[6]);
-    ret->P_read_status = cloneString(row[7]);
-    ret->P_metadata_html = cloneString(row[8]);
-    ret->T_read_status = cloneString(row[9]);
-    ret->T_metadata_html = cloneString(row[10]);
-    ret->O_read_orf_score = cloneString(row[11]);
-    ret->O_metadata_html = cloneString(row[12]);
-    ret->TAG_five_clip_len = cloneString(row[13]);
-    ret->TAG_three_clip_len = cloneString(row[14]);
-    ret->TAG_polya_len = cloneString(row[15]);
-    ret->TAG_polya_read_len = cloneString(row[16]);
-    ret->TAG_mapping_identity = cloneString(row[17]);
-    ret->TAG_singleton = cloneString(row[18]);
-    ret->TAG_orf_number = cloneString(row[19]);
-    ret->TAG_nested_orf_number = cloneString(row[20]);
-    ret->TAG_fake_fusion = cloneString(row[21]);
-    ret->TAG_review_fusion = cloneString(row[22]);
-    ret->TAG_strong_nmd = cloneString(row[23]);
-    ret->TAG_weak_nmd = cloneString(row[24]);
-    ret->TAG_unique_tai = cloneString(row[25]);
-    ret->collapsed = cloneString(row[26]);
+    ret->T_read_status = cloneString(row[4]);
+    ret->T_read_code = cloneString(row[5]);
+    ret->T_metadata_html = cloneString(row[6]);
+    ret->I_read_status = cloneString(row[7]);
+    ret->I_read_code = cloneString(row[8]);
+    ret->I_metadata_html = cloneString(row[9]);
+    ret->O_metadata_html = cloneString(row[10]);
+    ret->C_collapsed = cloneString(row[11]);
+
     return ret;
 }
 
@@ -94,18 +80,12 @@ struct isoClassDataBB *info = isoClassDataBBLoad(&fields[11], bbi->fieldCount); 
 printf("<h4>Overall classification</h4>\n"
        "<ul>\n"
        "  <li>Intron retention status: %s</li>\n"
-       "  <li>Has RT intron: %s</li>\n"
        "  <li>Intrapriming status: %s</li>\n"
        "  <li>Truncation status: %s</li>\n"
-       "  <li>ORF prediction score: %s</li>\n"
-       "  <li>Collapsed read names: %s</li>\n"
        "</ul><br>\n",
        info->R_read_status,
-       info->R_read_intron_status,
-       info->P_read_status,
-       info->T_read_status,
-       info->O_read_orf_score
-       info->collapsed);
+       info->I_read_status,
+       info->T_read_status
 );
 
 htmlHorizontalLine();
@@ -113,58 +93,14 @@ htmlHorizontalLine();
 //printf("<BR><a data-toggle=\"collapse\" href=\"#collapseIR\">Show details of intron retention detection</a>\n");
 //printf("<div id=\"collapseIR\" class=\"panel-collapse collapse\">\n");
 
-// Tag details
-
-printf("<details open>\n"
-       "  <summary>Show read tag details</summary>\n"
-       "  <ul>\n"
-       "    <li>TAG_five_clip_len: %s</li>\n"
-       "    <li>TAG_three_clip_len: %s</li>\n"
-       "    <li>TAG_polya_len: %s</li>\n"
-       "    <li>TAG_polya_read_len: %s</li>\n"
-       "    <li>TAG_mapping_identity: %s</li>\n"
-       "    <li>TAG_singleton: %s</li>\n"
-       "    <li>TAG_orf_number: %s</li>\n"
-       "    <li>TAG_nested_orf_number: %s</li>\n"
-       "    <li>TAG_fake_fusion: %s</li>\n"
-       "    <li>TAG_review_fusion: %s</li>\n"
-       "    <li>TAG_unique_tai: %s</li>\n"
-       "  </ul>\n"
-       "</details>\n",
-       info->TAG_five_clip_len,
-       info->TAG_three_clip_len,
-       info->TAG_polya_len,
-       info->TAG_polya_read_len,
-       info->TAG_mapping_identity,
-       info->TAG_singleton,
-       info->TAG_orf_number,
-       info->TAG_nested_orf_number,
-       info->TAG_fake_fusion,
-       info->TAG_review_fusion,
-       info->TAG_unique_tai);
-
-htmlHorizontalLine();
-
 // Intron retention details
 
 printf("<details open>\n"
        "  <summary>Show details of read intron retention</summary>\n"
        "  <h4>Read status details</h4>\n"
        "  %s\n"
-       "\n"
-       "  <h4>Retention details</h4>\n"
-       "  %s\n"
-       "\n"
-       "  <h4>Retained RT intron details</h4>\n"
-       "  %s\n"
-       "\n"
-       "  <h4>Spliced RT intron details</h4>\n"
-       "  %s\n"
        "</details>\n",
-       info->R_metadata_html,
-       info->R_retentions_html,
-       info->R_retains_rt_intron_html,
-       info->R_has_rt_html);
+       info->R_metadata_html);
 
 htmlHorizontalLine();
 
@@ -186,18 +122,29 @@ printf("<details open>\n"
        "  <h4>Intraprimming details</h4>\n"
        "  %s\n"
        "</details>\n",
-       info->P_metadata_html);
+       info->I_metadata_html);
 
 htmlHorizontalLine();
 
 // ORF prediction details
 
 printf("<details open>\n"
-       "  <summary>Show details of ORf prediction</summary>\n"
+       "  <summary>Show details of ORF prediction</summary>\n"
        "  <h4>ORF details</h4>\n"
        "  %s\n"
        "</details>\n",
        info->O_metadata_html);
+
+htmlHorizontalLine();
+
+// Collapsed details
+
+printf("<details open>\n"
+       "  <summary>Show details of collapse queue</summary>\n"
+       "  <h4>Collapse queue details</h4>\n"
+       "  %s\n"
+       "</details>\n",
+       info->C_collapsed);
 
 
 hPrintf("<link rel=\"stylesheet\" href=\"https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css\">");
