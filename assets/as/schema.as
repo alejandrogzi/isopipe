@@ -24,4 +24,5 @@ table isopipe
     string  I_read_code;                "T: Read code"
     lstring I_metadata_html;            "T: Metadata in HTML"
     lstring O_metadata_html;            "O: Metadata in HTML"
+    lstring C_collapsed                 "C: Collapsed list of reads"
 )

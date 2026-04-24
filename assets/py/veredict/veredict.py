@@ -5,7 +5,7 @@ from __future__ import annotations
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 import argparse
 import logging
@@ -759,7 +759,7 @@ def bucket_rows(schema: pd.DataFrame, flaws: int) -> Dict[str, pd.DataFrame]:
     """
 
     # RT routing takes precedence over flaw-based bucketing.
-    rt_mask = schema["R_code"].str.contains("K", regex=False, na=False)
+    rt_mask = schema["R_code"].str.contains("X", regex=False, na=False)
     remaining_schema = schema.loc[~rt_mask].copy()
 
     status_columns = [spec.status_column for spec in STATUS_INPUT_SPECS]
