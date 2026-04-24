@@ -15,6 +15,7 @@ include { GAWK_JOIN as JOIN_VEREDICT_TRASH } from '../../modules/custom/gawk/joi
 include { GAWK_JOIN as JOIN_VEREDICT_RETENTIONS } from '../../modules/custom/gawk/join/main.nf'
 include { GAWK_JOIN as JOIN_VEREDICT_TRUNCATIONS } from '../../modules/custom/gawk/join/main.nf'
 include { GAWK_JOIN as JOIN_VEREDICT_INTRAPRIMMING } from '../../modules/custom/gawk/join/main.nf'
+include { GAWK_JOIN as JOIN_VEREDICT_RT } from '../../modules/custom/gawk/join/main.nf'
 
 include { BEDTOBIGBED as BEDTOBIGBED_PASSES } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
 include { BEDTOBIGBED as BEDTOBIGBED_TRASH } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
@@ -23,6 +24,7 @@ include { BEDTOBIGBED as BEDTOBIGBED_TRUNCATIONS } from '../../modules/custom/bi
 include { BEDTOBIGBED as BEDTOBIGBED_INTRAPRIMMING } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
 include { BEDTOBIGBED as BEDTOBIGBED_DUPLICATES } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
 include { BEDTOBIGBED as BEDTOBIGBED_SCRAPS } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
+include { BEDTOBIGBED as BEDTOBIGBED_RT } from '../../modules/custom/bigtools/bedtobigbed/main.nf'
 
 include { PUBLISH as PUBLISH_BIGBEDS } from '../../modules/custom/publish/main.nf'
 
@@ -31,6 +33,8 @@ include { DETACH_DUPLICATES as DETACH_RETENTION_DUPLICATES } from '../../modules
 include { DETACH_DUPLICATES as DETACH_TRUNCATION_DUPLICATES } from '../../modules/custom/detach/main.nf'
 include { DETACH_DUPLICATES as DETACH_INTRAPRIMMING_DUPLICATES } from '../../modules/custom/detach/main.nf'
 include { DETACH_DUPLICATES as DETACH_RT_DUPLICATES } from '../../modules/custom/detach/main.nf'
+include { DETACH_DUPLICATES as DETACH_ORPHANS_DUPLICATES } from '../../modules/custom/detach/main.nf'
+include { DETACH_DUPLICATES as DETACH_TRASH_DUPLICATES } from '../../modules/custom/detach/main.nf'
 
 include { COLLAPSE as COLLAPSE_PASSES } from '../../modules/custom/collapse/main.nf'
 
@@ -89,10 +93,10 @@ workflow POLISH {
           .set { ch_pass }
       JOIN_VEREDICT_PASSES(ch_pass, 'bed')
       DETACH_PASS_DUPLICATES(JOIN_VEREDICT_PASSES.out.output)
-      ISOTOOLS_ORPHAN_FINDER(DETACH_DUPLICATES.out.pass, ch_reference_transcripts, splice_scores)
+      ISOTOOLS_ORPHAN_FINDER(DETACH_PASS_DUPLICATES.out.pass, ch_reference_transcripts, splice_scores)
       COLLAPSE_PASSES(ISOTOOLS_ORPHAN_FINDER.out.hq)
-      BEDTOBIGBED_PASSES(COLLAPSE.out.collapsed, chrom_sizes, autosql)
-      BEDTOBIGBED_DUPLICATES(DETACH_DUPLICATES.out.duplicates, chrom_sizes, autosql)
+      BEDTOBIGBED_PASSES(COLLAPSE_PASSES.out.collapsed, chrom_sizes, autosql)
+      BEDTOBIGBED_DUPLICATES(DETACH_PASS_DUPLICATES.out.duplicates, chrom_sizes, autosql)
       BEDTOBIGBED_SCRAPS(ISOTOOLS_ORPHAN_FINDER.out.scraps, chrom_sizes, autosql)
 
       ISOTOOLS_PLUGIN_VEREDICT.out.trash
@@ -153,7 +157,7 @@ workflow POLISH {
       ch_bbs = Channel.empty()
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_PASSES.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_DUPLICATES.out.bigbed)
-      ch_bbs = ch_bbs.mix(BEDTOBIGBED_ORPHANS.out.bigbed)
+      ch_bbs = ch_bbs.mix(BEDTOBIGBED_SCRAPS.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_TRASH.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_RETENTIONS.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_TRUNCATIONS.out.bigbed)

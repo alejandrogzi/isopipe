@@ -11,7 +11,7 @@ process COLLAPSE {
     tuple val(meta), path(bed)
 
     output:
-    tuple val(meta), path("collapsed/*.tsv"), emit: collapsed
+    tuple val(meta), path("*.collapsed.bed"), emit: collapsed
     path "versions.yml"                     , emit: versions
 
     when:
@@ -21,12 +21,14 @@ process COLLAPSE {
     def args = task.ext.args ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    collapse \\
+    collapse run \\
         $args \\
-        -t ${task.cpus} \\
         --bed ${bed} \\
         --extend \\
         --collapse-mode cds
+
+    sort -k1,1 -k2,2n collapsed/collapsed.bed > ${prefix}.collapsed.bed
+    rm -rf collapsed
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
@@ -36,7 +38,7 @@ process COLLAPSE {
 
     stub:
     """
-    touch *.derived.tsv
+    touch *.collapsed.bed
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

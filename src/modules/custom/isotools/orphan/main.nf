@@ -68,6 +68,7 @@ process ISOTOOLS_ORPHAN {
     """
 
     stub:
+    def prefix    = task.ext.prefix ?: "${meta.id}"
     """
     touch orphans/${prefix}.hq.bed
     touch orphans/${prefix}.scraps.bed

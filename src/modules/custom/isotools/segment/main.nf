@@ -61,6 +61,7 @@ process ISOTOOLS_SEGMENT {
     """
 
     stub:
+    def prefix    = task.ext.prefix ?: "${meta.id}"
     """
     touch *${prefix}*.hq.bam
     touch *${prefix}*.hq.bed
