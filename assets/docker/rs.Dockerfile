@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# version 0.0.3
+# version 0.0.4
 
 # ---------- Build Stage ----------
 FROM rust:1.93.0-bookworm as builder
@@ -12,10 +12,14 @@ COPY assets/rust/splicing/src ./splicing/src
 COPY assets/rust/aparent/Cargo.toml assets/rust/aparent/Cargo.lock ./aparent/
 COPY assets/rust/aparent/src ./aparent/src
 
+COPY assets/rust/collapse/Cargo.toml assets/rust/collapse/Cargo.lock ./collapse/
+COPY assets/rust/collapse/src ./collapse/src
+
 
 # INFO: build
 RUN cargo build --release --manifest-path ./splicing/Cargo.toml
 RUN cargo build --release --manifest-path ./aparent/Cargo.toml
+RUN cargo build --release --manifest-path ./collapse/Cargo.toml
 
 # ---------- Runtime Stage ----------
 FROM debian:bookworm-slim
@@ -31,7 +35,11 @@ RUN apt-get update \
 # INFO: copy binaries to bin section
 COPY --from=builder /apps/splicing/target/release/splicing /usr/local/bin/splicing
 COPY --from=builder /apps/aparent/target/release/aparent /usr/local/bin/aparent
+COPY --from=builder /apps/collapse/target/release/collapse /usr/local/bin/collapse
 
 # INFO: run help
 RUN splicing --help
 RUN aparent --help
+RUN collapse --help
+
+CMD ["bash"]
