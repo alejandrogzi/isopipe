@@ -89,6 +89,7 @@ workflow ISOPIPE {
         params.minimap2_align_use_junc_bed,
         params.isotools_adapter_remove_adapters,
         params.global_prefix,
+        params.collapse_shrink_twins,
         ch_versions
       )
 

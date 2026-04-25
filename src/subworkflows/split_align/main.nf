@@ -16,6 +16,8 @@ include { ISOTOOLS_FUSION as ISOTOOLS_FUSION_DETECTOR } from '../../modules/cust
 include { ISOTOOLS_CIGAR as ISOTOOLS_CIGAR_EXTENSION } from '../../modules/custom/isotools/cigar/main.nf'
 include { ISOTOOLS_ADAPTER as ISOTOOLS_REMOVE_ADAPTERS } from '../../modules/custom/isotools/adapter/main.nf'
 
+include { COLLAPSE as COLLAPSE_TWINS } from '../../modules/custom/collapse/main.nf'
+
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     LOCAL SUBWORKFLOWS
@@ -34,6 +36,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
       minimap2_use_junc_bed    // bool
       remove_adapters          // bool
       prefix                   // string
+      collapse_twins           // bool
       ch_versions              // [ meta, versions.yml ]
 
     main:
@@ -170,6 +173,11 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
               [ group_meta, beds ]
           }
           .set { ch_hq_bed_per_chr }
+
+      if (collapse_twins) {
+        COLLAPSE_TWINS(ch_hq_bed_per_chr)
+        ch_hq_bed_per_chr = COLLAPSE_TWINS.out.collapsed
+      }
 
       ISOTOOLS_FUSION_DETECTOR(ch_hq_bed_per_chr, ch_reference_transcripts)
 
