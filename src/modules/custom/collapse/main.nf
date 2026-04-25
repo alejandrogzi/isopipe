@@ -24,8 +24,7 @@ process COLLAPSE {
     collapse run \\
         $args \\
         --bed ${bed} \\
-        --extend \\
-        --collapse-mode cds
+        --extend
 
     sort -k1,1 -k2,2n collapsed/collapsed.bed > ${prefix}.collapsed.bed
     rm -rf collapsed
