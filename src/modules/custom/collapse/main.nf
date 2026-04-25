@@ -19,7 +19,8 @@ process COLLAPSE {
 
     script:
     def args = task.ext.args ?: ''
-    def prefix = task.ext.prefix ?: "${meta.id}"
+    def chr = ".${meta.chr}" ?: ''
+    def prefix = task.ext.prefix ?: "${meta.id}${chr}"
     """
     collapse run \\
         $args \\

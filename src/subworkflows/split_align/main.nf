@@ -172,14 +172,17 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
               def group_meta = [ id: sampleId, single_end: true, chr: meta.chr ]
               [ group_meta, beds ]
           }
-          .set { ch_hq_bed_per_chr }
+          .set { ch_aligned_segmented_hq_per_chr }
 
+      ch_aligned_segmented_collapsed = Channel.empty()
       if (collapse_twins) {
-        COLLAPSE_TWINS(ch_hq_bed_per_chr)
-        ch_hq_bed_per_chr = COLLAPSE_TWINS.out.collapsed
+        COLLAPSE_TWINS(ch_aligned_segmented_hq_per_chr)
+        ch_aligned_segmented_collapsed = COLLAPSE_TWINS.out.collapsed
+      } else {
+        ch_aligned_segmented_collapsed = ch_aligned_segmented_hq_per_chr
       }
 
-      ISOTOOLS_FUSION_DETECTOR(ch_hq_bed_per_chr, ch_reference_transcripts)
+      ISOTOOLS_FUSION_DETECTOR(ch_aligned_segmented_collapsed, ch_reference_transcripts)
 
       ch_versions = ch_versions.mix(FXSPLIT.out.versions)
       ch_versions = ch_versions.mix(MINIMAP2_ALIGN.out.versions)
