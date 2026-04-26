@@ -162,6 +162,7 @@ workflow POLISH {
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_RETENTIONS.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_TRUNCATIONS.out.bigbed)
       ch_bbs = ch_bbs.mix(BEDTOBIGBED_INTRAPRIMMING.out.bigbed)
+      ch_bbs = ch_bbs.mix(BEDTOBIGBED_RT.out.bigbed)
 
       ch_bbs.map { meta, file -> [meta.name, meta, file] }
          .groupTuple()
