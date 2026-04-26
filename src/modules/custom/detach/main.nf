@@ -25,17 +25,16 @@ process DETACH_DUPLICATES {
     meta1 = meta.clone()
     meta1.id  = "${meta.id}.duplicates"
     """
-    grep -v '#DU' ${bed} > ${prefix}.deduplicated.bed
-    grep '#DU' ${bed} > ${prefix}.duplicates.bed
+    grep -v '#DU' ${bed} > ${prefix}.deduplicated.bed || [[ \$? == 1 ]]
+    grep    '#DU' ${bed} > ${prefix}.duplicates.bed   || [[ \$? == 1 ]]
 
-    if [[ ! -s ${prefix}.bed ]]; then
-        rm ${prefix}.bed
+    if [[ ! -s ${prefix}.deduplicated.bed ]]; then
+        rm ${prefix}.deduplicated.bed
     fi
-
     if [[ ! -s ${prefix}.duplicates.bed ]]; then
         rm ${prefix}.duplicates.bed
     fi
-        
+
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         grep: \$(grep --version | sed 's/grep (GNU grep) //; s/ Copyright.*\$//')
@@ -45,7 +44,7 @@ process DETACH_DUPLICATES {
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    touch ${prefix}.bed
+    touch ${prefix}.deduplicated.bed
     touch ${prefix}.duplicates.bed
 
     cat <<-END_VERSIONS > versions.yml
