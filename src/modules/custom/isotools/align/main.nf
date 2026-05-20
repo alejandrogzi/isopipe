@@ -42,6 +42,10 @@ process ISOTOOLS_ALIGN {
         --output-format fasta \\
         --report ${prefix}.report.tsv
 
+    if [ ! -s ${prefix}.fragments.fasta ]; then
+        rm ${prefix}.fragments.fasta 
+    fi
+
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         iso-align: \$( iso-align --version | sed 's/iso-align //g' )

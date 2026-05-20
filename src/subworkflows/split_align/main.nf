@@ -5,15 +5,16 @@
 */
 
 include { MINIMAP2_ALIGN } from '../../modules/custom/minimap2/align/main.nf'
-include { MINIMAP2_ALIGN_FRAGMENTS } from '../../modules/custom/minimap2/align/main.nf'
+include { MINIMAP2_ALIGN as MINIMAP2_ALIGN_FRAGMENTS } from '../../modules/custom/minimap2/align/main.nf'
 
 include { FXSPLIT } from '../../modules/custom/fxsplit/main.nf'
 
 include { SAMTOOLS_BAM } from '../../modules/custom/samtools/bam/main.nf'
+include { SAMTOOLS_BAM as SAMTOOLS_BAM_FRAGMENTS } from '../../modules/custom/samtools/bam/main.nf'
 include { SAMTOOLS_MERGE as SAMTOOLS_MERGE_BAM_MULTI_SAMPLE } from '../../modules/custom/samtools/merge/main.nf'
 
 include { ISOTOOLS_SEGMENT as ISOTOOLS_SEGMENT_POLYA } from '../../modules/custom/isotools/segment/main.nf'
-include { ISOTOOLS_SEGMENT as ISOTOOLS_SEGMENT_POLYA_CIGAR_EXTENDED } from '../../modules/custom/isotools/segment/main.nf'
+include { ISOTOOLS_SEGMENT as ISOTOOLS_SEGMENT_POLYA_FRAGMENTS } from '../../modules/custom/isotools/segment/main.nf'
 include { ISOTOOLS_FUSION as ISOTOOLS_FUSION_DETECTOR } from '../../modules/custom/isotools/fusion/main.nf'
 include { ISOTOOLS_CIGAR as ISOTOOLS_CIGAR_EXTENSION } from '../../modules/custom/isotools/cigar/main.nf'
 include { ISOTOOLS_ADAPTER as ISOTOOLS_REMOVE_ADAPTERS } from '../../modules/custom/isotools/adapter/main.nf'
@@ -152,7 +153,6 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
 
       ISOTOOLS_FIND_FRAGMENTS(
         ISOTOOLS_CIGAR_EXTENSION.out.extended,
-        ch_reads
       )
 
       if (minimap2_use_junc_bed) {
@@ -174,12 +174,13 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
             Channel.value([[:], []])
           )
       }
+      SAMTOOLS_BAM_FRAGMENTS(MINIMAP2_ALIGN_FRAGMENTS.out.sam)
 
-      ISOTOOLS_SEGMENT_POLYA(ISOTOOLS_CIGAR_EXTENSION.out.aligned) // INFO: polyA tails
-      ISOTOOLS_SEGMENT_POLYA_CIGAR_EXTENDED(ISOTOOLS_CIGAR_EXTENSION.out.extended) // INFO: cigar extended
+      ISOTOOLS_SEGMENT_POLYA(ISOTOOLS_CIGAR_EXTENSION.out.extended) // INFO: polyA tails + cigar 
+      ISOTOOLS_SEGMENT_POLYA_FRAGMENTS(SAMTOOLS_BAM_FRAGMENTS.out.bam) // INFO: fragments + cigar
 
       ISOTOOLS_SEGMENT_POLYA.out.hq_bed
-          .mix(ISOTOOLS_SEGMENT_POLYA_CIGAR_EXTENDED.out.hq_bed)
+          .mix(ISOTOOLS_SEGMENT_POLYA_FRAGMENTS.out.hq_bed)
           .set { ch_aligned_segmented }
 
       ch_aligned_segmented
