@@ -51,7 +51,7 @@ include { TRACKDB } from './modules/custom/track/main.nf'
 */
 
 workflow ISOPIPE {
-    main: 
+    main:
       ch_versions = Channel.empty()
       ch_reads = Channel.empty()
 
@@ -79,7 +79,7 @@ workflow ISOPIPE {
       )
 
       SPLIT_ALIGN_CLEAN_CHUNKS(
-        PREPROCESSING.out.reads, 
+        PREPROCESSING.out.reads,
         PREPROCESSING.out.genome,
         PREPROCESSING.out.minimap2_index,
         PREPROCESSING.out.reference_transcripts,
@@ -120,7 +120,7 @@ workflow ISOPIPE {
       XORF_PREDICT_ORFS.out.files
           .map { meta, bed, tsv -> [ meta, bed ] }
           .set { ch_orf_predictions_bed }
-      
+
       XORF_PREDICT_FUSION_ORFS(
           SPLIT_ALIGN_CLEAN_CHUNKS.out.fusions,
           PREPROCESSING.out.genome,
@@ -132,8 +132,8 @@ workflow ISOPIPE {
           params.xorf_selenocysteine_codons
       )
       XORF_PREDICT_FUSION_ORFS.out.files
-          .map { meta, bed, tsv -> [ meta.name, meta, bed ] }    
-          .groupTuple()                                      
+          .map { meta, bed, tsv -> [ meta.name, meta, bed ] }
+          .groupTuple()
           .map { name, metas, files ->
               [ [ id: name + '.fusions', name: name ], files ]
           }
@@ -144,8 +144,8 @@ workflow ISOPIPE {
       ISOTOOLS_NMD_FILTER(ch_orf_predictions_bed)
 
       ISOTOOLS_NMD_FILTER.out.nmd
-          .map { meta, bed -> [ meta.name, meta, bed ] }    
-          .groupTuple()                                      
+          .map { meta, bed -> [ meta.name, meta, bed ] }
+          .groupTuple()
           .map { name, metas, files ->
               [ [ id: name + '.nmd', name: name ], files ]
           }

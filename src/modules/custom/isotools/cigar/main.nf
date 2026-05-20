@@ -44,7 +44,6 @@ process ISOTOOLS_CIGAR {
         --bam $bam \\
         --annotation $annotation \\
         --sequence $genome \\
-        --split-bam \\
         --threads ${task.cpus}
 
     cat <<-END_VERSIONS > versions.yml

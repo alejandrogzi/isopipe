@@ -5,6 +5,8 @@
 */
 
 include { MINIMAP2_ALIGN } from '../../modules/custom/minimap2/align/main.nf'
+include { MINIMAP2_ALIGN_FRAGMENTS } from '../../modules/custom/minimap2/align/main.nf'
+
 include { FXSPLIT } from '../../modules/custom/fxsplit/main.nf'
 
 include { SAMTOOLS_BAM } from '../../modules/custom/samtools/bam/main.nf'
@@ -15,6 +17,8 @@ include { ISOTOOLS_SEGMENT as ISOTOOLS_SEGMENT_POLYA_CIGAR_EXTENDED } from '../.
 include { ISOTOOLS_FUSION as ISOTOOLS_FUSION_DETECTOR } from '../../modules/custom/isotools/fusion/main.nf'
 include { ISOTOOLS_CIGAR as ISOTOOLS_CIGAR_EXTENSION } from '../../modules/custom/isotools/cigar/main.nf'
 include { ISOTOOLS_ADAPTER as ISOTOOLS_REMOVE_ADAPTERS } from '../../modules/custom/isotools/adapter/main.nf'
+include { ISOTOOLS_ALIGN as ISOTOOLS_FIND_FRAGMENTS } from '../../modules/custom/isotools/align/main.nf'
+
 
 include { COLLAPSE as COLLAPSE_TWINS } from '../../modules/custom/collapse/main.nf'
 
@@ -42,7 +46,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
     main:
       FXSPLIT(ch_reads)
       FXSPLIT.out.fastx_gz
-          .flatMap { 
+          .flatMap {
               meta, fa ->
               def fas = fa instanceof List ? fa : [fa]
               fas.collect { it ->
@@ -52,21 +56,21 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
               }
           }
           .set { ch_fastx_gz }
- 
+
       if (minimap2_use_junc_bed) {
           MINIMAP2_ALIGN(
-            ch_fastx_gz, 
+            ch_fastx_gz,
             ch_minimap2_index,
             ch_splice_scores,
             ch_reference_transcripts
-              .map { 
-                junctions -> 
-                [ [id:junctions.baseName], junctions ] 
+              .map {
+                junctions ->
+                [ [id:junctions.baseName], junctions ]
               }
           )
       } else {
           MINIMAP2_ALIGN(
-            ch_fastx_gz, 
+            ch_fastx_gz,
             ch_minimap2_index,
             ch_splice_scores,
             Channel.value([[:], []])
@@ -95,9 +99,9 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           SAMTOOLS_BAM.out.bam
               .map { meta, bam -> bam }
               .collect()
-              .map { bams -> [ 
+              .map { bams -> [
                 [
-                  id: prefix, 
+                  id: prefix,
                   single_end: false,
                   singleton: false,
                   chunk: 0
@@ -137,14 +141,39 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
         ch_aligned_bam = ISOTOOLS_REMOVE_ADAPTERS.out.bam
         ch_aligned_bai = ISOTOOLS_REMOVE_ADAPTERS.out.bai
         ch_versions = ch_versions.mix(ISOTOOLS_REMOVE_ADAPTERS.out.versions)
-      } 
+      }
 
       ISOTOOLS_CIGAR_EXTENSION(
-        ch_aligned_bam, 
+        ch_aligned_bam,
         ch_aligned_bai,
         ch_genome.map { genome -> [ [id:genome.baseName], genome ] },
         ch_reference_transcripts.map { gtf -> [ [id:gtf.baseName], gtf ] }
       )
+
+      ISOTOOLS_FIND_FRAGMENTS(
+        ISOTOOLS_CIGAR_EXTENSION.out.extended,
+        ch_reads
+      )
+
+      if (minimap2_use_junc_bed) {
+          MINIMAP2_ALIGN_FRAGMENTS(
+            ISOTOOLS_FIND_FRAGMENTS.out.fasta,
+            ch_minimap2_index,
+            ch_splice_scores,
+            ch_reference_transcripts
+              .map {
+                junctions ->
+                [ [id:junctions.baseName], junctions ]
+              }
+          )
+      } else {
+          MINIMAP2_ALIGN_FRAGMENTS(
+            ISOTOOLS_FIND_FRAGMENTS.out.fasta,
+            ch_minimap2_index,
+            ch_splice_scores,
+            Channel.value([[:], []])
+          )
+      }
 
       ISOTOOLS_SEGMENT_POLYA(ISOTOOLS_CIGAR_EXTENSION.out.aligned) // INFO: polyA tails
       ISOTOOLS_SEGMENT_POLYA_CIGAR_EXTENDED(ISOTOOLS_CIGAR_EXTENSION.out.extended) // INFO: cigar extended
