@@ -21,10 +21,11 @@ process ISOTOOLS_ALIGN {
 
     input:
     tuple val(meta), path(bam), path(bai)
+    tuple val(meta2), path(reads)
 
     output:
-    tuple val(meta), path("*.fragments.fasta"),   optional: true, emit: fasta
-    tuple val(meta), path("*.report.tsv"),        optional: true, emit: report
+    tuple val(meta1), path("*.fragments.fasta"),   optional: true, emit: fasta
+    tuple val(meta1), path("*.report.tsv"),        optional: true, emit: report
     path "versions.yml",                          emit: versions
 
     when:
@@ -33,11 +34,16 @@ process ISOTOOLS_ALIGN {
     script:
     def args      = task.ext.args ?: ''
     def prefix    = task.ext.prefix ?: "${meta.id}"
+    def fastx     = reads.join(',')
+
+    meta1 = meta.clone()
+    meta1.id = meta.id + '.fragments'
     """
     iso-align \\
         $args \\
         --threads ${task.cpus} \\
         --bam $bam \\
+        --reads $fastx \\
         --output ${prefix}.fragments.fasta \\
         --output-format fasta \\
         --report ${prefix}.report.tsv

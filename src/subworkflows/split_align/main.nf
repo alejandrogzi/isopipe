@@ -80,11 +80,13 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
 
       ch_aligned_bam = Channel.empty()
       ch_aligned_bai = Channel.empty()
+      ch_pooled_reads = Channel.empty()
       if (entrypoint == "isoseq") {
         // INFO: reads were already merged in isoseq clustering
         SAMTOOLS_BAM(MINIMAP2_ALIGN.out.sam)
         ch_aligned_bam = SAMTOOLS_BAM.out.bam
         ch_aligned_bai = SAMTOOLS_BAM.out.bai
+        ch_pooled_reads = ch_reads
 
         ch_versions = ch_versions.mix(SAMTOOLS_BAM.out.versions)
       } else if (entrypoint == "map") {
@@ -93,6 +95,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           SAMTOOLS_BAM(MINIMAP2_ALIGN.out.sam)
           ch_aligned_bam = SAMTOOLS_BAM.out.bam
           ch_aligned_bai = SAMTOOLS_BAM.out.bai
+          ch_pooled_reads = ch_reads
 
           ch_versions = ch_versions.mix(SAMTOOLS_BAM.out.versions)
         } else if (cluster_mode == "multi_sample") {
@@ -113,6 +116,12 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.bam
           ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.bai
 
+          ch_reads
+            .map { meta, reads -> reads }
+            .collect()
+            .map { reads -> [ [ id: 'pooled.reads' ], reads ] }
+            .set { ch_pooled_reads }
+
           ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.versions)
         } else if (cluster_mode == "both") {
           SAMTOOLS_BAM(MINIMAP2_ALIGN.out.sam)
@@ -128,6 +137,12 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
 
           ch_aligned_bam = ch_aligned_bam.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.bam)
           ch_aligned_bai = ch_aligned_bai.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.bai)
+
+          ch_reads
+            .map { meta, reads -> reads }
+            .collect()
+            .map { reads -> [ [ id: 'pooled.reads' ], reads ] }
+            .set { ch_pooled_reads }
 
           ch_versions = ch_versions.mix(SAMTOOLS_BAM.out.versions)
           ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.versions)
@@ -153,6 +168,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
 
       ISOTOOLS_FIND_FRAGMENTS(
         ISOTOOLS_CIGAR_EXTENSION.out.extended,
+        ch_pooled_reads
       )
 
       if (minimap2_use_junc_bed) {
@@ -175,9 +191,12 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           )
       }
       SAMTOOLS_BAM_FRAGMENTS(MINIMAP2_ALIGN_FRAGMENTS.out.sam)
+      SAMTOOLS_BAM_FRAGMENTS.out.bam
+          .join(SAMTOOLS_BAM_FRAGMENTS.out.bai)
+          .set { ch_fragments_bam }
 
       ISOTOOLS_SEGMENT_POLYA(ISOTOOLS_CIGAR_EXTENSION.out.extended) // INFO: polyA tails + cigar 
-      ISOTOOLS_SEGMENT_POLYA_FRAGMENTS(SAMTOOLS_BAM_FRAGMENTS.out.bam) // INFO: fragments + cigar
+      ISOTOOLS_SEGMENT_POLYA_FRAGMENTS(ch_fragments_bam) // INFO: fragments + cigar
 
       ISOTOOLS_SEGMENT_POLYA.out.hq_bed
           .mix(ISOTOOLS_SEGMENT_POLYA_FRAGMENTS.out.hq_bed)
