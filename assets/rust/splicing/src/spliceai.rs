@@ -1,15 +1,15 @@
 // Copyright (c) 2026 Alejandro Gonzalez-Irribarren <alejandrxgzi@gmail.com>
 // Distributed under the terms of the Apache License, Version 2.0.
 
-use bigtools::{utils::reopen::Reopen, BigWigRead};
+use bigtools::{BigWigRead, utils::reopen::Reopen};
 use dashmap::{DashMap, DashSet};
-use log::info;
+use log::{info, warn};
 use rayon::prelude::*;
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs::{self, File},
     io::{self, BufWriter, Write},
     path::{Path, PathBuf},
@@ -215,6 +215,127 @@ impl SpliceSite {
             SpliceSite::Acceptor => "acceptor",
         }
     }
+}
+
+/// Splice site collected from annotation for optional synthetic score inclusion.
+///
+/// The coordinate and dinucleotide fields use the same conventions as `Minisplice`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RegionSpliceSite {
+    pub coordinate_key: Vec<u8>,
+    pub chr: Vec<u8>,
+    pub position: usize,
+    pub strand: Strand,
+    pub splice_site: SpliceSite,
+    pub dinucleotide: Vec<u8>,
+}
+
+impl RegionSpliceSite {
+    /// Serializes this annotation splice site as a SpliceAI-like scored record.
+    pub fn as_spliceai_record(&self, score: f32) -> Vec<u8> {
+        let score = score.to_string();
+        let mut record = Vec::with_capacity(
+            self.coordinate_key.len() + self.dinucleotide.len() + score.len() + 5,
+        );
+
+        record.extend_from_slice(&self.coordinate_key);
+        record.push(b'\t');
+        record.push(match self.splice_site {
+            SpliceSite::Donor => b'D',
+            SpliceSite::Acceptor => b'A',
+        });
+        record.push(b'\t');
+        record.extend_from_slice(score.as_bytes());
+        record.push(b'\t');
+        record.extend_from_slice(&self.dinucleotide);
+
+        record
+    }
+}
+
+/// Adds missing region-derived splice sites to donor and acceptor score maps.
+///
+/// Existing BigWig-derived scores are kept. A region site is added only if the matching
+/// donor/acceptor map has no record with the same coordinate key.
+pub fn include_region_splice_sites(
+    donor_scores: &StrandSpliceMap,
+    acceptor_scores: &StrandSpliceMap,
+    region_donors: &DashSet<RegionSpliceSite>,
+    region_acceptors: &DashSet<RegionSpliceSite>,
+    score: f32,
+) -> (usize, usize) {
+    let donor_count = include_region_splice_sites_for_map(
+        "donor",
+        donor_scores,
+        region_donors,
+        SpliceSite::Donor,
+        score,
+    );
+    let acceptor_count = include_region_splice_sites_for_map(
+        "acceptor",
+        acceptor_scores,
+        region_acceptors,
+        SpliceSite::Acceptor,
+        score,
+    );
+
+    info!(
+        "Included {} donor and {} acceptor splice sites from regions with synthetic score {}",
+        donor_count, acceptor_count, score
+    );
+
+    (donor_count, acceptor_count)
+}
+
+fn include_region_splice_sites_for_map(
+    label: &str,
+    scores: &StrandSpliceMap,
+    region_sites: &DashSet<RegionSpliceSite>,
+    expected_splice_site: SpliceSite,
+    score: f32,
+) -> usize {
+    let mut existing_coordinates = HashSet::new();
+
+    scores.iter().for_each(|entry| {
+        entry.value().iter().for_each(|record| {
+            let Some(parsed) = parse_spliceai_record(record.as_slice()) else {
+                warn!(
+                    "Skipping malformed SpliceAI record while indexing {} scores: {}",
+                    label,
+                    String::from_utf8_lossy(record.as_slice())
+                );
+                return;
+            };
+
+            existing_coordinates.insert(parsed.coordinate_key);
+        });
+    });
+
+    let mut included = 0;
+    region_sites.iter().for_each(|site| {
+        if site.splice_site != expected_splice_site {
+            warn!(
+                "Skipping region {:?} splice site in {} collection: {}",
+                site.splice_site,
+                label,
+                String::from_utf8_lossy(&site.coordinate_key)
+            );
+            return;
+        }
+
+        if !existing_coordinates.insert(site.coordinate_key.clone()) {
+            return;
+        }
+
+        let chr = String::from_utf8_lossy(&site.chr).into_owned();
+        scores
+            .entry(chr)
+            .or_insert_with(DashSet::new)
+            .insert(site.as_spliceai_record(score));
+        included += 1;
+    });
+
+    included
 }
 
 /// Classification of a SpliceAI BigWig file by splice site type and strand.
@@ -1015,6 +1136,10 @@ mod tests {
         }
     }
 
+    fn bytes(value: &str) -> Vec<u8> {
+        value.as_bytes().to_vec()
+    }
+
     #[test]
     fn parse_spliceai_record_extracts_expected_fields() {
         let parsed = parse_spliceai_record(b"chr1:42(-)\tA\t0.75\tag").unwrap();
@@ -1026,6 +1151,80 @@ mod tests {
         assert_eq!(parsed.splice_site, SpliceSite::Acceptor);
         assert_eq!(parsed.score, 0.75);
         assert_eq!(parsed.dinucleotide, b"AG".to_vec());
+    }
+
+    #[test]
+    fn include_region_splice_sites_inserts_only_missing_coordinates() {
+        let donor_scores = DashMap::new();
+        let donor_sites = DashSet::new();
+        donor_sites.insert(bytes("chr1:10(+)\tD\t0.9\tGT"));
+        donor_scores.insert("chr1".to_string(), donor_sites);
+
+        let acceptor_scores = DashMap::new();
+        let region_donors = DashSet::new();
+        region_donors.insert(RegionSpliceSite {
+            coordinate_key: bytes("chr1:10(+)"),
+            chr: bytes("chr1"),
+            position: 10,
+            strand: Strand::Forward,
+            splice_site: SpliceSite::Donor,
+            dinucleotide: bytes("GT"),
+        });
+        region_donors.insert(RegionSpliceSite {
+            coordinate_key: bytes("chr1:20(+)"),
+            chr: bytes("chr1"),
+            position: 20,
+            strand: Strand::Forward,
+            splice_site: SpliceSite::Donor,
+            dinucleotide: bytes("GT"),
+        });
+
+        let region_acceptors = DashSet::new();
+        region_acceptors.insert(RegionSpliceSite {
+            coordinate_key: bytes("chr1:10(+)"),
+            chr: bytes("chr1"),
+            position: 10,
+            strand: Strand::Forward,
+            splice_site: SpliceSite::Acceptor,
+            dinucleotide: bytes("AG"),
+        });
+
+        let (donor_count, acceptor_count) = include_region_splice_sites(
+            &donor_scores,
+            &acceptor_scores,
+            &region_donors,
+            &region_acceptors,
+            0.5,
+        );
+
+        assert_eq!(donor_count, 1);
+        assert_eq!(acceptor_count, 1);
+
+        let donor_chr1 = donor_scores.get("chr1").unwrap();
+        assert_eq!(donor_chr1.len(), 2);
+        assert!(
+            donor_chr1
+                .iter()
+                .any(|record| record.as_slice() == b"chr1:10(+)\tD\t0.9\tGT")
+        );
+        assert!(
+            donor_chr1
+                .iter()
+                .any(|record| record.as_slice() == b"chr1:20(+)\tD\t0.5\tGT")
+        );
+        assert!(
+            !donor_chr1
+                .iter()
+                .any(|record| record.as_slice() == b"chr1:10(+)\tD\t0.5\tGT")
+        );
+
+        let acceptor_chr1 = acceptor_scores.get("chr1").unwrap();
+        assert_eq!(acceptor_chr1.len(), 1);
+        let inserted = acceptor_chr1.iter().next().unwrap();
+        let parsed = parse_spliceai_record(inserted.as_slice()).unwrap();
+        assert_eq!(parsed.coordinate_key, bytes("chr1:10(+)"));
+        assert_eq!(parsed.splice_site, SpliceSite::Acceptor);
+        assert_eq!(parsed.score, 0.5);
     }
 
     #[test]

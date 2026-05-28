@@ -3,7 +3,10 @@
 
 use dashmap::{DashMap, DashSet};
 use flate2::read::MultiGzDecoder;
-use genepred::{bed::BedFormat, reader::ReaderError, Bed12, GenePred, Gff, Gtf, Reader, Strand};
+use genepred::{
+    Bed12, GenePred, Gff, Gtf, Reader, Strand as AnnotationStrand, bed::BedFormat,
+    reader::ReaderError,
+};
 use log::{error, info, warn};
 use rayon::prelude::*;
 
@@ -15,7 +18,32 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::utils::{build_coordinate_key, reverse_complement_in_place, uppercase_in_place};
+use crate::{
+    cli::SsRegionPosition,
+    spliceai::{RegionSpliceSite, SpliceSite, Strand as SpliceAiStrand},
+    utils::{build_coordinate_key, reverse_complement_in_place, uppercase_in_place},
+};
+
+/// Annotation-derived splice-site collections used for calibration and optional inclusion.
+pub type AnnotationSpliceSites = (
+    DashMap<Vec<u8>, usize>,
+    DashMap<Vec<u8>, usize>,
+    DashSet<Vec<u8>>,
+    DashSet<Vec<u8>>,
+    DashSet<RegionSpliceSite>,
+    DashSet<RegionSpliceSite>,
+);
+
+struct ExtractedSpliceSite {
+    coordinate_key: Vec<u8>,
+    dinucleotide: Vec<u8>,
+    region_site: Option<RegionSpliceSite>,
+}
+
+struct ExtractedSpliceSitePair {
+    donor: ExtractedSpliceSite,
+    acceptor: ExtractedSpliceSite,
+}
 
 /// Extracts splice site donors and acceptors from genomic annotation.
 ///
@@ -25,9 +53,10 @@ use crate::utils::{build_coordinate_key, reverse_complement_in_place, uppercase_
 /// # Arguments
 /// * `genome` - Map of chromosome names to sequences
 /// * `regions` - Path to annotation file
+/// * `region_position` - Optional feature class for region splice-site records
 ///
 /// # Returns
-/// (donors_map, acceptors_map, donor_coords, acceptor_coords)
+/// (donors_map, acceptors_map, donor_coords, acceptor_coords, region_donors, region_acceptors)
 ///
 /// # Example
 /// ```rust,ignore
@@ -36,17 +65,15 @@ use crate::utils::{build_coordinate_key, reverse_complement_in_place, uppercase_
 pub fn get_ss_from_annotation(
     genome: &HashMap<Vec<u8>, Vec<u8>>,
     regions: PathBuf,
-) -> (
-    DashMap<Vec<u8>, usize>,
-    DashMap<Vec<u8>, usize>,
-    DashSet<Vec<u8>>,
-    DashSet<Vec<u8>>,
-) {
+    region_position: Option<SsRegionPosition>,
+) -> AnnotationSpliceSites {
     let donors = DashMap::new();
     let acceptors = DashMap::new();
 
     let ss_donors = DashSet::new();
     let ss_acceptors = DashSet::new();
+    let region_donors = DashSet::new();
+    let region_acceptors = DashSet::new();
 
     match detect_region_format(&regions) {
         Some(RegionFormat::Bed) => process_reader::<Bed12>(
@@ -56,6 +83,9 @@ pub fn get_ss_from_annotation(
             &acceptors,
             &ss_donors,
             &ss_acceptors,
+            &region_donors,
+            &region_acceptors,
+            region_position,
         ),
         Some(RegionFormat::Gtf) => process_reader::<Gtf>(
             &regions,
@@ -64,6 +94,9 @@ pub fn get_ss_from_annotation(
             &acceptors,
             &ss_donors,
             &ss_acceptors,
+            &region_donors,
+            &region_acceptors,
+            region_position,
         ),
         Some(RegionFormat::Gff) => process_reader::<Gff>(
             &regions,
@@ -72,11 +105,21 @@ pub fn get_ss_from_annotation(
             &acceptors,
             &ss_donors,
             &ss_acceptors,
+            &region_donors,
+            &region_acceptors,
+            region_position,
         ),
         None => panic!("ERROR: Unsupported file format"),
     }
 
-    (donors, acceptors, ss_donors, ss_acceptors)
+    (
+        donors,
+        acceptors,
+        ss_donors,
+        ss_acceptors,
+        region_donors,
+        region_acceptors,
+    )
 }
 
 /// Processes annotation records in parallel using a specific format reader.
@@ -88,6 +131,9 @@ pub fn get_ss_from_annotation(
 /// * `acceptors` - Output map for acceptor dinucleotide counts
 /// * `ss_donors` - Set of donor coordinates
 /// * `ss_acceptors` - Set of acceptor coordinates
+/// * `region_donors` - Region donor splice sites for optional inclusion
+/// * `region_acceptors` - Region acceptor splice sites for optional inclusion
+/// * `region_position` - Optional feature class for region splice-site records
 ///
 /// # Example
 /// ```rust,ignore
@@ -100,6 +146,9 @@ fn process_reader<R>(
     acceptors: &DashMap<Vec<u8>, usize>,
     ss_donors: &DashSet<Vec<u8>>,
     ss_acceptors: &DashSet<Vec<u8>>,
+    region_donors: &DashSet<RegionSpliceSite>,
+    region_acceptors: &DashSet<RegionSpliceSite>,
+    region_position: Option<SsRegionPosition>,
 ) where
     R: BedFormat + Into<GenePred> + Send,
 {
@@ -118,6 +167,9 @@ fn process_reader<R>(
                 &acceptors,
                 &ss_donors,
                 &ss_acceptors,
+                &region_donors,
+                &region_acceptors,
+                region_position,
             );
         });
 }
@@ -131,6 +183,9 @@ fn process_reader<R>(
 /// * `acceptors` - Acceptor dinucleotide counts
 /// * `ss_donors` - Donor coordinate set
 /// * `ss_acceptors` - Acceptor coordinate set
+/// * `region_donors` - Region donor splice sites for optional inclusion
+/// * `region_acceptors` - Region acceptor splice sites for optional inclusion
+/// * `region_position` - Optional feature class for region splice-site records
 pub fn fill_collectors(
     record: &Result<GenePred, ReaderError>,
     genome: &HashMap<Vec<u8>, Vec<u8>>,
@@ -138,6 +193,9 @@ pub fn fill_collectors(
     acceptors: &DashMap<Vec<u8>, usize>,
     ss_donors: &DashSet<Vec<u8>>,
     ss_acceptors: &DashSet<Vec<u8>>,
+    region_donors: &DashSet<RegionSpliceSite>,
+    region_acceptors: &DashSet<RegionSpliceSite>,
+    region_position: Option<SsRegionPosition>,
 ) {
     let record = match record {
         Ok(record) => record,
@@ -154,7 +212,17 @@ pub fn fill_collectors(
         )
     });
 
-    extract_splice_dinucleotides(&record, seq, donors, acceptors, ss_donors, ss_acceptors);
+    extract_splice_dinucleotides(
+        &record,
+        seq,
+        donors,
+        acceptors,
+        ss_donors,
+        ss_acceptors,
+        region_donors,
+        region_acceptors,
+        region_position,
+    );
 }
 
 /// Extracts donor and acceptor dinucleotides from introns in a gene record.
@@ -166,6 +234,9 @@ pub fn fill_collectors(
 /// * `acceptors` - Output acceptor counts
 /// * `ss_donors` - Donor coordinate set
 /// * `ss_acceptors` - Acceptor coordinate set
+/// * `region_donors` - Region donor splice sites for optional inclusion
+/// * `region_acceptors` - Region acceptor splice sites for optional inclusion
+/// * `region_position` - Optional feature class for region splice-site records
 fn extract_splice_dinucleotides(
     record: &GenePred,
     seq: &[u8],
@@ -173,96 +244,185 @@ fn extract_splice_dinucleotides(
     acceptors: &DashMap<Vec<u8>, usize>,
     ss_donors: &DashSet<Vec<u8>>,
     ss_acceptors: &DashSet<Vec<u8>>,
+    region_donors: &DashSet<RegionSpliceSite>,
+    region_acceptors: &DashSet<RegionSpliceSite>,
+    region_position: Option<SsRegionPosition>,
 ) {
-    let chrom = &record.chrom;
-
     for (start, end) in record.introns().iter() {
-        let mut donor = *start as usize;
-        let mut acceptor = *end as usize - 1;
-
-        let strand = record
-            .strand
-            .unwrap_or_else(|| panic!("ERROR: strand not found for record {:?}!", record.name));
-
-        let mut donor_seq = Vec::new();
-        let mut acceptor_seq = Vec::new();
-
-        let Some(donor_end) = donor.checked_add(2) else {
-            warn!(
-                "Skipping donor outside chromosome bounds: {}:{}",
-                String::from_utf8_lossy(chrom),
-                donor
-            );
+        let Some(pair) = extract_splice_site_pair(record, seq, *start, *end) else {
             continue;
         };
-        if let Some(slice) = seq.get(donor..donor_end) {
-            donor_seq.extend_from_slice(slice);
-        }
 
-        let Some(acceptor_start) = acceptor.checked_sub(1) else {
-            warn!(
-                "Skipping acceptor outside chromosome bounds: {}:{}",
-                String::from_utf8_lossy(chrom),
-                acceptor
-            );
-            continue;
-        };
-        let Some(acceptor_end) = acceptor.checked_add(1) else {
-            warn!(
-                "Skipping acceptor outside chromosome bounds: {}:{}",
-                String::from_utf8_lossy(chrom),
-                acceptor
-            );
-            continue;
-        };
-        if let Some(slice) = seq.get(acceptor_start..acceptor_end) {
-            acceptor_seq.extend_from_slice(slice);
-        }
+        let donor_region_site = pair.donor.region_site.clone();
+        let acceptor_region_site = pair.acceptor.region_site.clone();
 
-        if donor_seq.len() != 2 || acceptor_seq.len() != 2 {
-            warn!(
-                "Skipping splice site with incomplete dinucleotide sequence: {} donor={} acceptor={}",
-                String::from_utf8_lossy(chrom),
-                donor,
-                acceptor
-            );
-            continue;
-        }
-
-        match &record.strand {
-            Some(Strand::Forward) => {}
-            Some(Strand::Reverse) => {
-                reverse_complement_in_place(&mut donor_seq);
-                reverse_complement_in_place(&mut acceptor_seq);
-
-                // WARN: for reverse strand, donor and acceptor are reversed!
-                let tmp = donor_seq;
-                donor_seq = acceptor_seq;
-                acceptor_seq = tmp;
-
-                donor = *end as usize;
-                acceptor = *start as usize;
-            }
-            Some(Strand::Unknown) | None => {}
-        }
-
-        uppercase_in_place(&mut donor_seq);
-        uppercase_in_place(&mut acceptor_seq);
-
-        // INFO: key for Set is {chrom}:{position}({strand}) as bytes
-        let donor_key = build_coordinate_key(chrom, donor, strand);
-        let acceptor_key = build_coordinate_key(chrom, acceptor, strand);
-
-        if ss_donors.insert(donor_key) {
-            donors.entry(donor_seq).and_modify(|v| *v += 1).or_insert(1);
-        }
-
-        if ss_acceptors.insert(acceptor_key) {
-            acceptors
-                .entry(acceptor_seq)
+        if ss_donors.insert(pair.donor.coordinate_key) {
+            donors
+                .entry(pair.donor.dinucleotide)
                 .and_modify(|v| *v += 1)
                 .or_insert(1);
+            if region_position == Some(SsRegionPosition::Exon) {
+                if let Some(region_site) = donor_region_site {
+                    region_donors.insert(region_site);
+                }
+            }
         }
+
+        if ss_acceptors.insert(pair.acceptor.coordinate_key) {
+            acceptors
+                .entry(pair.acceptor.dinucleotide)
+                .and_modify(|v| *v += 1)
+                .or_insert(1);
+            if region_position == Some(SsRegionPosition::Exon) {
+                if let Some(region_site) = acceptor_region_site {
+                    region_acceptors.insert(region_site);
+                }
+            }
+        }
+    }
+
+    if region_position == Some(SsRegionPosition::Cds) {
+        let coding_exons = record.coding_exons();
+        for window in coding_exons.windows(2) {
+            let start = window[0].1;
+            let end = window[1].0;
+            if start >= end {
+                continue;
+            }
+
+            let Some(pair) = extract_splice_site_pair(record, seq, start, end) else {
+                continue;
+            };
+
+            if let Some(region_site) = pair.donor.region_site {
+                region_donors.insert(region_site);
+            }
+            if let Some(region_site) = pair.acceptor.region_site {
+                region_acceptors.insert(region_site);
+            }
+        }
+    }
+}
+
+fn extract_splice_site_pair(
+    record: &GenePred,
+    seq: &[u8],
+    start: u64,
+    end: u64,
+) -> Option<ExtractedSpliceSitePair> {
+    let chrom = &record.chrom;
+    let mut donor = start as usize;
+    let mut acceptor = end as usize - 1;
+
+    let strand = record
+        .strand
+        .unwrap_or_else(|| panic!("ERROR: strand not found for record {:?}!", record.name));
+
+    let mut donor_seq = Vec::new();
+    let mut acceptor_seq = Vec::new();
+
+    let Some(donor_end) = donor.checked_add(2) else {
+        warn!(
+            "Skipping donor outside chromosome bounds: {}:{}",
+            String::from_utf8_lossy(chrom),
+            donor
+        );
+        return None;
+    };
+    if let Some(slice) = seq.get(donor..donor_end) {
+        donor_seq.extend_from_slice(slice);
+    }
+
+    let Some(acceptor_start) = acceptor.checked_sub(1) else {
+        warn!(
+            "Skipping acceptor outside chromosome bounds: {}:{}",
+            String::from_utf8_lossy(chrom),
+            acceptor
+        );
+        return None;
+    };
+    let Some(acceptor_end) = acceptor.checked_add(1) else {
+        warn!(
+            "Skipping acceptor outside chromosome bounds: {}:{}",
+            String::from_utf8_lossy(chrom),
+            acceptor
+        );
+        return None;
+    };
+    if let Some(slice) = seq.get(acceptor_start..acceptor_end) {
+        acceptor_seq.extend_from_slice(slice);
+    }
+
+    if donor_seq.len() != 2 || acceptor_seq.len() != 2 {
+        warn!(
+            "Skipping splice site with incomplete dinucleotide sequence: {} donor={} acceptor={}",
+            String::from_utf8_lossy(chrom),
+            donor,
+            acceptor
+        );
+        return None;
+    }
+
+    match strand {
+        AnnotationStrand::Forward => {}
+        AnnotationStrand::Reverse => {
+            reverse_complement_in_place(&mut donor_seq);
+            reverse_complement_in_place(&mut acceptor_seq);
+
+            // WARN: for reverse strand, donor and acceptor are reversed!
+            let tmp = donor_seq;
+            donor_seq = acceptor_seq;
+            acceptor_seq = tmp;
+
+            donor = end as usize;
+            acceptor = start as usize;
+        }
+        AnnotationStrand::Unknown => {}
+    }
+
+    uppercase_in_place(&mut donor_seq);
+    uppercase_in_place(&mut acceptor_seq);
+
+    let donor_key = build_coordinate_key(chrom, donor, strand);
+    let acceptor_key = build_coordinate_key(chrom, acceptor, strand);
+    let spliceai_strand = to_spliceai_strand(strand);
+
+    let donor_region_site = spliceai_strand.map(|strand| RegionSpliceSite {
+        coordinate_key: donor_key.clone(),
+        chr: chrom.clone(),
+        position: donor,
+        strand,
+        splice_site: SpliceSite::Donor,
+        dinucleotide: donor_seq.clone(),
+    });
+    let acceptor_region_site = spliceai_strand.map(|strand| RegionSpliceSite {
+        coordinate_key: acceptor_key.clone(),
+        chr: chrom.clone(),
+        position: acceptor,
+        strand,
+        splice_site: SpliceSite::Acceptor,
+        dinucleotide: acceptor_seq.clone(),
+    });
+
+    Some(ExtractedSpliceSitePair {
+        donor: ExtractedSpliceSite {
+            coordinate_key: donor_key,
+            dinucleotide: donor_seq,
+            region_site: donor_region_site,
+        },
+        acceptor: ExtractedSpliceSite {
+            coordinate_key: acceptor_key,
+            dinucleotide: acceptor_seq,
+            region_site: acceptor_region_site,
+        },
+    })
+}
+
+fn to_spliceai_strand(strand: AnnotationStrand) -> Option<SpliceAiStrand> {
+    match strand {
+        AnnotationStrand::Forward => Some(SpliceAiStrand::Forward),
+        AnnotationStrand::Reverse => Some(SpliceAiStrand::Reverse),
+        AnnotationStrand::Unknown => None,
     }
 }
 
@@ -439,4 +599,184 @@ pub fn from_fa<F: AsRef<Path> + Debug>(f: F) -> HashMap<Vec<u8>, Vec<u8>> {
     info!("Read {} sequences from file {:#?}", acc.len(), f);
 
     acc
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use genepred::Extras;
+
+    fn bytes(value: &str) -> Vec<u8> {
+        value.as_bytes().to_vec()
+    }
+
+    fn region_site(
+        coordinate_key: &str,
+        position: usize,
+        strand: SpliceAiStrand,
+        splice_site: SpliceSite,
+        dinucleotide: &str,
+    ) -> RegionSpliceSite {
+        RegionSpliceSite {
+            coordinate_key: bytes(coordinate_key),
+            chr: bytes("chr1"),
+            position,
+            strand,
+            splice_site,
+            dinucleotide: bytes(dinucleotide),
+        }
+    }
+
+    fn three_exon_record() -> GenePred {
+        let mut record = GenePred::from_coords(bytes("chr1"), 0, 18, Extras::new());
+        record.set_strand(Some(AnnotationStrand::Forward));
+        record.set_block_count(Some(3));
+        record.set_block_starts(Some(vec![0, 7, 14]));
+        record.set_block_ends(Some(vec![3, 10, 18]));
+        record.set_thick_start(Some(8));
+        record.set_thick_end(Some(16));
+        record
+    }
+
+    #[test]
+    fn exon_region_sites_match_existing_intron_junctions() {
+        let record = three_exon_record();
+        let seq = b"AAAGTAGCCCGTAGCCCC";
+        let donors = DashMap::new();
+        let acceptors = DashMap::new();
+        let ss_donors = DashSet::new();
+        let ss_acceptors = DashSet::new();
+        let region_donors = DashSet::new();
+        let region_acceptors = DashSet::new();
+
+        extract_splice_dinucleotides(
+            &record,
+            seq,
+            &donors,
+            &acceptors,
+            &ss_donors,
+            &ss_acceptors,
+            &region_donors,
+            &region_acceptors,
+            Some(SsRegionPosition::Exon),
+        );
+
+        assert_eq!(region_donors.len(), 2);
+        assert_eq!(region_acceptors.len(), 2);
+        assert!(region_donors.contains(&region_site(
+            "chr1:3(+)",
+            3,
+            SpliceAiStrand::Forward,
+            SpliceSite::Donor,
+            "GT"
+        )));
+        assert!(region_acceptors.contains(&region_site(
+            "chr1:6(+)",
+            6,
+            SpliceAiStrand::Forward,
+            SpliceSite::Acceptor,
+            "AG"
+        )));
+        assert!(region_donors.contains(&region_site(
+            "chr1:10(+)",
+            10,
+            SpliceAiStrand::Forward,
+            SpliceSite::Donor,
+            "GT"
+        )));
+        assert!(region_acceptors.contains(&region_site(
+            "chr1:13(+)",
+            13,
+            SpliceAiStrand::Forward,
+            SpliceSite::Acceptor,
+            "AG"
+        )));
+    }
+
+    #[test]
+    fn cds_region_sites_use_coding_exon_junctions_only() {
+        let record = three_exon_record();
+        let seq = b"AAAGTAGCCCGTAGCCCC";
+        let donors = DashMap::new();
+        let acceptors = DashMap::new();
+        let ss_donors = DashSet::new();
+        let ss_acceptors = DashSet::new();
+        let region_donors = DashSet::new();
+        let region_acceptors = DashSet::new();
+
+        extract_splice_dinucleotides(
+            &record,
+            seq,
+            &donors,
+            &acceptors,
+            &ss_donors,
+            &ss_acceptors,
+            &region_donors,
+            &region_acceptors,
+            Some(SsRegionPosition::Cds),
+        );
+
+        assert_eq!(*donors.get(&bytes("GT")).unwrap(), 2);
+        assert!(ss_donors.contains(&bytes("chr1:3(+)")));
+        assert!(ss_donors.contains(&bytes("chr1:10(+)")));
+        assert_eq!(region_donors.len(), 1);
+        assert_eq!(region_acceptors.len(), 1);
+        assert!(region_donors.contains(&region_site(
+            "chr1:10(+)",
+            10,
+            SpliceAiStrand::Forward,
+            SpliceSite::Donor,
+            "GT"
+        )));
+        assert!(!region_donors.contains(&region_site(
+            "chr1:3(+)",
+            3,
+            SpliceAiStrand::Forward,
+            SpliceSite::Donor,
+            "GT"
+        )));
+    }
+
+    #[test]
+    fn reverse_strand_region_sites_keep_existing_coordinate_conventions() {
+        let mut record = GenePred::from_coords(bytes("chr1"), 0, 10, Extras::new());
+        record.set_strand(Some(AnnotationStrand::Reverse));
+        record.set_block_count(Some(2));
+        record.set_block_starts(Some(vec![0, 7]));
+        record.set_block_ends(Some(vec![3, 10]));
+
+        let donors = DashMap::new();
+        let acceptors = DashMap::new();
+        let ss_donors = DashSet::new();
+        let ss_acceptors = DashSet::new();
+        let region_donors = DashSet::new();
+        let region_acceptors = DashSet::new();
+
+        extract_splice_dinucleotides(
+            &record,
+            b"AAAGTAGCCC",
+            &donors,
+            &acceptors,
+            &ss_donors,
+            &ss_acceptors,
+            &region_donors,
+            &region_acceptors,
+            Some(SsRegionPosition::Exon),
+        );
+
+        assert!(region_donors.contains(&region_site(
+            "chr1:7(-)",
+            7,
+            SpliceAiStrand::Reverse,
+            SpliceSite::Donor,
+            "CT"
+        )));
+        assert!(region_acceptors.contains(&region_site(
+            "chr1:3(-)",
+            3,
+            SpliceAiStrand::Reverse,
+            SpliceSite::Acceptor,
+            "AC"
+        )));
+    }
 }
