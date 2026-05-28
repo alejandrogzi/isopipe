@@ -29,7 +29,9 @@ process SPLICEAI_DERIVE {
         --bigwig-dir ${spliceai} \\
         --sequence ${genome} \\
         --regions ${annotation} \\
-        --prefix ${prefix}
+        --prefix ${prefix} \\
+        --include-ss-from-regions \\
+        --position-for-ss-regions cds
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
