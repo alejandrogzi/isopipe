@@ -42,6 +42,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
       remove_adapters          // bool
       prefix                   // string
       collapse_twins           // bool
+      cigar_extension          // bool
       ch_versions              // [ meta, versions.yml ]
 
     main:
@@ -159,17 +160,32 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
         ch_versions = ch_versions.mix(ISOTOOLS_REMOVE_ADAPTERS.out.versions)
       }
 
-      ISOTOOLS_CIGAR_EXTENSION(
-        ch_aligned_bam,
-        ch_aligned_bai,
-        ch_genome.map { genome -> [ [id:genome.baseName], genome ] },
-        ch_reference_transcripts.map { gtf -> [ [id:gtf.baseName], gtf ] }
-      )
+      if (cigar_extension) {
+        ISOTOOLS_CIGAR_EXTENSION(
+          ch_aligned_bam,
+          ch_aligned_bai,
+          ch_genome.map { genome -> [ [id:genome.baseName], genome ] },
+          ch_reference_transcripts.map { gtf -> [ [id:gtf.baseName], gtf ] }
+        )
 
-      ISOTOOLS_FIND_FRAGMENTS(
-        ISOTOOLS_CIGAR_EXTENSION.out.extended,
-        ch_pooled_reads
-      )
+        // WARN: replacing ch_aligned_bam with [ meta, bam, bai ]
+        ch_aligned_bam = ISOTOOLS_CIGAR_EXTENSION.out.extended
+
+        ISOTOOLS_FIND_FRAGMENTS(
+          ISOTOOLS_CIGAR_EXTENSION.out.extended,
+          ch_pooled_reads
+        )
+
+        ch_versions = ch_versions.mix(ISOTOOLS_CIGAR_EXTENSION.out.versions)
+      } else {
+        ISOTOOLS_FIND_FRAGMENTS(
+          ch_aligned_bam.join(ch_aligned_bai),
+          ch_pooled_reads
+        )
+
+        // WARN: replacing ch_aligned_bam with [ meta, bam, bai ]
+        ch_aligned_bam = ch_aligned_bam.join(ch_aligned_bai)
+      }
 
       if (minimap2_use_junc_bed) {
           MINIMAP2_ALIGN_FRAGMENTS(
@@ -195,7 +211,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           .join(SAMTOOLS_BAM_FRAGMENTS.out.bai)
           .set { ch_fragments_bam }
 
-      ISOTOOLS_SEGMENT_POLYA(ISOTOOLS_CIGAR_EXTENSION.out.extended) // INFO: polyA tails + cigar 
+      ISOTOOLS_SEGMENT_POLYA(ch_aligned_bam) // INFO: polyA tails + cigar 
       ISOTOOLS_SEGMENT_POLYA_FRAGMENTS(ch_fragments_bam) // INFO: fragments + cigar
 
       ISOTOOLS_SEGMENT_POLYA.out.hq_bed
@@ -237,6 +253,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
       ch_versions = ch_versions.mix(MINIMAP2_ALIGN.out.versions)
       ch_versions = ch_versions.mix(ISOTOOLS_SEGMENT_POLYA.out.versions)
       ch_versions = ch_versions.mix(ISOTOOLS_FUSION_DETECTOR.out.versions)
+      ch_versions = ch_versions.mix(ISOTOOLS_FIND_FRAGMENTS.out.versions)
 
     emit:
       reads    = ISOTOOLS_FUSION_DETECTOR.out.free_fusion

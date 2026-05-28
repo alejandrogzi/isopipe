@@ -10,7 +10,7 @@ use splicing::{
     calibration::{build_null_profile, derive_spliceai_score, make_bins},
     cli::Args,
     genome::get_dinucleotide_count,
-    spliceai::get_splice_scores,
+    spliceai::{get_splice_scores, include_region_splice_sites},
 };
 
 fn main() {
@@ -39,8 +39,11 @@ fn main() {
     });
     let chroms = genome.keys().cloned().collect::<Vec<Vec<u8>>>();
 
-    let (donors, acceptors, ss_coord_donors, ss_coord_acceptors) =
-        get_ss_from_annotation(&genome, args.regions);
+    let region_position = args
+        .include_ss_from_regions
+        .then_some(args.position_for_ss_regions);
+    let (donors, acceptors, ss_coord_donors, ss_coord_acceptors, region_donors, region_acceptors) =
+        get_ss_from_annotation(&genome, args.regions, region_position);
 
     let donor_profile = build_null_profile("donor", &donors, &dinucleotide_count);
     let acceptor_profile = build_null_profile("acceptor", &acceptors, &dinucleotide_count);
@@ -50,6 +53,16 @@ fn main() {
             error!("ERROR: failed to load SpliceAI BigWigs: {}", e);
             std::process::exit(1);
         });
+
+    if args.include_ss_from_regions {
+        include_region_splice_sites(
+            &spliceai_donor_scores,
+            &spliceai_acceptor_scores,
+            &region_donors,
+            &region_acceptors,
+            args.score_for_ss_regions,
+        );
+    }
 
     let donor_bins = make_bins(
         &spliceai_donor_scores,

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alejandro Gonzalez-Irribarren <alejandrxgzi@gmail.com>
 // Distributed under the terms of the Apache License, Version 2.0.
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use log::Level;
 use std::path::PathBuf;
 
@@ -11,6 +11,43 @@ pub const SPLICE_AI_SCORE_RECOVERY_THRESHOLD: f32 = 0.001;
 pub const DEFAULT_SCORE_FLOOR: i32 = -4;
 /// Default maximum derived score value.
 pub const DEFAULT_SCORE_CEILING: i32 = 13;
+/// Default synthetic SpliceAI score for splice sites included from regions.
+pub const DEFAULT_SS_REGION_SCORE: f32 = 0.5;
+
+/// Region feature class used to select splice sites for synthetic inclusion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum SsRegionPosition {
+    /// Use splice sites from all exon junctions.
+    Exon,
+    /// Use splice sites from coding exon junctions only.
+    Cds,
+}
+
+impl std::fmt::Display for SsRegionPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SsRegionPosition::Exon => write!(f, "exon"),
+            SsRegionPosition::Cds => write!(f, "cds"),
+        }
+    }
+}
+
+/// Parses and validates the synthetic score used for region splice sites.
+pub fn parse_score_for_ss_regions(value: &str) -> Result<f32, String> {
+    let score = value
+        .parse::<f32>()
+        .map_err(|e| format!("invalid floating-point score: {e}"))?;
+
+    if !score.is_finite() {
+        return Err("score must be finite".to_string());
+    }
+
+    if !(0.0..=1.0).contains(&score) {
+        return Err("score must be between 0.0 and 1.0".to_string());
+    }
+
+    Ok(score)
+}
 
 #[derive(Debug, Parser)]
 #[command(name = "splicing", about = "derive spliceAi scores", version = env!("CARGO_PKG_VERSION"))]
@@ -97,4 +134,77 @@ pub struct Args {
         default_value_t = DEFAULT_SCORE_CEILING
     )]
     pub ceiling: i32,
+
+    #[arg(
+        short = 'S',
+        long = "include-ss-from-regions",
+        required = false,
+        help = "Include missing splice sites from --regions in the scored splice-site maps"
+    )]
+    pub include_ss_from_regions: bool,
+
+    #[arg(
+        short = 'K',
+        long = "score-for-ss-regions",
+        required = false,
+        value_name = "FLOAT",
+        help = "Synthetic SpliceAI score for missing splice sites from --regions when --include-ss-from-regions is set",
+        default_value_t = DEFAULT_SS_REGION_SCORE,
+        value_parser = parse_score_for_ss_regions
+    )]
+    pub score_for_ss_regions: f32,
+
+    #[arg(
+        short = 'P',
+        long = "position-for-ss-regions",
+        required = false,
+        value_name = "STRING",
+        help = "Use splice sites from all exon junctions or coding exon junctions only when --include-ss-from-regions is set",
+        value_enum,
+        default_value_t = SsRegionPosition::Exon
+    )]
+    pub position_for_ss_regions: SsRegionPosition,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_region_splice_site_options() {
+        let args = Args::try_parse_from([
+            "splicing",
+            "-b",
+            "bw",
+            "-r",
+            "regions.gtf",
+            "-S",
+            "-K",
+            "0.7",
+            "-P",
+            "cds",
+        ])
+        .unwrap();
+
+        assert!(args.include_ss_from_regions);
+        assert_eq!(args.score_for_ss_regions, 0.7);
+        assert_eq!(args.position_for_ss_regions, SsRegionPosition::Cds);
+    }
+
+    #[test]
+    fn rejects_invalid_region_splice_site_score() {
+        for score in ["-0.1", "1.1", "NaN"] {
+            let result =
+                Args::try_parse_from(["splicing", "-b", "bw", "-r", "regions.gtf", "-K", score]);
+            assert!(result.is_err(), "accepted invalid score {score}");
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_region_splice_site_position() {
+        let result =
+            Args::try_parse_from(["splicing", "-b", "bw", "-r", "regions.gtf", "-P", "intron"]);
+
+        assert!(result.is_err());
+    }
 }
