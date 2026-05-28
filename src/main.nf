@@ -90,6 +90,7 @@ workflow ISOPIPE {
         params.isotools_adapter_remove_adapters,
         params.global_prefix,
         params.collapse_shrink_twins,
+        params.isotools_cigar_extension_extend,
         ch_versions
       )
 
