@@ -6,7 +6,10 @@
 
 include { ISOSEQ } from '../isoseq/main.nf'
 include { GENOME } from '../genome/main.nf'
+include { GXF2BED } from '../../modules/custom/gxf2bed/main.nf'
+include { BED2GTF } from '../../modules/custom/bed2gtf/main.nf'
 include { MINIMAP2_INDEX } from '../../modules/nf-core/minimap2/index/main.nf'
+include { ULTRA_INDEX } from '../../modules/nf-core/ultra/index/main.nf'
 include { GENEPRED_LINT } from '../../modules/custom/genepred/lint/main.nf'
 include { SPLICING as MINISPLICE_GENOMIC_SPLICE_SCORES } from '../splicing/main.nf'
 include { SPLICING as SPLICEAI_GENOMIC_SPLICE_SCORES } from '../splicing/main.nf'
@@ -35,6 +38,9 @@ workflow PREPROCESSING {
       spliceai               // path
       compression            // bool
       global_prefix          // string
+      aligner                // string [ minimap2, ultra ]
+      ultra_use_annotation   // bool
+      ultra_index            // path
       ch_versions            // [ meta, versions.yml ]
 
     main:
@@ -42,29 +48,61 @@ workflow PREPROCESSING {
       ch_database = Channel.value(file(protein_database, checkIfExists: true))
 
       ch_reference_transcripts = Channel.value(file(annotation, checkIfExists: true))
+      ch_reference_transcripts_gtf = Channel.empty()
       GENEPRED_LINT(ch_reference_transcripts.map { file -> [ [ id:file.baseName ], file ] })
 
       if (annotation.endsWith(".gtf.gz")
         | annotation.endsWith(".gtf") 
         | annotation.endsWith(".gff.gz") 
         | annotation.endsWith(".gff")) {
-          GXF2BED(ch_reference_transcripts
-            .map { gtf -> [ [id:gtf.baseName], gtf ] })
+          ch_reference_transcripts_gtf = ch_reference_transcripts
+            .map { gtf -> [ [id:gtf.baseName], gtf ] }
+
+          GXF2BED(ch_reference_transcripts_gtf)
           ch_reference_transcripts = GXF2BED.out.bed
+      } else {
+          BED2GTF(
+            ch_reference_transcripts,
+            Channel.of([[:], []])
+          )
+
+          ch_reference_transcripts_gtf = BED2GTF.out.gtf
+          ch_reference_transcripts_gtf = ch_reference_transcripts.map { bed -> [ [id:bed.baseName], bed ] }
       }
 
       ch_reads = Channel.empty()
+      ch_genome_index = Channel.empty()
+      if (aligner == "minimap2") {
+        if (minimap2_index) {
+            ch_genome_index = Channel.value(file(minimap2_index, checkIfExists: true))
+                .map { path -> [ [id:path.name], path ] }
+        } else {
+            MINIMAP2_INDEX(
+                ch_genome.genome.map { genome -> [ [id:genome.baseName], genome ] }
+            )
+            ch_genome_index = MINIMAP2_INDEX.out.index
+            ch_versions = ch_versions.mix(MINIMAP2_INDEX.out.versions)
+        }
+      } else if (aligner == "ultra") {
+          if (ultra_index) {
+              ch_genome_index = Channel.value(file(ultra_index, checkIfExists: true))
+                  .map { path -> [ [id:path.name], path ] }
+          } else {
+              if (ultra_use_annotation) {
+                ULTRA_INDEX(
+                    ch_genome.genome.map { genome -> [ [id:genome.baseName], genome ] },
+                    ch_reference_transcripts_gtf
+                )
+              } else {
+                ULTRA_INDEX(
+                    ch_genome.genome.map { genome -> [ [id:genome.baseName], genome ] },
+                    Channel.of([[:], []])
+                )
+              }
 
-      ch_minimap2_index = Channel.empty()
-      if (minimap2_index) {
-          ch_minimap2_index = Channel.value(file(minimap2_index, checkIfExists: true))
-              .map { path -> [ [id:path.name], path ] }
-      } else {
-          MINIMAP2_INDEX(
-              ch_genome.genome.map { genome -> [ [id:genome.baseName], genome ] }
-          )
-          ch_minimap2_index = MINIMAP2_INDEX.out.index
-          ch_versions = ch_versions.mix(MINIMAP2_INDEX.out.versions)
+              ch_genome_index = ULTRA_INDEX.out.index
+              ch_versions = ch_versions.mix(ULTRA_INDEX.out.versions)
+          }
       }
 
       ch_splice_scores = Channel.empty()
@@ -135,13 +173,14 @@ workflow PREPROCESSING {
       ch_versions = ch_versions.mix(ch_genome.versions)
 
     emit:
-      genome                = ch_genome.genome
-      database              = ch_database
-      reads                 = ch_reads
-      minimap2_index        = ch_minimap2_index
-      reference_transcripts = ch_reference_transcripts
-      splice_scores         = ch_splice_scores
-      bigwigs               = ch_spliceai_bigwigs
-      chrom_sizes           = ch_genome.chrom_sizes
-      versions              = ch_versions
+      genome                    = ch_genome.genome
+      database                  = ch_database
+      reads                     = ch_reads
+      genome_index              = ch_genome_index
+      reference_transcripts     = ch_reference_transcripts
+      reference_transcripts_gtf = ch_reference_transcripts_gtf
+      splice_scores             = ch_splice_scores
+      bigwigs                   = ch_spliceai_bigwigs
+      chrom_sizes               = ch_genome.chrom_sizes
+      versions                  = ch_versions
 }
