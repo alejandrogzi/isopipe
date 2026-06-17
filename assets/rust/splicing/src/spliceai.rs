@@ -233,58 +233,114 @@ pub struct RegionSpliceSite {
 impl RegionSpliceSite {
     /// Serializes this annotation splice site as a SpliceAI-like scored record.
     pub fn as_spliceai_record(&self, score: f32) -> Vec<u8> {
-        let score = score.to_string();
-        let mut record = Vec::with_capacity(
-            self.coordinate_key.len() + self.dinucleotide.len() + score.len() + 5,
-        );
-
-        record.extend_from_slice(&self.coordinate_key);
-        record.push(b'\t');
-        record.push(match self.splice_site {
-            SpliceSite::Donor => b'D',
-            SpliceSite::Acceptor => b'A',
-        });
-        record.push(b'\t');
-        record.extend_from_slice(score.as_bytes());
-        record.push(b'\t');
-        record.extend_from_slice(&self.dinucleotide);
-
-        record
+        make_spliceai_record(
+            &self.coordinate_key,
+            self.splice_site,
+            score,
+            &self.dinucleotide,
+        )
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RegionSpliceSiteInclusionCounts {
+    pub donor_included: usize,
+    pub acceptor_included: usize,
+    pub donor_bonus_adjusted: usize,
+    pub acceptor_bonus_adjusted: usize,
+}
+
+#[derive(Debug, Clone)]
+struct ExistingSpliceAiRecord {
+    chr: String,
+    record: Vec<u8>,
+    splice_site: SpliceSite,
+    score: f32,
+    dinucleotide: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+struct BonusSpliceSiteUpdate {
+    chr: String,
+    old_record: Vec<u8>,
+    new_record: Vec<u8>,
+}
+
+fn make_spliceai_record(
+    coordinate_key: &[u8],
+    splice_site: SpliceSite,
+    score: f32,
+    dinucleotide: &[u8],
+) -> Vec<u8> {
+    let score = score.to_string();
+    let mut record =
+        Vec::with_capacity(coordinate_key.len() + dinucleotide.len() + score.len() + 5);
+
+    record.extend_from_slice(coordinate_key);
+    record.push(b'\t');
+    record.push(match splice_site {
+        SpliceSite::Donor => b'D',
+        SpliceSite::Acceptor => b'A',
+    });
+    record.push(b'\t');
+    record.extend_from_slice(score.as_bytes());
+    record.push(b'\t');
+    record.extend_from_slice(dinucleotide);
+
+    record
 }
 
 /// Adds missing region-derived splice sites to donor and acceptor score maps.
 ///
-/// Existing BigWig-derived scores are kept. A region site is added only if the matching
-/// donor/acceptor map has no record with the same coordinate key.
+/// Existing BigWig-derived scores are kept unless `bonus` is set. A region site is added only
+/// if the matching donor/acceptor map has no record with the same coordinate key. The bonus is
+/// applied only to annotation splice sites already present in the BigWig-derived maps, capped at
+/// 1.0, and never to newly inserted synthetic records.
 pub fn include_region_splice_sites(
     donor_scores: &StrandSpliceMap,
     acceptor_scores: &StrandSpliceMap,
     region_donors: &DashSet<RegionSpliceSite>,
     region_acceptors: &DashSet<RegionSpliceSite>,
     score: f32,
-) -> (usize, usize) {
-    let donor_count = include_region_splice_sites_for_map(
+    bonus: bool,
+    bonus_score: f32,
+) -> RegionSpliceSiteInclusionCounts {
+    let (donor_included, donor_bonus_adjusted) = include_region_splice_sites_for_map(
         "donor",
         donor_scores,
         region_donors,
         SpliceSite::Donor,
         score,
+        bonus,
+        bonus_score,
     );
-    let acceptor_count = include_region_splice_sites_for_map(
+    let (acceptor_included, acceptor_bonus_adjusted) = include_region_splice_sites_for_map(
         "acceptor",
         acceptor_scores,
         region_acceptors,
         SpliceSite::Acceptor,
         score,
+        bonus,
+        bonus_score,
     );
 
     info!(
         "Included {} donor and {} acceptor splice sites from regions with synthetic score {}",
-        donor_count, acceptor_count, score
+        donor_included, acceptor_included, score
     );
+    if bonus {
+        info!(
+            "Applied region splice-site bonus {} to {} donor and {} acceptor BigWig-backed records",
+            bonus_score, donor_bonus_adjusted, acceptor_bonus_adjusted
+        );
+    }
 
-    (donor_count, acceptor_count)
+    RegionSpliceSiteInclusionCounts {
+        donor_included,
+        acceptor_included,
+        donor_bonus_adjusted,
+        acceptor_bonus_adjusted,
+    }
 }
 
 fn include_region_splice_sites_for_map(
@@ -293,10 +349,13 @@ fn include_region_splice_sites_for_map(
     region_sites: &DashSet<RegionSpliceSite>,
     expected_splice_site: SpliceSite,
     score: f32,
-) -> usize {
-    let mut existing_coordinates = HashSet::new();
+    bonus: bool,
+    bonus_score: f32,
+) -> (usize, usize) {
+    let mut existing_records = HashMap::new();
 
     scores.iter().for_each(|entry| {
+        let chr = entry.key().clone();
         entry.value().iter().for_each(|record| {
             let Some(parsed) = parse_spliceai_record(record.as_slice()) else {
                 warn!(
@@ -307,10 +366,22 @@ fn include_region_splice_sites_for_map(
                 return;
             };
 
-            existing_coordinates.insert(parsed.coordinate_key);
+            existing_records.insert(
+                parsed.coordinate_key,
+                ExistingSpliceAiRecord {
+                    chr: chr.clone(),
+                    record: record.as_slice().to_vec(),
+                    splice_site: parsed.splice_site,
+                    score: parsed.score,
+                    dinucleotide: parsed.dinucleotide,
+                },
+            );
         });
     });
 
+    let mut seen_coordinates = existing_records.keys().cloned().collect::<HashSet<_>>();
+    let mut bonus_coordinates = HashSet::new();
+    let mut bonus_updates = Vec::new();
     let mut included = 0;
     region_sites.iter().for_each(|site| {
         if site.splice_site != expected_splice_site {
@@ -323,7 +394,47 @@ fn include_region_splice_sites_for_map(
             return;
         }
 
-        if !existing_coordinates.insert(site.coordinate_key.clone()) {
+        if let Some(existing) = existing_records.get(&site.coordinate_key) {
+            if bonus {
+                if !bonus_coordinates.insert(site.coordinate_key.clone()) {
+                    return;
+                }
+                if existing.splice_site != expected_splice_site {
+                    warn!(
+                        "Skipping bonus for {:?} record found in {} collection: {}",
+                        existing.splice_site,
+                        label,
+                        String::from_utf8_lossy(&existing.record)
+                    );
+                    return;
+                }
+                if !existing.score.is_finite() {
+                    warn!(
+                        "Skipping bonus for non-finite score in {} collection: {}",
+                        label,
+                        String::from_utf8_lossy(&existing.record)
+                    );
+                    return;
+                }
+
+                let adjusted_score = (existing.score + bonus_score).min(1.0);
+                if adjusted_score > existing.score {
+                    bonus_updates.push(BonusSpliceSiteUpdate {
+                        chr: existing.chr.clone(),
+                        old_record: existing.record.clone(),
+                        new_record: make_spliceai_record(
+                            &site.coordinate_key,
+                            existing.splice_site,
+                            adjusted_score,
+                            &existing.dinucleotide,
+                        ),
+                    });
+                }
+            }
+            return;
+        }
+
+        if !seen_coordinates.insert(site.coordinate_key.clone()) {
             return;
         }
 
@@ -335,7 +446,25 @@ fn include_region_splice_sites_for_map(
         included += 1;
     });
 
-    included
+    let bonus_adjusted = apply_bonus_updates(scores, bonus_updates);
+    (included, bonus_adjusted)
+}
+
+fn apply_bonus_updates(scores: &StrandSpliceMap, updates: Vec<BonusSpliceSiteUpdate>) -> usize {
+    let mut adjusted = 0;
+
+    updates.into_iter().for_each(|update| {
+        let Some(records) = scores.get(&update.chr) else {
+            return;
+        };
+
+        if records.remove(&update.old_record).is_some() {
+            records.insert(update.new_record);
+            adjusted += 1;
+        }
+    });
+
+    adjusted
 }
 
 /// Classification of a SpliceAI BigWig file by splice site type and strand.
@@ -1140,6 +1269,21 @@ mod tests {
         value.as_bytes().to_vec()
     }
 
+    fn parsed_record_for(
+        scores: &StrandSpliceMap,
+        chr: &str,
+        coordinate: &[u8],
+    ) -> ParsedSpliceAiRecord {
+        let records = scores.get(chr).unwrap();
+        records
+            .iter()
+            .find_map(|record| {
+                let parsed = parse_spliceai_record(record.as_slice())?;
+                (parsed.coordinate_key.as_slice() == coordinate).then_some(parsed)
+            })
+            .unwrap()
+    }
+
     #[test]
     fn parse_spliceai_record_extracts_expected_fields() {
         let parsed = parse_spliceai_record(b"chr1:42(-)\tA\t0.75\tag").unwrap();
@@ -1189,16 +1333,20 @@ mod tests {
             dinucleotide: bytes("AG"),
         });
 
-        let (donor_count, acceptor_count) = include_region_splice_sites(
+        let counts = include_region_splice_sites(
             &donor_scores,
             &acceptor_scores,
             &region_donors,
             &region_acceptors,
             0.5,
+            false,
+            0.25,
         );
 
-        assert_eq!(donor_count, 1);
-        assert_eq!(acceptor_count, 1);
+        assert_eq!(counts.donor_included, 1);
+        assert_eq!(counts.acceptor_included, 1);
+        assert_eq!(counts.donor_bonus_adjusted, 0);
+        assert_eq!(counts.acceptor_bonus_adjusted, 0);
 
         let donor_chr1 = donor_scores.get("chr1").unwrap();
         assert_eq!(donor_chr1.len(), 2);
@@ -1225,6 +1373,88 @@ mod tests {
         assert_eq!(parsed.coordinate_key, bytes("chr1:10(+)"));
         assert_eq!(parsed.splice_site, SpliceSite::Acceptor);
         assert_eq!(parsed.score, 0.5);
+    }
+
+    #[test]
+    fn include_region_splice_sites_applies_bonus_to_existing_coordinates() {
+        let donor_scores = DashMap::new();
+        let donor_sites = DashSet::new();
+        donor_sites.insert(bytes("chr1:10(+)\tD\t0.9\tGT"));
+        donor_sites.insert(bytes("chr1:20(+)\tD\t0.6\tGT"));
+        donor_scores.insert("chr1".to_string(), donor_sites);
+
+        let acceptor_scores = DashMap::new();
+        let acceptor_sites = DashSet::new();
+        acceptor_sites.insert(bytes("chr1:40(+)\tA\t0.8\tAG"));
+        acceptor_scores.insert("chr1".to_string(), acceptor_sites);
+
+        let region_donors = DashSet::new();
+        region_donors.insert(RegionSpliceSite {
+            coordinate_key: bytes("chr1:10(+)"),
+            chr: bytes("chr1"),
+            position: 10,
+            strand: Strand::Forward,
+            splice_site: SpliceSite::Donor,
+            dinucleotide: bytes("GT"),
+        });
+        region_donors.insert(RegionSpliceSite {
+            coordinate_key: bytes("chr1:20(+)"),
+            chr: bytes("chr1"),
+            position: 20,
+            strand: Strand::Forward,
+            splice_site: SpliceSite::Donor,
+            dinucleotide: bytes("GT"),
+        });
+        region_donors.insert(RegionSpliceSite {
+            coordinate_key: bytes("chr1:30(+)"),
+            chr: bytes("chr1"),
+            position: 30,
+            strand: Strand::Forward,
+            splice_site: SpliceSite::Donor,
+            dinucleotide: bytes("GT"),
+        });
+
+        let region_acceptors = DashSet::new();
+        region_acceptors.insert(RegionSpliceSite {
+            coordinate_key: bytes("chr1:40(+)"),
+            chr: bytes("chr1"),
+            position: 40,
+            strand: Strand::Forward,
+            splice_site: SpliceSite::Acceptor,
+            dinucleotide: bytes("AG"),
+        });
+
+        let counts = include_region_splice_sites(
+            &donor_scores,
+            &acceptor_scores,
+            &region_donors,
+            &region_acceptors,
+            0.5,
+            true,
+            0.25,
+        );
+
+        assert_eq!(counts.donor_included, 1);
+        assert_eq!(counts.acceptor_included, 0);
+        assert_eq!(counts.donor_bonus_adjusted, 2);
+        assert_eq!(counts.acceptor_bonus_adjusted, 1);
+
+        assert_eq!(
+            parsed_record_for(&donor_scores, "chr1", b"chr1:10(+)").score,
+            1.0
+        );
+        assert!(
+            (parsed_record_for(&donor_scores, "chr1", b"chr1:20(+)").score - 0.85).abs()
+                < f32::EPSILON
+        );
+        assert_eq!(
+            parsed_record_for(&donor_scores, "chr1", b"chr1:30(+)").score,
+            0.5
+        );
+        assert_eq!(
+            parsed_record_for(&acceptor_scores, "chr1", b"chr1:40(+)").score,
+            1.0
+        );
     }
 
     #[test]

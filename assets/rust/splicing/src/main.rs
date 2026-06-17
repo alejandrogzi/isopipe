@@ -61,6 +61,8 @@ fn main() {
             &region_donors,
             &region_acceptors,
             args.score_for_ss_regions,
+            args.bonus,
+            args.bonus_score,
         );
     }
 
