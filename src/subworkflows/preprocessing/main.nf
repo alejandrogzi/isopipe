@@ -67,7 +67,7 @@ workflow PREPROCESSING {
           )
 
           ch_reference_transcripts_gtf = BED2GTF.out.gtf
-          ch_reference_transcripts_gtf = ch_reference_transcripts.map { bed -> [ [id:bed.baseName], bed ] }
+          ch_reference_transcripts = ch_reference_transcripts.map { bed -> [ [id:bed.baseName], bed ] }
       }
 
       ch_reads = Channel.empty()

@@ -29,7 +29,7 @@ workflow SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS {
       ch_reads                 // [ meta, reads ]
       ch_genome                // [ genome ]
       ch_genome_index          // [ meta, index ]
-      ch_reference_transcripts // [ file ]
+      ch_reference_transcripts // [ meta, bed ]
       cluster_mode             // string [ per_sample, multi_sample, both ]
       entrypoint               // string [ isoseq, map ]
       remove_adapters          // bool
@@ -173,7 +173,10 @@ workflow SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS {
 
       // INFO: Fusion detection ///////////////////////////////////
 
-      ISOTOOLS_FUSION_DETECTOR(ch_aligned_segmented_collapsed, ch_reference_transcripts)
+      ISOTOOLS_FUSION_DETECTOR(
+        ch_aligned_segmented_collapsed, 
+        ch_reference_transcripts
+      )
 
       ch_versions = ch_versions.mix(FXSPLIT.out.versions)
       ch_versions = ch_versions.mix(ULTRA_ALIGN.out.versions)

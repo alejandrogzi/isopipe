@@ -34,7 +34,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
       ch_reads                 // [ meta, reads ]
       ch_genome                // [ genome ]
       ch_genome_index          // [ meta, index ]
-      ch_reference_transcripts // [ file ]
+      ch_reference_transcripts // [ meta, bed ]
       ch_splice_scores         // [ meta, scores ]
       cluster_mode             // string [ per_sample, multi_sample, both ]
       entrypoint               // string [ isoseq, map ]
@@ -69,10 +69,6 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
             ch_genome_index,
             ch_splice_scores,
             ch_reference_transcripts
-              .map {
-                junctions ->
-                [ [id:junctions.baseName], junctions ]
-              }
           )
       } else {
           MINIMAP2_ALIGN(
@@ -175,7 +171,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           ch_aligned_bam,
           ch_aligned_bai,
           ch_genome.map { genome -> [ [id:genome.baseName], genome ] },
-          ch_reference_transcripts.map { gtf -> [ [id:gtf.baseName], gtf ] }
+          ch_reference_transcripts
         )
 
         // WARN: replacing ch_aligned_bam with [ meta, bam, bai ]
@@ -205,10 +201,6 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
             ch_genome_index,
             ch_splice_scores,
             ch_reference_transcripts
-              .map {
-                junctions ->
-                [ [id:junctions.baseName], junctions ]
-              }
           )
       } else {
           MINIMAP2_ALIGN_FRAGMENTS(
@@ -263,7 +255,10 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
         ch_aligned_segmented_collapsed = ch_aligned_segmented_hq_per_chr
       }
 
-      ISOTOOLS_FUSION_DETECTOR(ch_aligned_segmented_collapsed, ch_reference_transcripts)
+      ISOTOOLS_FUSION_DETECTOR(
+        ch_aligned_segmented_collapsed, 
+        ch_reference_transcripts
+      )
 
       ch_versions = ch_versions.mix(FXSPLIT.out.versions)
       ch_versions = ch_versions.mix(MINIMAP2_ALIGN.out.versions)
