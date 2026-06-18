@@ -31,7 +31,8 @@ process SPLICEAI_DERIVE {
         --regions ${annotation} \\
         --prefix ${prefix} \\
         --include-ss-from-regions \\
-        --position-for-ss-regions cds
+        --position-for-ss-regions cds \\
+        --bonus
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
