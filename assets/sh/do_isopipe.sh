@@ -82,6 +82,7 @@ cat > "${run_dir}/params.json" <<EOF
     "// 1)": "Entrypoint / Global input options [ entrypoint: isoseq, map ] ───────────────────────────────────",
     "entrypoint": "${entrypoint}",
     "global_input_dir": "${input_dir}",
+    "global_output_dir": "${run_dir}",
     "global_genome": "${genome}",
     "global_annotation": "${annotation}",
     "global_primers": ${primers}",
