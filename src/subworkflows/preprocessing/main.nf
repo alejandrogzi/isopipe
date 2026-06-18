@@ -62,7 +62,7 @@ workflow PREPROCESSING {
           ch_reference_transcripts = GXF2BED.out.bed
       } else {
           BED2GTF(
-            ch_reference_transcripts,
+            ch_reference_transcripts.map { bed -> [ [id:bed.baseName], bed ] },
             Channel.of([[:], []])
           )
 
