@@ -58,7 +58,7 @@ workflow SPLICING {
             if (bigwigs) {
               SPLICEAI_DERIVE(
                   genome.map { genome -> [ [id:genome.baseName], genome ] },
-                  annotation.map { annotation -> [ [id:annotation.baseName], annotation ] },
+                  annotation,
                   ch_spliceai_bigwigs
               )
               ch_scores = SPLICEAI_DERIVE.out.scores
@@ -73,7 +73,7 @@ workflow SPLICING {
 
                 SPLICEAI_DERIVE(
                     genome.map { genome -> [ [id:genome.baseName], genome ] },
-                    annotation.map { annotation -> [ [id:annotation.baseName], annotation ] },
+                    annotation,
                     SPLICEAI_RUN.out.spliceai
                 )
 
