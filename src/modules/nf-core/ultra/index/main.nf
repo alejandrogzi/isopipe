@@ -12,7 +12,7 @@ process ULTRA_INDEX {
     tuple val(meta2), path(gtf)
 
     output:
-    tuple val(meta), path("*"), emit: index
+    tuple val(meta), path("index"), emit: index
     path "versions.yml",        emit: versions
 
     when:
@@ -22,13 +22,14 @@ process ULTRA_INDEX {
     def args = task.ext.args   ?: ''
     def disable_infer = gtf ? "--disable_infer" : ""
     """
+    mkdir index
     uLTRA \\
         index \\
         ${disable_infer} \\
         ${args} \\
         ${fasta} \\
         ${gtf} \\
-        .
+        index
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
@@ -40,27 +41,28 @@ process ULTRA_INDEX {
 
     stub:
     """
-    touch database.db
-    touch all_splice_pairs_annotations.pickle
-    touch all_splice_sites_annotations.pickle
-    touch chr_to_id.pickle
-    touch exon_choordinates_to_id.pickle
-    touch flank_choordinates.pickle
-    touch gene_to_small_segments.pickle
-    touch id_to_chr.pickle
-    touch max_intron_chr.pickle
-    touch parts_to_segments.pickle
-    touch ref_exon_sequences.pickle
-    touch ref_flank_sequences.pickle
-    touch ref_part_sequences.pickle
-    touch ref_segment_sequences.pickle
-    touch refs_id_lengths.pickle
-    touch refs_lengths.pickle
-    touch segment_id_to_choordinates.pickle
-    touch segment_to_gene.pickle
-    touch segment_to_ref.pickle
-    touch splices_to_transcripts.pickle
-    touch transcripts_to_splices.pickle
+    mkdir index
+    touch index/database.db
+    touch index/all_splice_pairs_annotations.pickle
+    touch index/all_splice_sites_annotations.pickle
+    touch index/chr_to_id.pickle
+    touch index/exon_choordinates_to_id.pickle
+    touch index/flank_choordinates.pickle
+    touch index/gene_to_small_segments.pickle
+    touch index/id_to_chr.pickle
+    touch index/max_intron_chr.pickle
+    touch index/parts_to_segments.pickle
+    touch index/ref_exon_sequences.pickle
+    touch index/ref_flank_sequences.pickle
+    touch index/ref_part_sequences.pickle
+    touch index/ref_segment_sequences.pickle
+    touch index/refs_id_lengths.pickle
+    touch index/refs_lengths.pickle
+    touch index/segment_id_to_choordinates.pickle
+    touch index/segment_to_gene.pickle
+    touch index/segment_to_ref.pickle
+    touch index/splices_to_transcripts.pickle
+    touch index/transcripts_to_splices.pickle
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
