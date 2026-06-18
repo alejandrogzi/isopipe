@@ -13,6 +13,7 @@ nextflow.enable.dsl=2
 include { PREPROCESSING } from './subworkflows/preprocessing/main.nf'
 
 include { SPLIT_ALIGN_CLEAN_CHUNKS } from './subworkflows/split_align/main.nf'
+include { SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS } from './subworkflows/ultra_align/main.nf'
 
 include { PREPOLISH as ISOTOOLS_PREPOLISH } from './subworkflows/prepolish/main.nf'
 include { POLISH as ISOTOOLS_POLISH } from './subworkflows/polish/main.nf'
@@ -75,24 +76,48 @@ workflow ISOPIPE {
         params.spliceai_scores_path,
         params.spliceai_chunk_compression,
         params.global_prefix,
+        params.aligner,
+        params.ultra_use_annotation,
+        params.ultra_index,
         ch_versions
       )
+      
+      if (params.aligner == "minimap2") {
+        SPLIT_ALIGN_CLEAN_CHUNKS(
+          PREPROCESSING.out.reads,
+          PREPROCESSING.out.genome,
+          PREPROCESSING.out.genome_index,
+          PREPROCESSING.out.reference_transcripts,
+          PREPROCESSING.out.splice_scores,
+          params.isoseq_cluster2_mode,
+          params.entrypoint,
+          params.minimap2_align_use_junc_bed,
+          params.isotools_adapter_remove_adapters,
+          params.global_prefix,
+          params.collapse_shrink_twins,
+          params.isotools_cigar_extension_extend,
+          ch_versions
+        )
 
-      SPLIT_ALIGN_CLEAN_CHUNKS(
-        PREPROCESSING.out.reads,
-        PREPROCESSING.out.genome,
-        PREPROCESSING.out.minimap2_index,
-        PREPROCESSING.out.reference_transcripts,
-        PREPROCESSING.out.splice_scores,
-        params.isoseq_cluster2_mode,
-        params.entrypoint,
-        params.minimap2_align_use_junc_bed,
-        params.isotools_adapter_remove_adapters,
-        params.global_prefix,
-        params.collapse_shrink_twins,
-        params.isotools_cigar_extension_extend,
-        ch_versions
-      )
+        ch_reads = SPLIT_ALIGN_CLEAN_CHUNKS.out.reads
+        ch_fusions = SPLIT_ALIGN_CLEAN_CHUNKS.out.fusions
+      } else if (params.aligner == "ultra") {
+        SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS(
+          PREPROCESSING.out.reads,
+          PREPROCESSING.out.genome,
+          PREPROCESSING.out.genome_index,
+          PREPROCESSING.out.reference_transcripts,
+          params.isoseq_cluster2_mode,
+          params.entrypoint,
+          params.isotools_adapter_remove_adapters,
+          params.global_prefix,
+          params.collapse_shrink_twins,
+          ch_versions
+        )
+
+        ch_reads = SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS.out.reads
+        ch_fusions = SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS.out.fusions
+      }
 
       ch_samba_weights = Channel.empty()
       if (params.xorf_samba_local_weights) {
@@ -109,7 +134,7 @@ workflow ISOPIPE {
       }
 
       XORF_PREDICT_ORFS(
-          SPLIT_ALIGN_CLEAN_CHUNKS.out.reads,
+          ch_reads,
           PREPROCESSING.out.genome,
           PREPROCESSING.out.database,
           params.global_output_dir,
@@ -123,7 +148,7 @@ workflow ISOPIPE {
           .set { ch_orf_predictions_bed }
 
       XORF_PREDICT_FUSION_ORFS(
-          SPLIT_ALIGN_CLEAN_CHUNKS.out.fusions,
+          ch_fusions,
           PREPROCESSING.out.genome,
           PREPROCESSING.out.database,
           params.global_output_dir,

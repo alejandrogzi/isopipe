@@ -22,13 +22,16 @@ process FXSPLIT {
     def args          = task.ext.args   ?: ''
     def prefix        = task.ext.prefix ?: "${meta.id}"
     def chunks        = task.ext.chunks ?: 400000
-    def gzip          = reads.name.endsWith('.gz') ? true : false
+
+    def is_gzip          = reads.name.endsWith('.gz') ? true : false
+    def gzip             = is_gzip ? '-G gzip' : ''
     """
     fxsplit \\
         $args \\
         -f $reads \\
         -c $chunks \\
         -t $task.cpus \\
+        $gzip \\
         -C \\
         --suffix ${prefix}
 
@@ -58,12 +61,12 @@ process FXSPLIT {
         done
     fi
 
-    if [ $gzip == true ]; then
+    if [ $is_gzip == true ]; then
         mkdir chunks/gz
-        mv chunks/*fast*.gz chunks/gz
+        mv chunks/*f*.gz chunks/gz/
     else
         mkdir chunks/fx
-        mv chunks/*fast* chunks/fx
+        mv chunks/*f* chunks/fx/
     fi
 
     cat <<-END_VERSIONS > versions.yml

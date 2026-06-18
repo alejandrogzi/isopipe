@@ -29,6 +29,7 @@ process XLOCI_INTRON {
         -o . \\
         -s $genome \\
         -r $reads \\
+        --unmask \\
         -t $task.cpus \\
         --prefix ${prefix}
 

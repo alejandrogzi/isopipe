@@ -13,6 +13,8 @@ pub const DEFAULT_SCORE_FLOOR: i32 = -4;
 pub const DEFAULT_SCORE_CEILING: i32 = 13;
 /// Default synthetic SpliceAI score for splice sites included from regions.
 pub const DEFAULT_SS_REGION_SCORE: f32 = 0.5;
+/// Default bonus for annotation splice sites already present in BigWig files.
+pub const DEFAULT_BONUS_FOR_SS_REGIONS: f32 = 0.25;
 
 /// Region feature class used to select splice sites for synthetic inclusion.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -32,7 +34,7 @@ impl std::fmt::Display for SsRegionPosition {
     }
 }
 
-/// Parses and validates the synthetic score used for region splice sites.
+/// Parses and validates a SpliceAI score-like value.
 pub fn parse_score_for_ss_regions(value: &str) -> Result<f32, String> {
     let score = value
         .parse::<f32>()
@@ -155,6 +157,25 @@ pub struct Args {
     pub score_for_ss_regions: f32,
 
     #[arg(
+        short = 'B',
+        long = "bonus",
+        required = false,
+        help = "Add --bonus-score to annotated splice sites already present in BigWigs when --include-ss-from-regions is set"
+    )]
+    pub bonus: bool,
+
+    #[arg(
+        short = 'J',
+        long = "bonus-score",
+        required = false,
+        value_name = "FLOAT",
+        help = "Bonus added to annotated splice sites already present in BigWigs when --bonus is set",
+        default_value_t = DEFAULT_BONUS_FOR_SS_REGIONS,
+        value_parser = parse_score_for_ss_regions
+    )]
+    pub bonus_score: f32,
+
+    #[arg(
         short = 'P',
         long = "position-for-ss-regions",
         required = false,
@@ -181,6 +202,9 @@ mod tests {
             "-S",
             "-K",
             "0.7",
+            "-B",
+            "-J",
+            "0.3",
             "-P",
             "cds",
         ])
@@ -188,7 +212,17 @@ mod tests {
 
         assert!(args.include_ss_from_regions);
         assert_eq!(args.score_for_ss_regions, 0.7);
+        assert!(args.bonus);
+        assert_eq!(args.bonus_score, 0.3);
         assert_eq!(args.position_for_ss_regions, SsRegionPosition::Cds);
+    }
+
+    #[test]
+    fn defaults_region_splice_site_bonus_options() {
+        let args = Args::try_parse_from(["splicing", "-b", "bw", "-r", "regions.gtf"]).unwrap();
+
+        assert!(!args.bonus);
+        assert_eq!(args.bonus_score, DEFAULT_BONUS_FOR_SS_REGIONS);
     }
 
     #[test]
@@ -197,6 +231,15 @@ mod tests {
             let result =
                 Args::try_parse_from(["splicing", "-b", "bw", "-r", "regions.gtf", "-K", score]);
             assert!(result.is_err(), "accepted invalid score {score}");
+        }
+    }
+
+    #[test]
+    fn rejects_invalid_region_splice_site_bonus_score() {
+        for score in ["-0.1", "1.1", "NaN"] {
+            let result =
+                Args::try_parse_from(["splicing", "-b", "bw", "-r", "regions.gtf", "-J", score]);
+            assert!(result.is_err(), "accepted invalid bonus score {score}");
         }
     }
 

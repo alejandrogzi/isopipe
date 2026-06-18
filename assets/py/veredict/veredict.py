@@ -5,7 +5,7 @@ from __future__ import annotations
 __author__ = "Alejandro Gonzales-Irribarren"
 __email__ = "alejandrxgzi@gmail.com"
 __github__ = "https://github.com/alejandrogzi"
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 
 import argparse
 import logging
@@ -94,6 +94,7 @@ OUTPUT_FILENAMES: Dict[str, str] = {
     "truncations": "truncations.bed",
     "intraprimming": "intraprimming.bed",
     "rt": "rt.bed",
+    "artifact": "artifacts.bed",
 }
 
 
@@ -762,6 +763,10 @@ def bucket_rows(schema: pd.DataFrame, flaws: int) -> Dict[str, pd.DataFrame]:
     rt_mask = schema["R_code"].str.contains("X", regex=False, na=False)
     remaining_schema = schema.loc[~rt_mask].copy()
 
+    # Artifact routing takes precedence over flaw-based bucketing.
+    artifact_mask = schema["R_code"].str.contains("Q", regex=False, na=False)
+    remaining_schema = schema.loc[~artifact_mask].copy()
+
     status_columns = [spec.status_column for spec in STATUS_INPUT_SPECS]
     status_frame = remaining_schema.loc[:, status_columns].copy()
     fail_mask = status_frame.ne("PASS")
@@ -778,6 +783,7 @@ def bucket_rows(schema: pd.DataFrame, flaws: int) -> Dict[str, pd.DataFrame]:
 
     buckets: Dict[str, pd.DataFrame] = {
         "rt": schema.loc[rt_mask].copy(),
+        "artifact": schema.loc[artifact_mask].copy(),
         "pass": remaining_schema.loc[fail_counts.eq(0)].copy(),
         "trash": remaining_schema.loc[fail_counts.ge(flaws)].copy(),
     }
