@@ -12,8 +12,8 @@ process ULTRA_INDEX {
     tuple val(meta2), path(gtf)
 
     output:
-    tuple val(meta), path("*.db"), path("*.pickle")    , emit: index
-    path "versions.yml"                                , emit: versions
+    tuple val(meta), path("*"), emit: index
+    path "versions.yml",        emit: versions
 
     when:
     task.ext.when == null || task.ext.when

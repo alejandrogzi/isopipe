@@ -8,7 +8,7 @@ include { ULTRA_ALIGN } from '../../modules/nf-core/ultra/align/main.nf'
 
 include { FXSPLIT } from '../../modules/custom/fxsplit/main.nf'
 
-include { SAMTOOLS_MERGE as SAMTOOLS_MERGE_BAM_MULTI_SAMPLE } from '../../modules/custom/samtools/merge/main.nf'
+include { SAMTOOLS_MERGE as SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA } from '../../modules/custom/samtools/merge/main.nf'
 
 include { ISOTOOLS_SEGMENT as ISOTOOLS_SEGMENT_POLYA } from '../../modules/custom/isotools/segment/main.nf'
 include { ISOTOOLS_SEGMENT as ISOTOOLS_SEGMENT_POLYA_FRAGMENTS } from '../../modules/custom/isotools/segment/main.nf'
@@ -89,9 +89,9 @@ workflow SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS {
                 ], bams ] }
               .set { ch_joined_bam }
 
-          SAMTOOLS_MERGE_BAM_MULTI_SAMPLE(ch_joined_bam)
-          ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.bam
-          ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.bai
+          SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA(ch_joined_bam)
+          ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA.out.bam
+          ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA.out.bai
 
           ch_reads
             .map { meta, reads -> reads }
@@ -99,17 +99,17 @@ workflow SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS {
             .map { reads -> [ [ id: 'pooled.reads' ], reads ] }
             .set { ch_pooled_reads }
 
-          ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.versions)
+          ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA.out.versions)
         } else if (cluster_mode == "both") {
             ch_aligned_bam
               .map { meta, bam -> bam }
               .collect()
               .map { bams -> [ [ id: prefix ], bams ] }
               .set { ch_joined_bam }
-          SAMTOOLS_MERGE_BAM_MULTI_SAMPLE(ch_joined_bam)
+          SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA(ch_joined_bam)
 
-          ch_aligned_bam = ch_aligned_bam.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.bam)
-          ch_aligned_bai = ch_aligned_bai.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.bai)
+          ch_aligned_bam = ch_aligned_bam.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA.out.bam)
+          ch_aligned_bai = ch_aligned_bai.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA.out.bai)
 
           ch_reads
             .map { meta, reads -> reads }
@@ -117,7 +117,7 @@ workflow SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS {
             .map { reads -> [ [ id: 'pooled.reads' ], reads ] }
             .set { ch_pooled_reads }
 
-          ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE.out.versions)
+          ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA.out.versions)
         }
       }
 
@@ -135,6 +135,7 @@ workflow SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS {
 
       // INFO: Segment polyA tails ///////////////////////////////////
 
+      ch_aligned_bam = ch_aligned_bam.join(ch_aligned_bai)
       ISOTOOLS_SEGMENT_POLYA(ch_aligned_bam) // INFO: polyA tails + cigar 
       ISOTOOLS_SEGMENT_POLYA.out.hq_bed
           .set { ch_aligned_segmented }

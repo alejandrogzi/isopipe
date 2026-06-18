@@ -1,5 +1,5 @@
 process ULTRA_ALIGN {
-    tag "$meta.id"
+    tag "$meta.id chunk $meta.chunk"
     label 'process_medium'
 
     conda "${moduleDir}/environment.yml"
@@ -10,7 +10,7 @@ process ULTRA_ALIGN {
     input:
     tuple val(meta), path(reads)
     tuple val(meta2), path(genome)
-    tuple val(meta3), path(database), path(pickle)
+    tuple val(meta3), path(index)
 
     output:
     tuple val(meta), path("*.bam"), emit: bam
@@ -23,14 +23,15 @@ process ULTRA_ALIGN {
     script:
     def args   = task.ext.args   ?: ''
     def args2  = task.ext.args2  ?: ''
-    def prefix = task.ext.prefix ?: "${meta.id}"
+    def singleton = meta.singleton ? ".singleton" : ""
+    def prefix = task.ext.prefix ?: "${meta.id}.${meta.chunk}${singleton}"
     """
     uLTRA \\
         align \\
         --t $task.cpus \\
         --prefix $prefix \\
         --isoseq \\
-        --index ./ \\
+        --index $index \\
         $args \\
         $genome \\
         $reads \\
@@ -56,7 +57,7 @@ process ULTRA_ALIGN {
     """
 
     stub:
-    def prefix = task.ext.prefix ?: "${meta.id}"
+    def prefix = task.ext.prefix ?: "${meta.id}.${meta.chunk}${singleton}"
     """
     touch ${prefix}.bam
     touch ${prefix}.bai
