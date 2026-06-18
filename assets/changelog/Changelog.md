@@ -2,20 +2,27 @@
 
 ## [v2.0.21] - 2026-06-18
 
-### Breaking Changes
-- v2.0.21 -> ultra aligner branch
-- veredict.py impls new ARTIFACT output category v0.0.8
+This release introduces a major architectural shift with the integration of the Ultra aligner alongside the existing minimap2 pipeline, giving users the flexibility to choose between alignment backends. It also brings significant improvements to splicing score annotation, Veredict classification, and HPC job orchestration.
 
-### Features
-- splicing-rs v0.0.6 -> --bonus + --bonus-score for annotation derived spliced sites
-- add --unmask to xloci
+### Ultra aligner integration
+- Added a dedicated ultra aligner branch with new subworkflow `ultra_align/main.nf` and nf-core modules for `ultra/index` and `ultra/align`. The pipeline now branches at alignment-time: if `aligner = "minimap2"` the existing minimap2 path is used; if `aligner = "ultra"` the new Ultra path is taken, including Ultra-specific index preparation, alignment, BAM merging, and adapter removal.
+- Updated `main.nf`, `nextflow.config`, and preprocessing subworkflows to conditionally dispatch channels based on the selected aligner, and added `ultra_index` and `ultra_use_annotation` parameters.
+- Fixed merging step to be Ultra-specific and corrected input Ultra index channel wiring.
+- Updated collateral modules to align with the new aligner branching logic.
 
-### Fixes
-- update merging step to ultra-specific + fix input ultra index channels
+### Splicing score annotation
+- Bumped `splicing-rs` to v0.0.6, adding `--bonus` and `--bonus-score` flags to reward annotation-derived spliced sites during spliceai derive, improving the quality of junction-level scoring for annotated transcripts.
+- Propagated the `--bonus` flag through the spliceai derive module.
 
-### Chores
-- include --bonus for spliceai derive
-- update colateral modules to match new aligner procedure
+### Veredict classification
+- Veredict.py updated to v0.0.8, implementing a new `ARTIFACT` output category that allows the pipeline to explicitly flag and separate technical artifacts from genuine biological signals in the polishing step.
+
+### xloci improvements
+- Added `--unmask` option to xloci intron extraction, providing finer control over repeat masking during intron boundary delineation.
+
+### Infrastructure and HPC
+- Added a new HPC matrix scheduler script (`assets/sh/do_isopipe.sh`) to streamline job array submission and resource allocation across Slurm-based clusters.
+- Fixed annotation channel tuple propagation across downstream processes to prevent channel misalignment in multi-sample runs.
 
 ## [v2.0.20] - 2026-05-28
 
