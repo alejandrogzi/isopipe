@@ -30,6 +30,7 @@
     "// 5)": "Ultra options ────────────────────────────────────────",
     "ultra_index": null,
     "ultra_use_annotation": true,
+    "ultra_do_second_pass": true,
 
     "// 6)": "SpliceAI/minisplice options ────────────────────────────────────────",
     "spliceai_bigwigs_dir": null,
