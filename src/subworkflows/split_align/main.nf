@@ -195,21 +195,13 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
 
       // INFO: Re-alignment step ///////////////////////////////////
 
-      if (aligner_use_annotation) {
-          MINIMAP2_ALIGN_FRAGMENTS(
-            ISOTOOLS_FIND_FRAGMENTS.out.fasta,
-            ch_genome_index,
-            ch_splice_scores,
-            ch_reference_transcripts
-          )
-      } else {
-          MINIMAP2_ALIGN_FRAGMENTS(
-            ISOTOOLS_FIND_FRAGMENTS.out.fasta,
-            ch_genome_index,
-            ch_splice_scores,
-            Channel.value([[:], []])
-          )
-      }
+      MINIMAP2_ALIGN_FRAGMENTS(
+        ISOTOOLS_FIND_FRAGMENTS.out.fasta,
+        ch_genome_index,
+        ch_splice_scores,
+        ch_reference_transcripts
+      )
+
       SAMTOOLS_BAM_FRAGMENTS(MINIMAP2_ALIGN_FRAGMENTS.out.sam)
       SAMTOOLS_BAM_FRAGMENTS.out.bam
           .join(SAMTOOLS_BAM_FRAGMENTS.out.bai)

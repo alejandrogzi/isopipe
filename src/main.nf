@@ -79,6 +79,7 @@ workflow ISOPIPE {
         params.aligner,
         params.ultra_use_annotation,
         params.ultra_index,
+        params.ultra_do_second_pass,
         ch_versions
       )
       
@@ -106,12 +107,16 @@ workflow ISOPIPE {
           PREPROCESSING.out.reads,
           PREPROCESSING.out.genome,
           PREPROCESSING.out.genome_index,
+          PREPROCESSING.out.minimap2_index,
           PREPROCESSING.out.reference_transcripts,
+          PREPROCESSING.out.splice_scores,
           params.isoseq_cluster2_mode,
           params.entrypoint,
           params.isotools_adapter_remove_adapters,
           params.global_prefix,
           params.collapse_shrink_twins,
+          params.isotools_cigar_extension_extend,
+          params.ultra_do_second_pass,
           ch_versions
         )
 

@@ -41,6 +41,7 @@ workflow PREPROCESSING {
       aligner                // string [ minimap2, ultra ]
       ultra_use_annotation   // bool
       ultra_index            // path
+      ultra_do_second_pass   // bool
       ch_versions            // [ meta, versions.yml ]
 
     main:
@@ -72,6 +73,7 @@ workflow PREPROCESSING {
 
       ch_reads = Channel.empty()
       ch_genome_index = Channel.empty()
+      ch_ultra_minimap2_index = Channel.empty()
       if (aligner == "minimap2") {
         if (minimap2_index) {
             ch_genome_index = Channel.value(file(minimap2_index, checkIfExists: true))
@@ -102,6 +104,19 @@ workflow PREPROCESSING {
 
               ch_genome_index = ULTRA_INDEX.out.index
               ch_versions = ch_versions.mix(ULTRA_INDEX.out.versions)
+          }
+
+          if (ultra_do_second_pass) {
+              if (minimap2_index) {
+                  ch_ultra_minimap2_index = Channel.value(file(minimap2_index, checkIfExists: true))
+                      .map { path -> [ [id:path.name], path ] }
+              } else {
+                  MINIMAP2_INDEX(
+                      ch_genome.genome.map { genome -> [ [id:genome.baseName], genome ] }
+                  )
+                  ch_ultra_minimap2_index = MINIMAP2_INDEX.out.index
+                  ch_versions = ch_versions.mix(MINIMAP2_INDEX.out.versions)
+              }
           }
       }
 
@@ -177,6 +192,7 @@ workflow PREPROCESSING {
       database                  = ch_database
       reads                     = ch_reads
       genome_index              = ch_genome_index
+      minimap2_index            = ch_ultra_minimap2_index
       reference_transcripts     = ch_reference_transcripts
       reference_transcripts_gtf = ch_reference_transcripts_gtf
       splice_scores             = ch_splice_scores
