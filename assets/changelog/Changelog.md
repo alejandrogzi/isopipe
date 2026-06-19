@@ -1,5 +1,29 @@
 # Changelog
 
+## [v2.0.22] - 2026-06-19
+
+This release introduces a two-pass alignment strategy for the Ultra backend that significantly improves sensitivity for fragmented reads, along with finer-grained control over minimap2 junction scoring during splice site annotation. Several channel wiring bugs introduced in v2.0.21 have also been corrected.
+
+### Ultra two-pass alignment
+
+- Implemented a second pass in the Ultra alignment branch: after the initial Ultra alignment, reads undergo optional cigar extension and fragment detection via isotools, and the resulting fragments are re-aligned using minimap2 for higher-resolution junction placement. This is controlled by the new `ultra_do_second_pass` parameter (default: `true`).
+- Added the `ultra_max_intron_size` parameter (default: 300 kb) to configure the maximum intron length passed to the Ultra aligner.
+- Added new process modules for the ultra second pass: `MINIMAP2_ALIGN_FRAGMENTS_ULTRA`, `SAMTOOLS_BAM_FRAGMENTS_ULTRA`, and `ISOTOOLS_FIND_FRAGMENTS_ULTRA`, each with dedicated process configuration in `nextflow.config`.
+- Updated the preprocessing subworkflow to conditionally build a minimap2 index when Ultra is selected and `ultra_do_second_pass` is enabled, ensuring the second pass has the required index available.
+- Changed the Ultra merged BAM output directory from `06_ULTRA_ALIGN/MERGED` to `06_ULTRA_ALIGN/ULTRA_MERGED` to avoid ambiguity with other merge paths, and added `FRAGMENTS` publish directories for fragment-level SAM and BAM outputs.
+- The Ultra second pass fragments now flow through `ISOTOOLS_SEGMENT_POLYA_FRAGMENTS` and are mixed with the primary segmented output for downstream processing.
+
+### Minimap2 scoring granularity
+
+- The `--junc-bed` flag in `MINIMAP2_ALIGN` is now conditionally applied based on the new `ext.use_junc_bed` configuration value, allowing the pipeline to omit the junction bed when splice scores are available and should take precedence.
+- The `SPLICEAI_DERIVE` process arguments (`--include-ss-from-regions`, `--position-for-ss-regions`, `--bonus`) are now only applied when both `minimap2_align_use_junc_bed` and `minimap2_align_use_splice_scores` are enabled, preventing redundant or conflicting scoring modes.
+
+### Bug fixes
+
+- Corrected the annotation channel format in the `SPLICING` subworkflow to prevent the annotation path from being incorrectly wrapped in a meta tuple when passed to `SPLICEAI_DERIVE`.
+- Fixed `BED2GTF` invocation in the preprocessing subworkflow to supply a proper meta map instead of relying on the bed file's base name directly.
+- Ensured `global_output_dir` is properly referenced in the Slurm scheduler script (`assets/sh/do_isopipe.sh`).
+
 ## [v2.0.21] - 2026-06-18
 
 This release introduces a major architectural shift with the integration of the Ultra aligner alongside the existing minimap2 pipeline, giving users the flexibility to choose between alignment backends. It also brings significant improvements to splicing score annotation, Veredict classification, and HPC job orchestration.
