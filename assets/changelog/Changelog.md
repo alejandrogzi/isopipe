@@ -1,5 +1,34 @@
 # Changelog
 
+## [v2.0.23] - 2026-07-18
+
+This release expands the pipeline's alignment options with two new backends — deSALT and pbmm2 — giving users four aligners to choose from depending on their sequencing platform and sensitivity requirements. The minimap2 branch also receives several correctness fixes, particularly around second-pass gating and index preset configuration, along with minor resource tuning and a new xORF parameter.
+
+### New aligner backends
+
+- Added **deSALT** as a selectable aligner (`aligner = "desalt"`), a splice-aware long-read aligner well-suited for isoform discovery. The integration includes a new `DESALT_INDEX` module for building the deSALT genome index, a `DESALT_ALIGN` module for alignment with configurable annotation guidance via `desalt_use_annotation`, and a dedicated `desalt_align` subworkflow that handles chunking, alignment, BAM conversion, multi-sample merging, adapter removal, cigar extension, polyA segmentation, twin collapse, and fusion detection.
+- Added **pbmm2** as a selectable aligner (`aligner = "pbmm2"`), PacBio's official minimap2 wrapper optimized for CCS reads. The integration includes a `PBMM2_INDEX` module that builds the index using the `splice` preset, a `PBMM2_ALIGN` module using the `ISOSEQ` preset, and a dedicated `pbmm2_align` subworkflow covering the full post-alignment processing pipeline.
+- Updated the `aligner` parameter documentation and schema to reflect all four supported options: `minimap2`, `ultra`, `desalt`, and `pbmm2`.
+- Extended the preprocessing subworkflow with conditional index-building branches for deSALT and pbmm2, accepting new `desalt_index` and `pbmm2_index` parameters to support pre-built index paths.
+
+### Minimap2 indexing and second-pass fixes
+
+- Corrected the `MINIMAP2_INDEX` process configuration by adding `ext.args` with the appropriate `-x` splice alignment preset, ensuring the minimap2 index is built with the correct parameters for transcript-aware alignment.
+- Fixed `ext.use_junc_bed` assignment for both `MINIMAP2_ALIGN` and `MINIMAP2_ALIGN_FRAGMENTS` to properly reflect `!params.minimap2_align_use_splice_scores`, preventing the junction BED from being applied in scenarios where splice scores should take precedence.
+- Gated the entire fragment detection and second-pass re-alignment logic in the `split_align` subworkflow behind the new `minimap2_align_do_second_pass` parameter (default: `true`). When disabled, the pipeline skips fragment detection and minimap2 re-alignment entirely, proceeding directly to segmentation with the primary BAM. This mirrors the behavior already present in the Ultra backend and avoids unnecessary computation when the second pass is not needed.
+
+### xORF improvements
+
+- Added the `xorf_skip_netstart` parameter (default: `true`) to allow users to bypass NetStart-based start codon predictions during ORF calling, streamlining results when only canonical start codons are of interest.
+
+### Resource tuning
+
+- Reduced the `process_medium_high_memory` resource label from 6 CPUs and 96 GB to 4 CPUs and 36 GB per task attempt, providing a more cost-effective baseline for medium-memory workloads without compromising stability.
+
+### Chores
+
+- Bumped `isotools` and `xorf` submodules to their latest versions.
+
 ## [v2.0.22] - 2026-06-19
 
 This release introduces a two-pass alignment strategy for the Ultra backend that significantly improves sensitivity for fragmented reads, along with finer-grained control over minimap2 junction scoring during splice site annotation. Several channel wiring bugs introduced in v2.0.21 have also been corrected.
