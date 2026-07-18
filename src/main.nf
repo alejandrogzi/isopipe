@@ -14,6 +14,8 @@ include { PREPROCESSING } from './subworkflows/preprocessing/main.nf'
 
 include { SPLIT_ALIGN_CLEAN_CHUNKS } from './subworkflows/split_align/main.nf'
 include { SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS } from './subworkflows/ultra_align/main.nf'
+include { SPLIT_DESALT_ALIGN_CLEAN_CHUNKS } from './subworkflows/desalt_align/main.nf'
+include { SPLIT_PBMM2_ALIGN_CLEAN_CHUNKS } from './subworkflows/pbmm2_align/main.nf'
 
 include { PREPOLISH as ISOTOOLS_PREPOLISH } from './subworkflows/prepolish/main.nf'
 include { POLISH as ISOTOOLS_POLISH } from './subworkflows/polish/main.nf'
@@ -80,6 +82,8 @@ workflow ISOPIPE {
         params.ultra_use_annotation,
         params.ultra_index,
         params.ultra_do_second_pass,
+        params.desalt_index,
+        params.pbmm2_index,
         ch_versions
       )
       
@@ -97,6 +101,7 @@ workflow ISOPIPE {
           params.global_prefix,
           params.collapse_shrink_twins,
           params.isotools_cigar_extension_extend,
+          params.minimap2_align_do_second_pass,
           ch_versions
         )
 
@@ -122,6 +127,48 @@ workflow ISOPIPE {
 
         ch_reads = SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS.out.reads
         ch_fusions = SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS.out.fusions
+      } else if (params.aligner == "desalt") {
+        SPLIT_DESALT_ALIGN_CLEAN_CHUNKS(
+          PREPROCESSING.out.reads,
+          PREPROCESSING.out.genome,
+          PREPROCESSING.out.genome_index,
+          PREPROCESSING.out.minimap2_index,
+          PREPROCESSING.out.reference_transcripts,
+          PREPROCESSING.out.splice_scores,
+          params.isoseq_cluster2_mode,
+          params.entrypoint,
+          params.isotools_adapter_remove_adapters,
+          params.global_prefix,
+          params.collapse_shrink_twins,
+          params.isotools_cigar_extension_extend,
+          params.ultra_do_second_pass,
+          params.desalt_use_annotation,
+          ch_versions
+        )
+
+        ch_reads = SPLIT_DESALT_ALIGN_CLEAN_CHUNKS.out.reads
+        ch_fusions = SPLIT_DESALT_ALIGN_CLEAN_CHUNKS.out.fusions
+      } else if (params.aligner == "pbmm2") {
+        SPLIT_PBMM2_ALIGN_CLEAN_CHUNKS(
+          PREPROCESSING.out.reads,
+          PREPROCESSING.out.genome,
+          PREPROCESSING.out.genome_index,
+          PREPROCESSING.out.reference_transcripts,
+          PREPROCESSING.out.splice_scores,
+          params.isoseq_cluster2_mode,
+          params.entrypoint,
+          params.isotools_adapter_remove_adapters,
+          params.global_prefix,
+          params.collapse_shrink_twins,
+          params.isotools_cigar_extension_extend,
+          ch_versions
+        )
+
+        ch_reads = SPLIT_PBMM2_ALIGN_CLEAN_CHUNKS.out.reads
+        ch_fusions = SPLIT_PBMM2_ALIGN_CLEAN_CHUNKS.out.fusions
+      } else {
+        error "Unsupported aligner: ${params.aligner}. Supported aligners: minimap2, ultra, desalt, pbmm2"
+        System.exit(1)
       }
 
       ch_samba_weights = Channel.empty()
@@ -146,7 +193,8 @@ workflow ISOPIPE {
           params.xorf_chunk_size,
           ch_samba_weights,
           params.xorf_predict_keep_raw,
-          params.xorf_selenocysteine_codons
+          params.xorf_selenocysteine_codons,
+          params.xorf_skip_netstart
       )
       XORF_PREDICT_ORFS.out.files
           .map { meta, bed, tsv -> [ meta, bed ] }
@@ -160,7 +208,8 @@ workflow ISOPIPE {
           params.xorf_chunk_size,
           ch_samba_weights,
           params.xorf_predict_keep_raw,
-          params.xorf_selenocysteine_codons
+          params.xorf_selenocysteine_codons,
+          params.xorf_skip_netstart
       )
       XORF_PREDICT_FUSION_ORFS.out.files
           .map { meta, bed, tsv -> [ meta.name, meta, bed ] }

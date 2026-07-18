@@ -9,7 +9,9 @@ include { GENOME } from '../genome/main.nf'
 include { GXF2BED } from '../../modules/custom/gxf2bed/main.nf'
 include { BED2GTF } from '../../modules/custom/bed2gtf/main.nf'
 include { MINIMAP2_INDEX } from '../../modules/nf-core/minimap2/index/main.nf'
+include { MINIMAP2_INDEX as PBMM2_INDEX } from '../../modules/nf-core/minimap2/index/main.nf'
 include { ULTRA_INDEX } from '../../modules/nf-core/ultra/index/main.nf'
+include { DESALT_INDEX } from '../../modules/custom/desalt/index/main.nf'
 include { GENEPRED_LINT } from '../../modules/custom/genepred/lint/main.nf'
 include { SPLICING as MINISPLICE_GENOMIC_SPLICE_SCORES } from '../splicing/main.nf'
 include { SPLICING as SPLICEAI_GENOMIC_SPLICE_SCORES } from '../splicing/main.nf'
@@ -42,6 +44,8 @@ workflow PREPROCESSING {
       ultra_use_annotation   // bool
       ultra_index            // path
       ultra_do_second_pass   // bool
+      desalt_index           // path
+      pbmm2_index            // path
       ch_versions            // [ meta, versions.yml ]
 
     main:
@@ -118,6 +122,30 @@ workflow PREPROCESSING {
                   ch_versions = ch_versions.mix(MINIMAP2_INDEX.out.versions)
               }
           }
+      } else if (aligner == "desalt") {
+          if (desalt_index) {
+              ch_genome_index = Channel.value(file(desalt_index, checkIfExists: true))
+                  .map { path -> [ [id:path.name], path ] }
+          } else {
+              DESALT_INDEX(
+                  ch_genome.genome.map { genome -> [ [id:genome.baseName], genome ] }
+              )
+
+              ch_genome_index = DESALT_INDEX.out.index
+              ch_versions = ch_versions.mix(DESALT_INDEX.out.versions)
+          }
+      } else if (aligner == "pbmm2") {
+          if (pbmm2_index) {
+              ch_genome_index = Channel.value(file(pbmm2_index, checkIfExists: true))
+                  .map { path -> [ [id:path.name], path ] }
+          } else {
+              PBMM2_INDEX(
+                  ch_genome.genome.map { genome -> [ [id:genome.baseName], genome ] }
+              )
+
+              ch_genome_index = PBMM2_INDEX.out.index
+              ch_versions = ch_versions.mix(PBMM2_INDEX.out.versions)
+          } 
       }
 
       ch_splice_scores = Channel.empty()

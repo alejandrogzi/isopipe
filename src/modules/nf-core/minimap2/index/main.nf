@@ -1,5 +1,5 @@
 process MINIMAP2_INDEX {
-    label 'process_low'
+    label 'process_high'
 
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
