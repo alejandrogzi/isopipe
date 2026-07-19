@@ -52,7 +52,7 @@
     "isotools_segment_max_three_prime_clip": 20,
 
     "// 7)": "xORF options ────────────────────────────────────────",
-    "xorf_protein_database": null,
+    "xorf_custom_database": null,
     "xorf_chunk_size": 10,
     "xorf_predict_keep_raw": true,
     "xorf_predict_min_score_max_predictions": 0.50,

@@ -15,6 +15,9 @@ include { DESALT_INDEX } from '../../modules/custom/desalt/index/main.nf'
 include { GENEPRED_LINT } from '../../modules/custom/genepred/lint/main.nf'
 include { SPLICING as MINISPLICE_GENOMIC_SPLICE_SCORES } from '../splicing/main.nf'
 include { SPLICING as SPLICEAI_GENOMIC_SPLICE_SCORES } from '../splicing/main.nf'
+include { WGET as WGET_PROTEIN_DATABASE } from '../../modules/nf-core/wget/main.nf'
+include { UNTAR as UNTAR_PROTEIN_DATABASE } from '../../modules/nf-core/untar/main.nf'
+include { GUNZIP as GUNZIP_DATABASE } from '../../modules/custom/gunzip/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -32,6 +35,7 @@ workflow PREPROCESSING {
       ccs_chunk              // int
       isoseq_cluster2_mode   // string
       protein_database       // path
+      custom_database        // path
       minimap2_index         // path
       use_splice_scores      // bool
       splice_score_algorithm // string
@@ -50,7 +54,34 @@ workflow PREPROCESSING {
 
     main:
       ch_genome = GENOME(genome)
-      ch_database = Channel.value(file(protein_database, checkIfExists: true))
+
+      ch_database = Channel.empty()
+      if (custom_database) {
+        if (custom_database.endsWith('.gz')) {
+            GUNZIP_DATABASE(
+                Channel.value(
+                    [ [id: custom_database.tokenize('/')[-1]], custom_database ]
+                )
+            )
+            GUNZIP_DATABASE.out.gunzip
+              .map { meta, it -> it }
+              .set { ch_database }
+
+            ch_versions = ch_versions.mix(GUNZIP_DATABASE.out.versions)
+        } else {
+            ch_database = Channel.value(file(custom_database, checkIfExists: true))
+        }
+      } else {
+        WGET_PROTEIN_DATABASE(
+          Channel.value(protein_database)
+          .map { it -> [ [ id: 'uniprot_sprot.tar.gz' ], it ] }
+        )
+        UNTAR_PROTEIN_DATABASE(WGET_PROTEIN_DATABASE.out.outfile)
+        ch_database = UNTAR_PROTEIN_DATABASE.out.contents.map { meta, it -> it }
+
+        ch_versions = ch_versions.mix(WGET_PROTEIN_DATABASE.out.versions)
+        ch_versions = ch_versions.mix(UNTAR_PROTEIN_DATABASE.out.versions)
+      }
 
       ch_reference_transcripts = Channel.value(file(annotation, checkIfExists: true))
       ch_reference_transcripts_gtf = Channel.empty()
