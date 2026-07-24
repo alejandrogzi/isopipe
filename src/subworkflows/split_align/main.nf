@@ -185,9 +185,11 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           FLAIR_ALIGN(
             ch_fastx_gz,
             ch_genome_index,
+            Channel.value([[:], []]),
+            Channel.value([[:], []])
           )
 
-          SAMTOOLS_BAM_FLAIR_ALIGN(FLAIR_ALIGN.out.bam)
+          SAMTOOLS_BAM_FLAIR_ALIGN(FLAIR_ALIGN.out.sam)
           ch_aligned_bam = SAMTOOLS_BAM_FLAIR_ALIGN.out.bam
           ch_aligned_bai = SAMTOOLS_BAM_FLAIR_ALIGN.out.bai
           ch_versions = ch_versions.mix(SAMTOOLS_BAM_FLAIR_ALIGN.out.versions)
