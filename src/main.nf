@@ -10,7 +10,7 @@ nextflow.enable.dsl=2
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-include { ISOPIPE as MAIN } from './workflows/isopipe.nf'
+include { ARK as MAIN } from './workflows/ark.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -28,15 +28,15 @@ def validateFullRun() {
     if (!params.global_repeats) { problems << 'missing required --global_repeats' }
     
     if (!(params.entrypoint in ['isoseq', 'map'])) { 
-      problems << 'unknown entrypoint option -> options are: isoseq, map'
+      problems << 'ERROR: Unknown entrypoint option -> options are: isoseq, map'
     }
 
     if (!(params.isoseq_cluster2_mode in ['per_sample', 'multi_sample', 'both'])) { 
-      problems << 'unknown isoseq_cluster2_mode option -> options are: per_sample, multi_sample, both'
+      problems << 'ERROR: Unknown isoseq_cluster2_mode option -> options are: per_sample, multi_sample, both'
     }
 
-    if (!(params.aligner in ['minimap2', 'ultra', 'desalt', 'pbmm2'])) { 
-      problems << 'unknown aligner option -> options are: minimap2, ultra, desalt, pbmm2'
+    if (!(params.aligner in ['mm2', 'ultra', 'desalt', 'pbmm2', 'flair', 'ark'])) { 
+      problems << 'ERROR: Unknown aligner option -> options are: mm2, ultra, desalt, pbmm2, flair'
     }
 
     if (problems) {
@@ -51,11 +51,13 @@ def validateFullRun() {
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-workflow ISOPIPE {  
+workflow ARK {  
     validateFullRun()
 
     log.info """
-    isopipe v${workflow.manifest.version}
+    > ark v${workflow.manifest.version}
+    > A Reference pipeline to annotate euKaryotes at high resolution
+    > The Hiller Lab at the Senckenberg Research Institute
   
     Authors: ${workflow.manifest.author}
     Github:  ${workflow.manifest.homePage}
@@ -73,7 +75,7 @@ workflow ISOPIPE {
     MAIN () 
 }
 
-workflow { ISOPIPE () }
+workflow { ARK () }
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
