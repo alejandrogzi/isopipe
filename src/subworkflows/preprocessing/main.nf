@@ -220,7 +220,7 @@ workflow PREPROCESSING {
               ch_genome_index = Channel.value(file(minimap2_index, checkIfExists: true))
                   .map { path -> [ [id:path.name], path ] }
           } else {
-              MINIMAP2_INDEX(
+              FLAIR_INDEX(
                   ch_genome.genome.map { genome -> [ [id:genome.baseName], genome ] }
               )
               ch_genome_index = FLAIR_INDEX.out.index
