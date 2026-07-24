@@ -1,5 +1,56 @@
 # Changelog
 
+## [v2.0.24] - 2026-07-24
+
+This release consolidates the pipeline's alignment architecture under a single unified subworkflow, renames the project from isopipe to ARK, and introduces FLAIR as a sixth aligner option. The previously separate desalt, ultra, and pbmm2 alignment subworkflows have been merged into a single `split_align` subworkflow that dispatches to the correct backend via a switch statement, significantly reducing code duplication. Additional work includes a new ORF renaming engine for xORF, programmatic AutoSQL schema generation, and several channel-wiring corrections across downstream subworkflows.
+
+### Pipeline rename to ARK
+
+- Renamed the primary workflow from `ISOPIPE` to `ARK` and the corresponding entry file from `workflows/isopipe.nf` to `workflows/ark.nf`. The pipeline description was updated to "A Reference pipeline to annotate euKaryotes at high resolution" and all manifest metadata (name, homePage) now point to the `alejandrogzi/ark` repository.
+- Updated `main.nf` to include `ARK` from the new workflow path and to log the Ark banner (version, description, authors, lab) instead of the former isopipe banner.
+
+### Unified alignment architecture
+
+- Removed three dedicated alignment subworkflows — `desalt_align`, `ultra_align`, and `pbmm2_align` — and consolidated all six supported aligners into the single `split_align` subworkflow. The subworkflow now accepts an `aligner` string parameter and uses a switch statement to route chunked reads through the correct alignment module, BAM conversion, and multi-sample merge path.
+- Added dedicated index modules for each aligner: `ARK_INDEX` and `FLAIR_INDEX` (both minimap2-based with appropriate `-x` presets), alongside the existing `MINIMAP2_INDEX`, `ULTRA_INDEX`, `DESALT_INDEX`, and `PBMM2_INDEX`. Each aligner now has its own publish directory under `06_<ALIGNER>_INDEX`.
+- Each aligner's BAM output now routes through a uniquely named samtools conversion process (`SAMTOOLS_BAM_ARK_ALIGN`, `SAMTOOLS_BAM_MINIMAP2_ALIGN`, `SAMTOOLS_BAM_DESALT_ALIGN`, `SAMTOOLS_BAM_PBMM2_ALIGN`, `SAMTOOLS_BAM_FLAIR_ALIGN`) to prevent channel collisions in multi-sample merging.
+- Multi-sample BAM merging was similarly split into per-aligner `SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_*` processes, ensuring correct version tracking when multiple aligners are exercised across pipeline invocations.
+
+### New aligner: FLAIR
+
+- Added **FLAIR** as a selectable aligner (`aligner = "flair"`). The integration includes a `FLAIR_INDEX` module that builds the minimap2 index with the `-x splice` preset and a `FLAIR_ALIGN` process aliased from `MINIMAP2_ALIGN` that runs with the standard splice preset. The `split_align` subworkflow routes FLAIR-aligned output through a dedicated `SAMTOOLS_BAM_FLAIR_ALIGN` conversion step.
+
+### Ark as default aligner
+
+- Changed the default `aligner` parameter from `"minimap2"` to `"ark"`. The Ark aligner runs minimap2 with the PacBio Kinnex standard preset (`-uf -ax splice:hq`), replacing the previous verbose flag set (`-a -c --eqx -uf -C5 -G ... -ax splice:hq --secondary=... -cs ... --junc-bonus ... --junc-pen ...`). This simplification follows the minimap2 documentation's recommended configuration for high-quality PacBio long reads.
+- The second-pass re-alignment (cigar extension + fragment detection) is now gated exclusively behind `params.aligner == 'ark'`, since other aligners handle fragment resolution differently or do not benefit from the additional pass.
+
+### ORF renaming engine
+
+- Added `rename_predictions.py` (v0.0.4), a standalone Python script that rewrites ORF prediction identifiers in BED12/TSV files with human-readable, information-rich names. Supported features include hash-based rebasing of root IDs (`--rebase`), ORF score appending (`--append-orf-score`), protein name appending (`--append-protein-name`), custom prefix injection (`--custom-prefix`), and full deactivation (`--deactivate`).
+- Added five new xORF parameters: `xorf_rename_deactivate` (default: `false`), `xorf_rename_rebase` (default: `false`), `xorf_rename_append_orf_score` (default: `true`), `xorf_rename_append_protein_name` (default: `true`), and `xorf_rename_custom_prefix` (default: `null`). These are propagated through both `XORF_PREDICT_ORFS` and `XORF_PREDICT_FUSION_ORFS` process invocations.
+
+### AutoSQL schema generation
+
+- Added `AUTOSQL_BASE` and `AUTOSQL_SCHEMA` Nextflow processes that programmatically generate AutoSQL `.as` schema files at runtime, replacing the previous reliance on static files from `assets/as/`. `AUTOSQL_BASE` emits a minimal BED12-compatible schema, while `AUTOSQL_SCHEMA` emits the extended schema including read-status, metadata, collapsed-reads, and ORF metadata columns. Both are imported in the main ARK workflow and their outputs are wired to the `autosql` and `schema` channels used by downstream bed-to-bigbed conversion.
+
+### Parameter and validation changes
+
+- Renamed the `minimap2` aligner option to `mm2` throughout the parameter schema, documentation, and validation logic. The valid aligner set is now: `mm2`, `ultra`, `desalt`, `pbmm2`, `flair`, `ark`.
+- Removed the `ultra_do_second_pass` parameter entirely. The Ultra two-pass logic from v2.0.22 is superseded by the unified second-pass gating in `split_align`, which only activates for the `ark` aligner.
+- Improved validation error messages with explicit `ERROR:` prefixes and structured multi-line formatting via `stripIndent()`.
+
+### Channel wiring fixes
+
+- Corrected the annotation channel format in `PREPOLISH` and `POLISH` subworkflows: the annotation is now expected as `[ val(meta), [ annotation ] ]` from preprocessing rather than being re-mapped with `[id:annotation.baseName]` at the subworkflow boundary. This prevents inconsistent channel shapes when the annotation flows through multi-sample paths.
+- The `POLISH` subworkflow now receives the `autosql` channel as an explicit input parameter rather than constructing it from a static asset path, ensuring the AutoSQL schema stays in sync with the dynamically generated output.
+
+### Chores
+
+- Added `.gitattributes` to the repository root.
+- Updated `params.json` schema documentation to reflect the new aligner list and the `xorf_rename_deactivate` parameter.
+- Removed dedicated `ext.args` blocks for `MINIMAP2_ALIGN` fragment-detection processes, replacing them with the simplified Ark preset configuration.
+
 ## [v2.0.23] - 2026-07-18
 
 This release expands the pipeline's alignment options with two new backends — deSALT and pbmm2 — giving users four aligners to choose from depending on their sequencing platform and sensitivity requirements. The minimap2 branch also receives several correctness fixes, particularly around second-pass gating and index preset configuration, along with minor resource tuning and a new xORF parameter.
