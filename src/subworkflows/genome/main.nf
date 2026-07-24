@@ -41,7 +41,7 @@ workflow GENOME {
       ch_versions = ch_versions.mix(CHROMSIZE.out.versions)
 
     emit:
-      genome      = ch_fasta
+      genome      = ch_fasta // file: /path/to/genome.fasta
       chrom_sizes = ch_chrom_sizes
       versions    = ch_versions
 }

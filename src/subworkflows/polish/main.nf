@@ -47,16 +47,16 @@ include { COLLAPSE as COLLAPSE_PASSES } from '../../modules/custom/collapse/main
 workflow POLISH {
     take:
       reads                  // channel: [ val(meta), [ reads ], [ introns ], [ orfs ] ]
-      annotation             // Channel.value(path)
+      annotation             // channel: [ val(meta), [ annotation ] ]
       forward_peaks          // channel: [ val(meta), [ forward_peaks ] ]
       reverse_peaks          // channel: [ val(meta), [ reverse_peaks ] ]
       chrom_sizes            // path
       splice_scores          // channel: [ val(meta), [ splice_scores ] ]
+      autosql                // channel: [ autosql ]
       ch_versions            // [ meta, versions.yml ]
 
     main:
-      ch_reference_transcripts = annotation.map { annotation -> [ [id:annotation.baseName], annotation ] }
-      autosql = Channel.value(file('${projectDir}/../../assets/as/schema.as', checkIfExists: true))
+      ch_reference_transcripts = annotation
 
       ISOTOOLS_INTRON_RETENTION(
         reads
