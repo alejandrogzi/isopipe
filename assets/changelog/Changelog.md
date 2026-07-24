@@ -22,7 +22,7 @@ This release consolidates the pipeline's alignment architecture under a single u
 
 ### Ark as default aligner
 
-- Changed the default `aligner` parameter from `"minimap2"` to `"ark"`. The Ark aligner runs minimap2 with the PacBio Kinnex standard preset (`-uf -ax splice:hq`), replacing the previous verbose flag set (`-a -c --eqx -uf -C5 -G ... -ax splice:hq --secondary=... -cs ... --junc-bonus ... --junc-pen ...`). This simplification follows the minimap2 documentation's recommended configuration for high-quality PacBio long reads.
+- Changed the default `aligner` parameter from `"minimap2"` to `"ark"`. The `"mm2"` aligner runs minimap2 with the PacBio Kinnex standard preset (`-uf -ax splice:hq`), replacing the previous verbose flag set (`-a -c --eqx -uf -C5 -G ... -ax splice:hq --secondary=... -cs ... --junc-bonus ... --junc-pen ...`) that now runs through `"ark"`.
 - The second-pass re-alignment (cigar extension + fragment detection) is now gated exclusively behind `params.aligner == 'ark'`, since other aligners handle fragment resolution differently or do not benefit from the additional pass.
 
 ### ORF renaming engine
