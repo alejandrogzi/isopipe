@@ -13,9 +13,6 @@ nextflow.enable.dsl=2
 include { PREPROCESSING } from '../subworkflows/preprocessing/main.nf'
 
 include { SPLIT_ALIGN_CLEAN_CHUNKS } from '../subworkflows/split_align/main.nf'
-include { SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS } from '../subworkflows/ultra_align/main.nf'
-include { SPLIT_DESALT_ALIGN_CLEAN_CHUNKS } from '../subworkflows/desalt_align/main.nf'
-include { SPLIT_PBMM2_ALIGN_CLEAN_CHUNKS } from '../subworkflows/pbmm2_align/main.nf'
 
 include { PREPOLISH as ISOTOOLS_PREPOLISH } from '../subworkflows/prepolish/main.nf'
 include { POLISH as ISOTOOLS_POLISH } from '../subworkflows/polish/main.nf'
@@ -47,19 +44,28 @@ include { BEDTOBIGBED as BEDTOBIGBED_NMD } from '../modules/custom/bigtools/bedt
 include { PUBLISH as PUBLISH_ADDITIONAL_BIGBEDS } from '../modules/custom/publish/main.nf'
 include { TRACKDB } from '../modules/custom/track/main.nf'
 
+include { AUTOSQL_BASE } from '../modules/custom/autosql/base/main.nf'
+include { AUTOSQL_SCHEMA } from '../modules/custom/autosql/schema/main.nf'
+
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     WORKFLOWS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-workflow ISOPIPE {
+workflow ARK {
     main:
       ch_versions = Channel.empty()
       ch_reads = Channel.empty()
 
-      autosql = Channel.value(file('${projectDir}/../../assets/as/base.as', checkIfExists: true))
+      AUTOSQL_BASE()
+      AUTOSQL_SCHEMA()
+
+      autosql = AUTOSQL_BASE.out.autosql
+      schema = AUTOSQL_SCHEMA.out.autosql
       track = Channel.value(file('${projectDir}/../../assets/as/track.as', checkIfExists: true))
+
+      // Preprocessing /////////////////////////////////////////////
 
       PREPROCESSING(
         params.entrypoint,
@@ -82,24 +88,26 @@ workflow ISOPIPE {
         params.aligner,
         params.ultra_use_annotation,
         params.ultra_index,
-        params.ultra_do_second_pass,
         params.desalt_index,
         params.pbmm2_index,
         ch_versions
       )
+
+      // Alignment /////////////////////////////////////////////
       
-      if (params.aligner == "minimap2") {
+      if (params.aligner in ['mm2', 'ultra', 'pbmm2', 'desalt', 'ark', 'flair']) {
         SPLIT_ALIGN_CLEAN_CHUNKS(
           PREPROCESSING.out.reads,
           PREPROCESSING.out.genome,
           PREPROCESSING.out.genome_index,
           PREPROCESSING.out.reference_transcripts,
+          params.global_prefix,
           PREPROCESSING.out.splice_scores,
           params.isoseq_cluster2_mode,
           params.entrypoint,
+          params.aligner,
           params.minimap2_align_use_junc_bed,
           params.isotools_adapter_remove_adapters,
-          params.global_prefix,
           params.collapse_shrink_twins,
           params.isotools_cigar_extension_extend,
           params.minimap2_align_do_second_pass,
@@ -108,69 +116,15 @@ workflow ISOPIPE {
 
         ch_reads = SPLIT_ALIGN_CLEAN_CHUNKS.out.reads
         ch_fusions = SPLIT_ALIGN_CLEAN_CHUNKS.out.fusions
-      } else if (params.aligner == "ultra") {
-        SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS(
-          PREPROCESSING.out.reads,
-          PREPROCESSING.out.genome,
-          PREPROCESSING.out.genome_index,
-          PREPROCESSING.out.minimap2_index,
-          PREPROCESSING.out.reference_transcripts,
-          PREPROCESSING.out.splice_scores,
-          params.isoseq_cluster2_mode,
-          params.entrypoint,
-          params.isotools_adapter_remove_adapters,
-          params.global_prefix,
-          params.collapse_shrink_twins,
-          params.isotools_cigar_extension_extend,
-          params.ultra_do_second_pass,
-          ch_versions
-        )
-
-        ch_reads = SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS.out.reads
-        ch_fusions = SPLIT_ULTRA_ALIGN_CLEAN_CHUNKS.out.fusions
-      } else if (params.aligner == "desalt") {
-        SPLIT_DESALT_ALIGN_CLEAN_CHUNKS(
-          PREPROCESSING.out.reads,
-          PREPROCESSING.out.genome,
-          PREPROCESSING.out.genome_index,
-          PREPROCESSING.out.minimap2_index,
-          PREPROCESSING.out.reference_transcripts,
-          PREPROCESSING.out.splice_scores,
-          params.isoseq_cluster2_mode,
-          params.entrypoint,
-          params.isotools_adapter_remove_adapters,
-          params.global_prefix,
-          params.collapse_shrink_twins,
-          params.isotools_cigar_extension_extend,
-          params.ultra_do_second_pass,
-          params.desalt_use_annotation,
-          ch_versions
-        )
-
-        ch_reads = SPLIT_DESALT_ALIGN_CLEAN_CHUNKS.out.reads
-        ch_fusions = SPLIT_DESALT_ALIGN_CLEAN_CHUNKS.out.fusions
-      } else if (params.aligner == "pbmm2") {
-        SPLIT_PBMM2_ALIGN_CLEAN_CHUNKS(
-          PREPROCESSING.out.reads,
-          PREPROCESSING.out.genome,
-          PREPROCESSING.out.genome_index,
-          PREPROCESSING.out.reference_transcripts,
-          PREPROCESSING.out.splice_scores,
-          params.isoseq_cluster2_mode,
-          params.entrypoint,
-          params.isotools_adapter_remove_adapters,
-          params.global_prefix,
-          params.collapse_shrink_twins,
-          params.isotools_cigar_extension_extend,
-          ch_versions
-        )
-
-        ch_reads = SPLIT_PBMM2_ALIGN_CLEAN_CHUNKS.out.reads
-        ch_fusions = SPLIT_PBMM2_ALIGN_CLEAN_CHUNKS.out.fusions
       } else {
-        error "Unsupported aligner: ${params.aligner}. Supported aligners: minimap2, ultra, desalt, pbmm2"
+        error """
+        ERROR: Unsupported aligner: '${params.aligner}'.
+        Valid aligners are: mm2, pbmm2, desalt, ultra, ark, flair
+        """.stripIndent()
         System.exit(1)
       }
+
+      // Weights /////////////////////////////////////////////
 
       ch_samba_weights = Channel.empty()
       if (params.xorf_samba_local_weights) {
@@ -186,6 +140,10 @@ workflow ISOPIPE {
         ch_samba_weights = WGET_SAMBA_WEIGHTS.out.outfile
       }
 
+      // ORF calling /////////////////////////////////////////////
+
+      // channel comes per chromosome previously splitted at segmentation step
+      // metadata -> [ id: sampleId, single_end: true, chr: meta.chr ]
       XORF_PREDICT_ORFS(
           ch_reads,
           PREPROCESSING.out.genome,
@@ -195,7 +153,10 @@ workflow ISOPIPE {
           ch_samba_weights,
           params.xorf_predict_keep_raw,
           params.xorf_selenocysteine_codons,
-          params.xorf_skip_netstart
+          params.xorf_skip_netstart,
+          params.xorf_rename_deactivate,
+          false, // xorf_do_polishing
+          true   // xorf_skip_joined_concat
       )
       XORF_PREDICT_ORFS.out.files
           .map { meta, bed, tsv -> [ meta, bed ] }
@@ -210,7 +171,10 @@ workflow ISOPIPE {
           ch_samba_weights,
           params.xorf_predict_keep_raw,
           params.xorf_selenocysteine_codons,
-          params.xorf_skip_netstart
+          params.xorf_skip_netstart,
+          params.xorf_rename_deactivate,
+          false,
+          true
       )
       XORF_PREDICT_FUSION_ORFS.out.files
           .map { meta, bed, tsv -> [ meta.name, meta, bed ] }
@@ -221,6 +185,8 @@ workflow ISOPIPE {
           .set { ch_fusion_orf_predictions_bed }
       JOIN_FUSIONS(ch_fusion_orf_predictions_bed, 'bed')
       BEDTOBIGBED_FUSIONS(JOIN_FUSIONS.out.output, PREPROCESSING.out.chrom_sizes, autosql)
+
+      // NMD calling /////////////////////////////////////////////
 
       ISOTOOLS_NMD_FILTER(ch_orf_predictions_bed)
 
@@ -234,6 +200,8 @@ workflow ISOPIPE {
       JOIN_NMD(ch_nmd_bed, 'bed')
       BEDTOBIGBED_NMD(JOIN_NMD.out.output, PREPROCESSING.out.chrom_sizes, autosql)
 
+      // Additional bigbeds /////////////////////////////////////////////
+
       ch_additional_bbs = Channel.empty()
       ch_additional_bbs = ch_additional_bbs.mix(BEDTOBIGBED_FUSIONS.out.bigbed)
       ch_additional_bbs = ch_additional_bbs.mix(BEDTOBIGBED_NMD.out.bigbed)
@@ -242,6 +210,8 @@ workflow ISOPIPE {
          .map { name, metas, files -> [ [ id: name ], files] }
          .set { ch_additional_bbs }
       PUBLISH_ADDITIONAL_BIGBEDS(ch_additional_bbs)
+
+      // APARENT calling /////////////////////////////////////////////
 
       ch_aparent_weights = Channel.empty()
       if (params.aparent_predict_weights_local_path) {
@@ -256,6 +226,8 @@ workflow ISOPIPE {
           )
           ch_aparent_weights = WGET_APARENT_WEIGHTS.out.outfile
       }
+
+      // Pre-polishing /////////////////////////////////////////////
 
       ISOTOOLS_PREPOLISH(
           ISOTOOLS_NMD_FILTER.out.reads,
@@ -286,6 +258,8 @@ workflow ISOPIPE {
         }
         .set { ch_full_length_reads }
 
+      // Polishing /////////////////////////////////////////////
+
       ISOTOOLS_POLISH(
           ch_full_length_reads,
           PREPROCESSING.out.reference_transcripts,
@@ -293,6 +267,7 @@ workflow ISOPIPE {
           ISOTOOLS_PREPOLISH.out.aparent_minus,
           PREPROCESSING.out.chrom_sizes,
           PREPROCESSING.out.bigwigs,
+          schema,
           ch_versions
       )
 

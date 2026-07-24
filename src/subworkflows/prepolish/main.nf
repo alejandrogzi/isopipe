@@ -32,14 +32,14 @@ workflow PREPOLISH {
       genome                 // Channel.value(path)
       chrom_sizes            // Channel.value(path)
       repeats                // path
-      annotation             // Channel.value(path)
+      annotation             // channel: [ val(meta), [ annotation ] ]
       bigwigs                // channel: [ val(meta), [ bigwigs ] ]
       aparent_weights        // channel: [ val(meta), [ aparent_weights ] ]
       ch_versions            // [ meta, versions.yml ]
 
     main:
       ch_genome = genome.map { genome -> [ [id:genome.baseName], genome ] }
-      ch_reference_transcripts = annotation.map { annotation -> [ [id:annotation.baseName], annotation ] }
+      ch_reference_transcripts = annotation
 
       XLOCI_EXTRACT_INTRONS(ch_genome, reads)
       IIC_PREDICT_SPLICEOSOME(XLOCI_EXTRACT_INTRONS.out.tsv)

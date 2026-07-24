@@ -18,10 +18,10 @@
     "// 2b)": "Chunking options ────────────────────────────────────────",
     "fxsplit_chunk_size": 50000,
 
-    "// 3)": "Aligner options [ minimap2, ultra, desalt, pbmm2 ] ────────────────────────────────────────",
-    "aligner": "minimap2",
+    "// 3)": "Aligner options [ ark, mm2, ultra, desalt, pbmm2, flair ] ────────────────────────────────────────",
+    "aligner": "ark",
 
-    "// 3.1)": "Minimap2 options [ scoring options: spliceai, minisplice ] ────────────────────────────────────────",
+    "// 3.1)": "Ark/Minimap2 options [ scoring options: spliceai, minisplice ] ────────────────────────────────────────",
     "minimap2_index_path": null,
     "minimap2_align_use_junc_bed": true,
     "minimap2_align_use_splice_scores": true,
@@ -60,6 +60,7 @@
     "xorf_predict_threshold": 0.01,
     "xorf_selenocysteine_codons": null,
     "xorf_skip_netstart": true,
+    "xorf_rename_deactivate": false,
 
     "// 8)": "Track upload options ────────────────────────────────────────",
     "load_track": false
