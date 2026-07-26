@@ -151,7 +151,7 @@ workflow PREPROCESSING {
               ch_genome_index = ARK_INDEX.out.index
               ch_versions = ch_versions.mix(ARK_INDEX.out.versions)
           }
-          break
+        break
         
         case 'mm2':
           if (minimap2_index) {
@@ -164,7 +164,7 @@ workflow PREPROCESSING {
               ch_genome_index = MINIMAP2_INDEX.out.index
               ch_versions = ch_versions.mix(MINIMAP2_INDEX.out.versions)
           }
-          break
+        break
 
         case 'ultra':
           if (ultra_index) {
@@ -186,7 +186,7 @@ workflow PREPROCESSING {
               ch_genome_index = ULTRA_INDEX.out.index
               ch_versions = ch_versions.mix(ULTRA_INDEX.out.versions)
           }
-          break
+        break
 
         case 'desalt':
           if (desalt_index) {
@@ -200,7 +200,7 @@ workflow PREPROCESSING {
               ch_genome_index = DESALT_INDEX.out.index
               ch_versions = ch_versions.mix(DESALT_INDEX.out.versions)
           }
-          break
+        break
 
         case 'pbmm2':
           if (pbmm2_index) {
@@ -214,6 +214,7 @@ workflow PREPROCESSING {
               ch_genome_index = PBMM2_INDEX.out.index
               ch_versions = ch_versions.mix(PBMM2_INDEX.out.versions)
           } 
+        break
 
         case 'flair':
           if (minimap2_index) {
@@ -226,7 +227,7 @@ workflow PREPROCESSING {
               ch_genome_index = FLAIR_INDEX.out.index
               ch_versions = ch_versions.mix(FLAIR_INDEX.out.versions)
           }
-          break
+        break
 
         default:
           error """

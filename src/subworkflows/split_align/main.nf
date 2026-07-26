@@ -30,6 +30,8 @@ include { SAMTOOLS_MERGE as SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_DESALT } from '../..
 include { SAMTOOLS_MERGE as SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_PBMM2 } from '../../modules/custom/samtools/merge/main.nf'
 include { SAMTOOLS_MERGE as SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_FLAIR } from '../../modules/custom/samtools/merge/main.nf'
 
+include { SAMTOOLS_INDEX as SAMTOOLS_INDEX_PBMM2 } from '../../modules/custom/samtools/index/main.nf'
+
 include { ISOTOOLS_SEGMENT as ISOTOOLS_SEGMENT_POLYA } from '../../modules/custom/isotools/segment/main.nf'
 include { ISOTOOLS_SEGMENT as ISOTOOLS_SEGMENT_POLYA_FRAGMENTS } from '../../modules/custom/isotools/segment/main.nf'
 include { ISOTOOLS_FUSION as ISOTOOLS_FUSION_DETECTOR } from '../../modules/custom/isotools/fusion/main.nf'
@@ -116,7 +118,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
             ch_aligned_bai = SAMTOOLS_BAM_ARK_ALIGN.out.bai
             ch_versions = ch_versions.mix(SAMTOOLS_BAM_ARK_ALIGN.out.versions)
             ch_versions = ch_versions.mix(ARK_ALIGN.out.versions)
-            break
+          break
 
         case 'mm2':
             if (aligner_use_annotation) {
@@ -140,7 +142,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
             ch_aligned_bai = SAMTOOLS_BAM_MINIMAP2_ALIGN.out.bai
             ch_versions = ch_versions.mix(SAMTOOLS_BAM_MINIMAP2_ALIGN.out.versions)
             ch_versions = ch_versions.mix(MINIMAP2_ALIGN.out.versions)
-            break
+          break
 
         case 'pbmm2':
             PBMM2_ALIGN(
@@ -148,12 +150,11 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
               ch_genome_index
             )
 
-            SAMTOOLS_BAM_PBMM2_ALIGN(PBMM2_ALIGN.out.bam)
-            ch_aligned_bam = SAMTOOLS_BAM_PBMM2_ALIGN.out.bam
-            ch_aligned_bai = SAMTOOLS_BAM_PBMM2_ALIGN.out.bai
+            SAMTOOLS_INDEX_PBMM2(PBMM2_ALIGN.out.bam)
+            ch_aligned_bam = SAMTOOLS_INDEX_PBMM2.out.bam
+            ch_aligned_bai = SAMTOOLS_INDEX_PBMM2.out.bai
             ch_versions = ch_versions.mix(PBMM2_ALIGN.out.versions)
-            ch_versions = ch_versions.mix(SAMTOOLS_BAM_PBMM2_ALIGN.out.versions)
-            break
+          break
 
         case 'desalt':
             DESALT_ALIGN(
@@ -167,7 +168,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
             ch_aligned_bai = SAMTOOLS_BAM_DESALT_ALIGN.out.bai
             ch_versions = ch_versions.mix(SAMTOOLS_BAM_DESALT_ALIGN.out.versions)
             ch_versions = ch_versions.mix(DESALT_ALIGN.out.versions)
-            break
+          break
 
         case 'ultra':
             ULTRA_ALIGN(
@@ -179,7 +180,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
             ch_aligned_bam = ULTRA_ALIGN.out.bam
             ch_aligned_bai = ULTRA_ALIGN.out.bai
             ch_versions = ch_versions.mix(ULTRA_ALIGN.out.versions)
-            break
+          break
 
         case 'flair':
           FLAIR_ALIGN(
@@ -194,7 +195,7 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
           ch_aligned_bai = SAMTOOLS_BAM_FLAIR_ALIGN.out.bai
           ch_versions = ch_versions.mix(SAMTOOLS_BAM_FLAIR_ALIGN.out.versions)
           ch_versions = ch_versions.mix(FLAIR_ALIGN.out.versions)
-          break
+        break
 
         default:
           error """
@@ -236,42 +237,42 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
               ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ARK.out.bam
               ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ARK.out.bai
               ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ARK.out.versions)
-              break
+            break
 
             case 'mm2':
               SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_MINIMAP2(ch_joined_bam)
               ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_MINIMAP2.out.bam
               ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_MINIMAP2.out.bai
               ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_MINIMAP2.out.versions)
-              break
+            break
 
             case 'ultra':
               SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA(ch_joined_bam)
               ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA.out.bam
               ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA
               ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA.out.versions)
-              break
+            break
 
             case 'desalt':
               SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_DESALT(ch_joined_bam)
               ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_DESALT.out.bam
               ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_DESALT.out.bai
               ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_DESALT.out.versions)
-              break
+            break
 
             case 'pbmm2':
               SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_PBMM2(ch_joined_bam)
               ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_PBMM2.out.bam
               ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_PBMM2.out.bai
               ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_PBMM2.out.versions)
-              break
+            break
 
             case 'flair':
               SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_FLAIR(ch_joined_bam)
               ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_FLAIR.out.bam
               ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_FLAIR.out.bai
               ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_FLAIR.out.versions)
-              break
+            break
 
             default:
               error """
@@ -299,42 +300,42 @@ workflow SPLIT_ALIGN_CLEAN_CHUNKS {
               ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ARK.out.bam
               ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ARK.out.bai
               ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ARK.out.versions)
-              break
+            break
 
             case 'mm2':
               SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_MINIMAP2(ch_joined_bam)
               ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_MINIMAP2.out.bam
               ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_MINIMAP2.out.bai
               ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_MINIMAP2.out.versions)
-              break
+            break
 
             case 'ultra':
               SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA(ch_joined_bam)
               ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA.out.bam
               ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA
               ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_ULTRA.out.versions)
-              break
+            break
 
             case 'desalt':
               SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_DESALT(ch_joined_bam)
               ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_DESALT.out.bam
               ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_DESALT.out.bai
               ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_DESALT.out.versions)
-              break
+            break
 
             case 'pbmm2':
               SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_PBMM2(ch_joined_bam)
               ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_PBMM2.out.bam
               ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_PBMM2.out.bai
               ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_PBMM2.out.versions)
-              break
+            break
 
             case 'flair':
               SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_FLAIR(ch_joined_bam)
               ch_aligned_bam = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_FLAIR.out.bam
               ch_aligned_bai = SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_FLAIR.out.bai
               ch_versions = ch_versions.mix(SAMTOOLS_MERGE_BAM_MULTI_SAMPLE_FLAIR.out.versions)
-              break
+            break
 
             default:
               error """
