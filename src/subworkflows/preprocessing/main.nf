@@ -34,7 +34,7 @@ include { GUNZIP as GUNZIP_DATABASE } from '../../modules/custom/gunzip/main.nf'
 
 workflow PREPROCESSING {
     take:
-      entrypoint             // isoseq or fastq
+      entrypoint             // [ subreads, ccs, flnc ]
       global_input_dir       // path
       global_primers         // path
       genome                 // path
@@ -281,24 +281,25 @@ workflow PREPROCESSING {
 
       /*
       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-          ENTRYPOINTS [ isoseq, map ]
+          ENTRYPOINTS [ subreads, ccs, flnc ]
      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
       */
 
       // INFO: isoseq entrypoint
       ch_reads = Channel.empty()
-      if (entrypoint == "isoseq") {
+      if (entrypoint == "subreads" || entrypoint == "ccs") {
           ISOSEQ(
               global_input_dir,
               global_primers,
               ccs_chunk,
               isoseq_cluster2_mode,
-              global_prefix
+              global_prefix,
+              entrypoint
           )
 
           ch_reads = ch_reads.mix(ISOSEQ.out.reads)
           ch_versions = ch_versions.mix(ISOSEQ.out.versions)
-      } else if (entrypoint == "map") {
+      } else if (entrypoint == "flnc") {
           Channel
               .fromPath("${global_input_dir}/*.fast*", checkIfExists: true)
               .map { fastx ->

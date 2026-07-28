@@ -27,8 +27,8 @@ def validateFullRun() {
     if (!params.global_annotation) { problems << 'missing required --global_annotation' }
     if (!params.global_repeats) { problems << 'missing required --global_repeats' }
     
-    if (!(params.entrypoint in ['isoseq', 'map'])) { 
-      problems << 'ERROR: Unknown entrypoint option -> options are: isoseq, map'
+    if (!(params.entrypoint in ['subreads', 'ccs', 'flnc'])) { 
+      problems << 'ERROR: Unknown entrypoint option -> options are: subreads, ccs, flnc'
     }
 
     if (!(params.isoseq_cluster2_mode in ['per_sample', 'multi_sample', 'both'])) { 
@@ -59,9 +59,10 @@ workflow ARK {
     > A Reference pipeline to annotate euKaryotes at high resolution
     > The Hiller Lab at the Senckenberg Research Institute
   
-    Authors: ${workflow.manifest.author}
-    Github:  ${workflow.manifest.homePage}
+    Authors : ${workflow.manifest.author}
+    Github  :  ${workflow.manifest.homePage}
 
+      Entrypoint: ${params.entrypoint}
       Input     : ${params.global_input_dir}
       Output    : ${params.global_output_dir}
       Genome    : ${params.global_genome}

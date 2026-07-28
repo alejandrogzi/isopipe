@@ -29,10 +29,17 @@ workflow ISOSEQ {
       ccs_chunk              // int
       isoseq_cluster2_mode   // string
       prefix                 // string
+      entrypoint             // [ ccs, flnc ] (subreads unreachable)
 
     main:
       ch_versions = Channel.empty()
       ch_primers = Channel.value(file(global_primers))
+
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          CHANNELING/INDEXING [ SUBREADS, CCS ]
+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
       Channel
           .fromPath("${global_input_dir}/*.bam", checkIfExists: true)
@@ -78,36 +85,67 @@ workflow ISOSEQ {
 
       ch_bam = ch_bam_branched.indexed.mix(ch_bam_reindexed)
 
-      ch_bam
-          .combine(Channel.of(1..ccs_chunk))   // INFO: cartesian product: N_bam × chunk combos
-          .map { meta, bam, pbi, chunk_idx ->
-              [ meta + [chunk: chunk_idx], bam, pbi ]
-          }
-          .set { ch_chunks }
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          ENTRYPOINT BRANCHING  [ SUBREADS, CCS ]
+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
+  
+      ch_lima_bams = Channel.empty()
+      switch (entrypoint) {
+        case 'ccs':
 
-      PBCCS(ch_chunks, ccs_chunk) // INFO: generate CCS from raw reads
-      PBCCS.out.bam // INFO: update meta: update id (+chunkX) and store former id
-      .map {
-          def chunk   = it[0].chunk
-          def parent  = it[0].id
-          def child   = it[0].id + "." + chunk
-          return [ [id:child, parent:parent, single_end:true, chunk:chunk], it[1] ]
+          ch_bam
+              .combine(Channel.of(1..ccs_chunk))   // INFO: cartesian product: N_bam × chunk combos
+              .map { meta, bam, pbi, chunk_idx ->
+                  [ meta + [chunk: chunk_idx], bam, pbi ]
+              }
+              .set { ch_chunks }
+
+          PBCCS(ch_chunks, ccs_chunk) // INFO: generate CCS from raw reads
+          PBCCS.out.bam // INFO: update meta: update id (+chunkX) and store former id
+          .map {
+              def chunk   = it[0].chunk
+              def parent  = it[0].id
+              def child   = it[0].id + "." + chunk
+              return [ [id:child, parent:parent, single_end:true, chunk:chunk], it[1] ]
+          }
+          .set { ch_pbccs_bam_updated }
+
+          // INFO: group all chunks belonging to the same parent sample
+          ch_pbccs_bam_updated
+              .map { meta, bam -> [ meta.parent, meta, bam ] }   // INFO: key by parent
+              .groupTuple(by: 0, size: ccs_chunk)              // INFO: wait for all chunks
+              .map { parent, metas, bams ->
+                  // Reconstruct a clean meta for the merged output
+                  def meta_merged = [ id: parent, single_end: true ]
+                  [ meta_merged, bams ]                           // INFO: bams is now a List
+              }
+              .set { ch_pbccs_merged }
+
+          PBMERGE(ch_pbccs_merged) // INFO: merge chunks
+          ch_lima_bams = PBMERGE.out.bam
+
+        break
+
+        case 'flnc':
+          ch_lima_bams = ch_bam
+        break
+
+        default:
+          error """
+          ERROR: Unknown entrypoint -> options are at this step are: ccs, flnc
+          """.stripIndent()
+          System.exit(1)
       }
-      .set { ch_pbccs_bam_updated }
 
-      // INFO: group all chunks belonging to the same parent sample
-      ch_pbccs_bam_updated
-          .map { meta, bam -> [ meta.parent, meta, bam ] }   // INFO: key by parent
-          .groupTuple(by: 0, size: ccs_chunk)              // INFO: wait for all chunks
-          .map { parent, metas, bams ->
-              // Reconstruct a clean meta for the merged output
-              def meta_merged = [ id: parent, single_end: true ]
-              [ meta_merged, bams ]                           // INFO: bams is now a List
-          }
-          .set { ch_pbccs_merged }
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          LIMA [ REMOVE PRIMERS ]
+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
-      PBMERGE(ch_pbccs_merged) // INFO: merge chunks
-      LIMA(PBMERGE.out.bam, ch_primers)  // INFO: remove primers from CCS
+      LIMA(ch_lima_bams, ch_primers)  // INFO: remove primers from CCS
       LIMA.out.bam
           .map { meta, bams ->
               [ meta, bams instanceof List ? bams : [bams] ]
@@ -119,11 +157,23 @@ workflow ISOSEQ {
           }
           .set { ch_lima_branched }
 
-      ch_lima_bams = Channel.empty()
       PBMERGE_MULTI_LIMA(ch_lima_branched.merge)
       ch_lima_bams = ch_lima_bams.mix(PBMERGE_MULTI_LIMA.out.bam)
       ch_lima_bams = ch_lima_bams.mix(ch_lima_branched.single.map { meta, bams -> [ meta, bams[0] ] })
+
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          ISOSEQ_REFINE [ DISCARD CCS WITHOUT POLYA TAILS ]
+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
+
       ISOSEQ_REFINE(ch_lima_bams, ch_primers) // INFO: discard CCS without polyA tails, remove it from the other
+
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          ISOSEQ_CLUSTER2 [ CLUSTER READS ]
+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
       // INFO: three possible modes: per_tissue, pan_tissue, both
       ch_pbccs_merged_flnc_clustered_fa = Channel.empty()
@@ -179,8 +229,11 @@ workflow ISOSEQ {
         ch_versions = ch_versions.mix(PBMERGE_MULTI_SAMPLE.out.versions)
       }
 
-      // INFO: should end up emitting a channel with fastqs (hq and singletons in this branch)
-      // ch_pbccs_merged_flnc_clustered_fa.view()
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          VERSIONING
+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
       ch_versions = ch_versions.mix(ISOSEQ_REFINE.out.versions)
       ch_versions = ch_versions.mix(LIMA.out.versions)
@@ -188,7 +241,19 @@ workflow ISOSEQ {
       ch_versions = ch_versions.mix(PBINDEX.out.versions)
       ch_versions = ch_versions.mix(PBCCS.out.versions)
 
+    /*
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        OUTPUT CHANNELS
+   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    */
+
     emit:
         reads   = ch_pbccs_merged_flnc_clustered_fa
         versions = ch_versions
 }
+
+/*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    THE END 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+*/
