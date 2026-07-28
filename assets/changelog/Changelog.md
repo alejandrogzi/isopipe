@@ -1,5 +1,30 @@
 # Changelog
 
+## [v2.0.25] - 2026-07-29
+
+This release replaces the previous two-entrypoint model (`isoseq` / `map`) with three granular modes — `subreads`, `ccs`, and `flnc` — that map directly to the real PacBio processing stages users are working with. The new model gives you control over where your data enters the pipeline: raw subreads, already-called CCS reads, or full-length non-chimeric reads that have already gone through primer removal and clustering. The internal ISOSEQ subworkflow was refactored to branch on these entrypoints, running PBCCS and chunk merging only when needed (i.e., for `subreads` and `ccs`), while `flnc` reads skip straight to LIMA and refinement. The default entrypoint was changed from `isoseq` to `subreads`, and the workflow banner now prints the active entrypoint at launch to make it immediately visible which mode is in use. Additional structural comments were added throughout the main workflow and the ISOSEQ subworkflow to clarify the stage boundaries in the code.
+
+### New entrypoint model
+
+- Replaced the previous `isoseq` and `map` entrypoints with three new options: `subreads`, `ccs`, and `flnc`. Validation in `main.nf` was updated to reject unknown values with a clear error message listing the valid options.
+- Changed the default `entrypoint` parameter from `"isoseq"` to `"subreads"` in `nextflow.config` and `params.json`.
+- The workflow banner now displays `Entrypoint: ${params.entrypoint}` alongside the input, output, and genome paths, making it easier to confirm which mode is active at a glance.
+
+### ISOSEQ subworkflow refactoring
+
+- The `ISOSEQ` subworkflow now accepts an `entrypoint` input parameter (expected values: `ccs` or `flnc`; `subreads` is handled upstream). A `switch` statement dispatches execution into two branches:
+  - **`ccs`**: runs `PBCCS` on chunked BAMs to generate circular consensus sequences, groups chunks by parent sample via `groupTuple`, merges them with `PBMERGE`, and passes the merged BAMs to `LIMA` for primer removal.
+  - **`flnc`**: passes the raw input BAMs directly to `LIMA`, skipping CCS generation and merging entirely.
+- An explicit error is thrown if an unrecognized entrypoint reaches the subworkflow.
+
+### Preprocessing dispatch update
+
+- The preprocessing subworkflow now checks for `subreads` or `ccs` to route into the `ISOSEQ` branch (the `ISOSEQ` call now also passes the `entrypoint` value), and checks for `flnc` to enter the direct FASTQ-reading branch (formerly the `map` branch).
+
+### Codebase organization
+
+- Added ASCII-delimited section headers throughout `workflows/ark.nf`, `subworkflows/isoseq/main.nf`, and `subworkflows/preprocessing/main.nf` to visually separate stages such as Autosql, Preprocessing, Alignment, ORF calling, NMD calling, Polishing, and Tracking. These are purely cosmetic and have no effect on pipeline logic.
+
 ## [v2.0.24] - 2026-07-24
 
 This release consolidates the pipeline's alignment architecture under a single unified subworkflow, renames the project from isopipe to ARK, and introduces FLAIR as a sixth aligner option. The previously separate desalt, ultra, and pbmm2 alignment subworkflows have been merged into a single `split_align` subworkflow that dispatches to the correct backend via a switch statement, significantly reducing code duplication. Additional work includes a new ORF renaming engine for xORF, programmatic AutoSQL schema generation, and several channel-wiring corrections across downstream subworkflows.
