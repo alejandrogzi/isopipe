@@ -126,6 +126,10 @@ workflow ISOSEQ {
           PBMERGE(ch_pbccs_merged) // INFO: merge chunks
           ch_lima_bams = PBMERGE.out.bam
 
+          ch_versions = ch_versions.mix(PBMERGE.out.versions)
+          ch_versions = ch_versions.mix(PBINDEX.out.versions)
+          ch_versions = ch_versions.mix(PBCCS.out.versions)
+
         break
 
         case 'ccs':
@@ -237,9 +241,6 @@ workflow ISOSEQ {
 
       ch_versions = ch_versions.mix(ISOSEQ_REFINE.out.versions)
       ch_versions = ch_versions.mix(LIMA.out.versions)
-      ch_versions = ch_versions.mix(PBMERGE.out.versions)
-      ch_versions = ch_versions.mix(PBINDEX.out.versions)
-      ch_versions = ch_versions.mix(PBCCS.out.versions)
 
     /*
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
