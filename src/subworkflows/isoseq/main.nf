@@ -149,7 +149,8 @@ workflow ISOSEQ {
      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
       */
 
-      LIMA(ch_lima_bams, ch_primers)  // INFO: remove primers from CCS
+      ch_lima_out_bams = Channel.empty()
+      LIMA(ch_lima_bams.map { meta, bam, pbi -> [ meta, bam ] }, ch_primers)  // INFO: remove primers from CCS
       LIMA.out.bam
           .map { meta, bams ->
               [ meta, bams instanceof List ? bams : [bams] ]
@@ -162,8 +163,8 @@ workflow ISOSEQ {
           .set { ch_lima_branched }
 
       PBMERGE_MULTI_LIMA(ch_lima_branched.merge)
-      ch_lima_bams = ch_lima_bams.mix(PBMERGE_MULTI_LIMA.out.bam)
-      ch_lima_bams = ch_lima_bams.mix(ch_lima_branched.single.map { meta, bams -> [ meta, bams[0] ] })
+      ch_lima_out_bams = ch_lima_out_bams.mix(PBMERGE_MULTI_LIMA.out.bam)
+      ch_lima_out_bams = ch_lima_out_bams.mix(ch_lima_branched.single.map { meta, bams -> [ meta, bams[0] ] })
 
       /*
       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -171,7 +172,7 @@ workflow ISOSEQ {
      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
       */
 
-      ISOSEQ_REFINE(ch_lima_bams, ch_primers) // INFO: discard CCS without polyA tails, remove it from the other
+      ISOSEQ_REFINE(ch_lima_out_bams, ch_primers) // INFO: discard CCS without polyA tails, remove it from the other
 
       /*
       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
