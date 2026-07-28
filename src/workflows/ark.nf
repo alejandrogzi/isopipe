@@ -58,6 +58,12 @@ workflow ARK {
       ch_versions = Channel.empty()
       ch_reads = Channel.empty()
 
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          AUTOSQL
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
+
       AUTOSQL_BASE()
       AUTOSQL_SCHEMA()
 
@@ -65,7 +71,11 @@ workflow ARK {
       schema = AUTOSQL_SCHEMA.out.autosql
       track = Channel.value(file('${projectDir}/../../assets/as/track.as', checkIfExists: true))
 
-      // Preprocessing /////////////////////////////////////////////
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          PRE-PROCESSING [ INDEXES, SPLICE SCORES, READS ]
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
       PREPROCESSING(
         params.entrypoint,
@@ -93,7 +103,11 @@ workflow ARK {
         ch_versions
       )
 
-      // Alignment /////////////////////////////////////////////
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          ALIGNMENT [ SPLIT_ALIGN_CLEAN_CHUNKS ]
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
       
       if (params.aligner in ['mm2', 'ultra', 'pbmm2', 'desalt', 'ark', 'flair']) {
         SPLIT_ALIGN_CLEAN_CHUNKS(
@@ -124,7 +138,11 @@ workflow ARK {
         System.exit(1)
       }
 
-      // Weights /////////////////////////////////////////////
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          WEIGHTS [ XORF ]
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
       ch_samba_weights = Channel.empty()
       if (params.xorf_samba_local_weights) {
@@ -140,7 +158,11 @@ workflow ARK {
         ch_samba_weights = WGET_SAMBA_WEIGHTS.out.outfile
       }
 
-      // ORF calling /////////////////////////////////////////////
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          ORF CALLING [ XORF ]
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
       // channel comes per chromosome previously splitted at segmentation step
       // metadata -> [ id: sampleId, single_end: true, chr: meta.chr ]
@@ -186,7 +208,11 @@ workflow ARK {
       JOIN_FUSIONS(ch_fusion_orf_predictions_bed, 'bed')
       BEDTOBIGBED_FUSIONS(JOIN_FUSIONS.out.output, PREPROCESSING.out.chrom_sizes, autosql)
 
-      // NMD calling /////////////////////////////////////////////
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          NMD CALLING [ ISOTOOLS_NMD_FILTER ]
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
       ISOTOOLS_NMD_FILTER(ch_orf_predictions_bed)
 
@@ -200,7 +226,11 @@ workflow ARK {
       JOIN_NMD(ch_nmd_bed, 'bed')
       BEDTOBIGBED_NMD(JOIN_NMD.out.output, PREPROCESSING.out.chrom_sizes, autosql)
 
-      // Additional bigbeds /////////////////////////////////////////////
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          ADDITIONAL BIGBEDS [ BEDTOBIGBED_FUSIONS, BEDTOBIGBED_NMD ]
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
       ch_additional_bbs = Channel.empty()
       ch_additional_bbs = ch_additional_bbs.mix(BEDTOBIGBED_FUSIONS.out.bigbed)
@@ -211,7 +241,11 @@ workflow ARK {
          .set { ch_additional_bbs }
       PUBLISH_ADDITIONAL_BIGBEDS(ch_additional_bbs)
 
-      // APARENT calling /////////////////////////////////////////////
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          APARENT WEIGHTS [ POLYA PEAKS ]
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
       ch_aparent_weights = Channel.empty()
       if (params.aparent_predict_weights_local_path) {
@@ -227,7 +261,11 @@ workflow ARK {
           ch_aparent_weights = WGET_APARENT_WEIGHTS.out.outfile
       }
 
-      // Pre-polishing /////////////////////////////////////////////
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          PRE-POLISHING [ APARENT, INTRON, RETENTION, INTRAPRIMMING, BIGWIG  ]
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
       ISOTOOLS_PREPOLISH(
           ISOTOOLS_NMD_FILTER.out.reads,
@@ -258,7 +296,11 @@ workflow ARK {
         }
         .set { ch_full_length_reads }
 
-      // Polishing /////////////////////////////////////////////
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          POLISHING [ ISOTOOLS_POLISH ]
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
       ISOTOOLS_POLISH(
           ch_full_length_reads,
@@ -270,6 +312,12 @@ workflow ARK {
           schema,
           ch_versions
       )
+
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          TRACKING [ TRACKDB ]
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
       if (params.load_track) {
           TRACKDB(
@@ -373,6 +421,12 @@ workflow ARK {
 
           ch_versions = ch_versions.mix(TRACKDB.out.versions)
       }
+
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          VERSIONING
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
 
 
       ch_versions = ch_versions.mix(ISOTOOLS_NMD_FILTER.out.versions)
