@@ -29,7 +29,7 @@ workflow ISOSEQ {
       ccs_chunk              // int
       isoseq_cluster2_mode   // string
       prefix                 // string
-      entrypoint             // [ ccs, flnc ] (subreads unreachable)
+      entrypoint             // [ subreads, ccs ] (flnc unreachable)
 
     main:
       ch_versions = Channel.empty()
@@ -93,7 +93,7 @@ workflow ISOSEQ {
   
       ch_lima_bams = Channel.empty()
       switch (entrypoint) {
-        case 'ccs':
+        case 'subreads':
 
           ch_bam
               .combine(Channel.of(1..ccs_chunk))   // INFO: cartesian product: N_bam × chunk combos
@@ -128,7 +128,7 @@ workflow ISOSEQ {
 
         break
 
-        case 'flnc':
+        case 'ccs':
           ch_lima_bams = ch_bam
         break
 
