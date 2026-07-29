@@ -4,11 +4,11 @@ process LIMA {
 
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/lima:2.9.0--h9ee0642_1' :
-        'biocontainers/lima:2.9.0--h9ee0642_1' }"
+        'https://depot.galaxyproject.org/singularity/lima:26.2.1--h9ee0642_0' :
+        'biocontainers/lima:26.2.1--h9ee0642_0' }"
 
     input:
-    tuple val(meta), path(ccs)
+    tuple val(meta), path(ccs), path(pbi)
     path primers
 
     output:

@@ -132,7 +132,7 @@ workflow ISOSEQ {
               .set { ch_pbccs_merged }
 
           PBMERGE(ch_pbccs_merged) // INFO: merge chunks
-          ch_ccs_bams = PBMERGE.out.bam
+          ch_ccs_bams = PBMERGE.out.bam.join(PBMERGE.out.pbi)
 
           ch_versions = ch_versions.mix(PBMERGE.out.versions)
           ch_versions = ch_versions.mix(PBINDEX.out.versions)
@@ -171,7 +171,7 @@ workflow ISOSEQ {
           ch_ccs_bams.map{ meta, bam, pbi -> [ meta, bam ] },
           ch_skera_demux_primers.map { meta, primers -> primers }
         )
-        ch_skera_demux_bams = PBSKERA_SPLIT.out.bam
+        ch_skera_demux_bams = PBSKERA_SPLIT.out.bam.join(PBSKERA_SPLIT.out.pbi)
       } else {
         ch_skera_demux_bams = ch_ccs_bams
       }
