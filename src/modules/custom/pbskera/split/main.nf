@@ -24,10 +24,14 @@ process PBSKERA_SPLIT {
 
     output:
     tuple val(meta), path("*skera.bam")               , emit: bam
+    tuple val(meta), path("*.skera.bam.pbi")          , emit: pbi
     tuple val(meta), path("*.non_passing.bam")        , emit: non_passing_bam
-    tuple val(meta), path("summary.csv")              , emit: summary
-    tuple val(meta), path("*ligations.csv")           , emit: ligations
-    tuple val(meta), path("read_lengths.csv")         , emit: read_lengths
+    tuple val(meta), path("*.non_passing_bam.pbi")    , emit: non_passing_pbi
+    tuple val(meta), path("*.found_adapters.csv.gz")  , emit: found_adapters
+    tuple val(meta), path("*.summary.csv")            , emit: summary
+    tuple val(meta), path("*.summary.json")           , emit: summary_json
+    tuple val(meta), path("*.ligations.csv")          , emit: ligations
+    tuple val(meta), path("*.read_lengths.csv")       , emit: read_lengths
     path  "versions.yml"                              , emit: versions
 
     when:
@@ -55,9 +59,13 @@ process PBSKERA_SPLIT {
     """
     touch ${prefix}.skera.bam
     touch ${prefix}.non_passing.bam
-    touch summary.csv
-    touch ligations.csv
-    touch read_lengths.csv
+    touch *summary.csv
+    touch *ligations.csv
+    touch *read_lengths.csv
+    touch *found_adapters.csv.gz
+    touch *summary.json
+    touch *skera.bam.pbi
+    touch *non_passing.bam.pbi
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
