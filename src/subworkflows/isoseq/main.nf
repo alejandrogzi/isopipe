@@ -5,15 +5,21 @@
 */
 
 include { PBCCS } from '../../modules/nf-core/pbccs/main.nf'
+
 include { PBTK_PBINDEX as PBINDEX } from '../../modules/nf-core/pbtk/pbindex/main.nf'
+
 include { PBTK_PBMERGE as PBMERGE } from '../../modules/nf-core/pbtk/pbmerge/main.nf'
 include { PBTK_PBMERGE as PBMERGE_MULTI_SAMPLE } from '../../modules/nf-core/pbtk/pbmerge/main.nf'
 include { PBTK_PBMERGE as PBMERGE_MULTI_LIMA } from '../../modules/nf-core/pbtk/pbmerge/main.nf'
+
 include { PBSKERA_SPLIT } from '../../modules/custom/pbskera/split/main.nf'
+include { WGET as WGET_SKERA_PRIMERS } from '../../modules/nf-core/wget/main.nf'
+
 include { LIMA } from '../../modules/nf-core/lima/main.nf'
 include { ISOSEQ_REFINE } from '../../modules/nf-core/isoseq/refine/main.nf'
 include { ISOSEQ_CLUSTER2 } from '../../modules/custom/isoseq/cluster2/main.nf'
 include { ISOSEQ_CLUSTER2 as ISOSEQ_CLUSTER2_MULTI_SAMPLE } from '../../modules/custom/isoseq/cluster2/main.nf'
+
 include { BAM_TO_FA } from '../../modules/custom/bamtofa/main.nf'
 include { BAM_TO_FA as BAM_TO_FA_MULTI_SAMPLE } from '../../modules/custom/bamtofa/main.nf'
 
@@ -153,7 +159,18 @@ workflow ISOSEQ {
 
       ch_skera_demux_bams = Channel.empty()
       if (is_kinnex_library) {
-        PBSKERA_SPLIT(ch_ccs_bams.map{ meta, bam, pbi -> [ meta, bam ] }, ch_primers)
+        WGET_SKERA_PRIMERS(
+          Channel.value(
+            params.skera_kinnex_primers
+          ).map { url -> [ [id : url.tokenize('/')[-1]], url ] }
+        )
+
+        ch_skera_demux_primers = WGET_SKERA_PRIMERS.out.outfile
+
+        PBSKERA_SPLIT(
+          ch_ccs_bams.map{ meta, bam, pbi -> [ meta, bam ] },
+          ch_skera_demux_primers.map { meta, primers -> primers }
+        )
         ch_skera_demux_bams = PBSKERA_SPLIT.out.bam
       } else {
         ch_skera_demux_bams = ch_ccs_bams
