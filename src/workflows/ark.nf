@@ -69,7 +69,7 @@ workflow ARK {
 
       autosql = AUTOSQL_BASE.out.autosql
       schema = AUTOSQL_SCHEMA.out.autosql
-      track = Channel.value(file('${projectDir}/../../assets/as/track.as', checkIfExists: true))
+      track = Channel.value(file('${projectDir}/../../assets/as/track.as'))
 
       /*
       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -100,6 +100,7 @@ workflow ARK {
         params.ultra_index,
         params.desalt_index,
         params.pbmm2_index,
+        params.skera_is_kinnex_library,
         ch_versions
       )
 

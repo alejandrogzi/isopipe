@@ -9,6 +9,7 @@ include { PBTK_PBINDEX as PBINDEX } from '../../modules/nf-core/pbtk/pbindex/mai
 include { PBTK_PBMERGE as PBMERGE } from '../../modules/nf-core/pbtk/pbmerge/main.nf'
 include { PBTK_PBMERGE as PBMERGE_MULTI_SAMPLE } from '../../modules/nf-core/pbtk/pbmerge/main.nf'
 include { PBTK_PBMERGE as PBMERGE_MULTI_LIMA } from '../../modules/nf-core/pbtk/pbmerge/main.nf'
+include { PBSKERA_SPLIT } from '../../modules/custom/pbskera/split/main.nf'
 include { LIMA } from '../../modules/nf-core/lima/main.nf'
 include { ISOSEQ_REFINE } from '../../modules/nf-core/isoseq/refine/main.nf'
 include { ISOSEQ_CLUSTER2 } from '../../modules/custom/isoseq/cluster2/main.nf'
@@ -30,6 +31,7 @@ workflow ISOSEQ {
       isoseq_cluster2_mode   // string
       prefix                 // string
       entrypoint             // [ subreads, ccs ] (flnc unreachable)
+      is_kinnex_library      // bool
 
     main:
       ch_versions = Channel.empty()
@@ -91,7 +93,7 @@ workflow ISOSEQ {
      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
       */
   
-      ch_lima_bams = Channel.empty()
+      ch_ccs_bams = Channel.empty()
       switch (entrypoint) {
         case 'subreads':
 
@@ -124,7 +126,7 @@ workflow ISOSEQ {
               .set { ch_pbccs_merged }
 
           PBMERGE(ch_pbccs_merged) // INFO: merge chunks
-          ch_lima_bams = PBMERGE.out.bam
+          ch_ccs_bams = PBMERGE.out.bam
 
           ch_versions = ch_versions.mix(PBMERGE.out.versions)
           ch_versions = ch_versions.mix(PBINDEX.out.versions)
@@ -133,7 +135,7 @@ workflow ISOSEQ {
         break
 
         case 'ccs':
-          ch_lima_bams = ch_bam
+          ch_ccs_bams = ch_bam
         break
 
         default:
@@ -145,12 +147,26 @@ workflow ISOSEQ {
 
       /*
       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+          SKERA [ DEMULTIPLEX KINNEX ARRAY ]
+     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      */
+
+      ch_skera_demux_bams = Channel.empty()
+      if (is_kinnex_library) {
+        PBSKERA_SPLIT(ch_ccs_bams, ch_primers)
+        ch_skera_demux_bams = PBSKERA_SPLIT.out.bam
+      } else {
+        ch_skera_demux_bams = ch_ccs_bams
+      }
+
+      /*
+      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
           LIMA [ REMOVE PRIMERS ]
      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
       */
 
       ch_lima_out_bams = Channel.empty()
-      LIMA(ch_lima_bams.map { meta, bam, pbi -> [ meta, bam ] }, ch_primers)  // INFO: remove primers from CCS
+      LIMA(ch_skera_demux_bams, ch_primers)  // INFO: remove primers from CCS
       LIMA.out.bam
           .map { meta, bams ->
               [ meta, bams instanceof List ? bams : [bams] ]

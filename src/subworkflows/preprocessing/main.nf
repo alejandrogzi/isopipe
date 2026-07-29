@@ -56,6 +56,7 @@ workflow PREPROCESSING {
       ultra_index            // path
       desalt_index           // path
       pbmm2_index            // path
+      is_kinnex_library      // bool
       ch_versions            // [ meta, versions.yml ]
 
     main:
@@ -294,7 +295,8 @@ workflow PREPROCESSING {
               ccs_chunk,
               isoseq_cluster2_mode,
               global_prefix,
-              entrypoint
+              entrypoint,
+              is_kinnex_library
           )
 
           ch_reads = ch_reads.mix(ISOSEQ.out.reads)
