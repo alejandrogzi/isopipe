@@ -153,7 +153,7 @@ workflow ISOSEQ {
 
       ch_skera_demux_bams = Channel.empty()
       if (is_kinnex_library) {
-        PBSKERA_SPLIT(ch_ccs_bams, ch_primers)
+        PBSKERA_SPLIT(ch_ccs_bams.map{ meta, bam, pbi -> [ meta, bam ] }, ch_primers)
         ch_skera_demux_bams = PBSKERA_SPLIT.out.bam
       } else {
         ch_skera_demux_bams = ch_ccs_bams
