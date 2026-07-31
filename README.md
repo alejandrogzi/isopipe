@@ -9,7 +9,7 @@
 
   <span>
     <h1 align="center">
-        ark
+        `ark`
     </h1>
   </span>
 

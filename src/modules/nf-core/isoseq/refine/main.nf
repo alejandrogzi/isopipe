@@ -8,7 +8,7 @@ process ISOSEQ_REFINE {
         'biocontainers/isoseq:4.0.0--h9ee0642_0' }"
 
     input:
-    tuple val(meta), path(bam)
+    tuple val(meta), path(bam), path(pbi)
     path primers
 
     output:
