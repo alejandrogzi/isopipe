@@ -184,20 +184,59 @@ workflow ISOSEQ {
 
       ch_lima_out_bams = Channel.empty()
       LIMA(ch_skera_demux_bams, ch_primers)  // INFO: remove primers from CCS
-      LIMA.out.bam
-          .map { meta, bams ->
-              [ meta, bams instanceof List ? bams : [bams] ]
-          }
-          .branch {
-              meta, bams ->
-              merge:  bams.size() > 1
-              single: bams.size() == 1
-          }
-          .set { ch_lima_branched }
 
-      PBMERGE_MULTI_LIMA(ch_lima_branched.merge)
-      ch_lima_out_bams = ch_lima_out_bams.mix(PBMERGE_MULTI_LIMA.out.bam)
-      ch_lima_out_bams = ch_lima_out_bams.mix(ch_lima_branched.single.map { meta, bams -> [ meta, bams[0] ] })
+      // Normalize BAM outputs to one channel item per BAM.
+      // Key: <original meta.id>::<BAM filename without .bam>
+      ch_lima_bams_keyed = LIMA.out.bam
+        .flatMap { meta, bams ->
+            def bam_files = bams instanceof List ? bams : [bams]
+
+            bam_files.collect { bam ->
+                def stem = bam.name.replaceFirst(/\.bam$/, '')
+
+                // Example:
+                // IsoSeqX_bc01_5p--IsoSeqX_3p -> bc01
+                def matcher = stem =~ /IsoSeqX_(bc\d+)_5p--IsoSeqX_3p$/
+                def barcode = matcher.find()
+                    ? matcher.group(1)
+                    : stem
+
+                def updated_meta = meta + [
+                    parent_id : meta.id,
+                    id        : "${meta.id}.${barcode}",
+                    barcode   : barcode
+                ]
+
+                tuple(
+                    "${meta.id}::${stem}",
+                    updated_meta,
+                    bam
+                )
+            }
+        }
+
+        // Normalize PBI outputs to one channel item per PBI.
+        // The stem must match the corresponding BAM stem.
+        ch_lima_pbis_keyed = LIMA.out.pbi
+            .flatMap { meta, pbis ->
+                def pbi_files = pbis instanceof List ? pbis : [pbis]
+
+                pbi_files.collect { pbi ->
+                    def stem = pbi.name.replaceFirst(/\.bam\.pbi$/, '')
+
+                    tuple(
+                        "${meta.id}::${stem}",
+                        pbi
+                    )
+                }
+            }
+
+        // Join each BAM to its corresponding .pbi
+        ch_lima_out_bams = ch_lima_bams_keyed
+            .join(ch_lima_pbis_keyed)
+            .map { key, updated_meta, bam, pbi ->
+                tuple(updated_meta, bam, pbi)
+            }
 
       /*
       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -205,7 +244,7 @@ workflow ISOSEQ {
      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
       */
 
-      ISOSEQ_REFINE(ch_lima_out_bams, ch_primers) // INFO: discard CCS without polyA tails, remove it from the other
+      ISOSEQ_REFINE(ch_lima_out_bams, ch_primers) // INFO: discard CCS without polyA tails
 
       /*
       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

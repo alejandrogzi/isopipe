@@ -1,5 +1,36 @@
 # Changelog
 
+## [v2.0.26] - 2026-07-31
+
+This release adds native support for Kinnex/MAS-Seq libraries through skera-based demultiplexing, and reworks the primer-removal and refinement segment of the ISOSEQ subworkflow so that per-primer-pair reads are tracked individually instead of being merged back into a single pool. The new `skera_is_kinnex_library` parameter activates a `PBSKERA_SPLIT` step between CCS generation and LIMA, with the MAS-Seq adapter primer set downloaded automatically at runtime when the option is enabled. On the refinement side, the LIMA output channel was restructured from the ground up: the multi-sample merge that previously collapsed per-barcode BAMs back into one file has been removed entirely, and each barcode-specific BAM is now paired with its `.pbi` index and handed to ISOSEQ_REFINE as an independent tuple. Several entrypoint dispatch and versioning-channel corrections carried over from the v2.0.25 maintenance cycle are included as well, along with a LIMA container update, a dedicated high-core resource label, and a number of output-emission fixes in the new skera module.
+
+### Kinnex library demultiplexing
+
+- Added the `skera_is_kinnex_library` parameter (default: `false`). When enabled, CCS BAMs are demultiplexed with skera through the new custom `PBSKERA_SPLIT` module (biocontainers/pbskera 1.4.0) before reaching LIMA for primer removal. The parameter is declared in `nextflow.config` and `params.json` and propagated through the preprocessing and ISOSEQ subworkflows.
+- Added the `skera_kinnex_primers` parameter, which defaults to the MAS-Seq Adapter v3 8-primer FASTA hosted on the PacBio Cloud downloads server. When demultiplexing is active, the primer set is fetched at runtime through a dedicated WGET step instead of requiring a manual download and a local path.
+- `PBSKERA_SPLIT` now emits the full set of skera outputs with correct filename prefixes: the demultiplexed `*.skera.bam` together with its `.pbi` index, the `*.non_passing.bam` file and index, `*.found_adapters.csv.gz`, `*.summary.csv`, `*.summary.json`, `*.ligations.csv`, and `*.read_lengths.csv`. Outputs are published to a dedicated `02_PBSKERA_SPLIT` directory.
+- When `skera_is_kinnex_library` is enabled, LIMA is invoked with `--overwrite-biosample-names` so the biosample names produced during demultiplexing are carried through primer removal instead of being reset.
+- Fixed a stray whitespace character in the pbskera container string that caused the container identifier to resolve incorrectly.
+
+### Primer removal and refinement rework
+
+- LIMA now expects the CCS BAM paired with its `.pbi` index as a three-element input tuple, and its container was bumped from lima 2.9.0 to 26.2.1. Both the merged CCS output from PBMERGE and the demultiplexed output from PBSKERA_SPLIT are joined with their corresponding index files before being passed to LIMA.
+- Removed the merge step that previously recombined multi-barcode LIMA outputs: the single/merge branching logic and the `PBMERGE_MULTI_LIMA` invocation in the ISOSEQ subworkflow are gone. LIMA output is instead flattened into one channel item per BAM, keyed as `sample::stem`.
+- Each per-primer-pair BAM is now identified by its barcode: the filename stem is parsed for the `IsoSeqX_bcNN_5p--IsoSeqX_3p` pattern and the extracted barcode is stored in the metadata alongside a new `parent_id` field. The sample id becomes `sample.barcode`, preserving per-barcode identity through the downstream steps.
+- Each barcode-specific BAM is joined with its matching `.pbi` and passed to `ISOSEQ_REFINE` as an individual tuple; the refine process input was updated to accept the index alongside the BAM. Reads are therefore refined per primer pair rather than as a merged pool, and the polyA filtering operates with per-barcode context.
+- LIMA's resource label was changed from `process_low` to the new `process_high_core` label, and `--log-level INFO` was added to its arguments. The label was introduced at 32 CPUs, 32 GB, and 16 hours per attempt, then adjusted down to 16 CPUs with the same memory and time limits to better match actual usage.
+
+### Entrypoint dispatch and channel wiring fixes
+
+- Corrected the entrypoint dispatch inside the ISOSEQ subworkflow to match the v2.0.25 entrypoint model: the subworkflow now receives `subreads` or `ccs` (with `flnc` unreachable). `subreads` runs the PBCCS chunking and merge path, while `ccs` passes BAMs straight to primer removal. Previously the subworkflow expected `ccs`/`flnc` values it could no longer receive from preprocessing.
+- Moved the PBCCS, PBINDEX, and PBMERGE version-channel mixing inside the `subreads` branch. Those processes only execute for that entrypoint, so mixing their `versions.yml` outputs unconditionally left the version channel in an inconsistent state for `ccs` runs.
+- Gave the LIMA step a dedicated output channel (`ch_lima_out_bams`) instead of reusing the input channel, preventing a channel reassignment that could break the workflow DAG depending on entrypoint or demultiplexing configuration. As part of this cleanup the index element was temporarily stripped from the LIMA input tuple, a detail later revised when the `.pbi` became part of LIMA's input contract.
+
+### Chores
+
+- Bumped the pipeline version to 2.0.26 in the Nextflow manifest.
+- Corrected the `ark` project name rendering in the README header.
+
 ## [v2.0.25] - 2026-07-29
 
 This release replaces the previous two-entrypoint model (`isoseq` / `map`) with three granular modes — `subreads`, `ccs`, and `flnc` — that map directly to the real PacBio processing stages users are working with. The new model gives you control over where your data enters the pipeline: raw subreads, already-called CCS reads, or full-length non-chimeric reads that have already gone through primer removal and clustering. The internal ISOSEQ subworkflow was refactored to branch on these entrypoints, running PBCCS and chunk merging only when needed (i.e., for `subreads` and `ccs`), while `flnc` reads skip straight to LIMA and refinement. The default entrypoint was changed from `isoseq` to `subreads`, and the workflow banner now prints the active entrypoint at launch to make it immediately visible which mode is in use. Additional structural comments were added throughout the main workflow and the ISOSEQ subworkflow to clarify the stage boundaries in the code.
