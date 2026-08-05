@@ -1,3 +1,58 @@
+<p align="center">
+  <p align="center">
+    <img width=100 align="center" src="../figures/logo.png" >
+  </p>
+
+<p align="center">
+  <picture>
+    <source
+      media="(prefers-color-scheme: dark)"
+      srcset="../figures/hillerlab-dark.png"
+    >
+    <source
+      media="(prefers-color-scheme: light)"
+      srcset="../figures/hillerlab-light.png"
+    >
+    <img
+      width="200"
+      alt="Hiller Lab"
+      src="../figures/hillerlab-light.png"
+    >
+  </picture>
+</p>
+
+
+  <span>
+    <h1 align="center">
+        ark
+    </h1>
+  </span>
+
+  <span>
+    <h2 align="center">
+        CHANGELOG
+    </h2>
+  </span>
+
+  <p align="center">
+    <a href="https://github.com/hillerlab/ark" reference="_blank">
+      <img alt="GitHub License" src="https://img.shields.io/github/license/hillerlab/ark?color=blue">
+    </a>
+  </p>
+
+  <p align="center">
+    <samp>
+        <span> The Hiller Lab at the Senckenberg Research Institute </span>
+        <br>
+        <br>
+        <a href="https://github.com/alejandrogzi/ark/blob/master/assets/docs/usage.md">usage</a> .
+        <a href="https://github.com/hillerlab/ark/blob/main/assets/pipeline/ark.mermaid">pipeline</a> .
+        <a href="https://hillerlab.com/">us</a> 
+    </samp>
+  </p>
+
+</p>
+
 # Changelog
 
 ## [v2.0.26] - 2026-07-31
