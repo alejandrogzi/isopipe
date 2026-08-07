@@ -51,4 +51,4 @@ jobs:
             --global_species_name mm39
 
       - name: Compare against golden truth
-        run: python3 assets/ci/compare.py assets/test_data/gold/${{ matrix.entrypoint }} results/${{ matrix.entrypoint }}
+        run: python3 assets/ci/compare.py --show-diffs assets/test_data/gold/${{ matrix.entrypoint }} results/${{ matrix.entrypoint }}

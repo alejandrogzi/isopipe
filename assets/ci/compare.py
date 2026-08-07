@@ -14,7 +14,17 @@ import sys
 from pathlib import Path
 
 BINARY_SUFFIXES = (".bam", ".bai", ".pbi", ".bb", ".bw", ".html", ".pdf", ".png", ".mmi", ".sam")
-EXCLUDED_DIRS = {"PIPELINE_INFO"}
+EXCLUDED_DIRS = {"PIPELINE_INFO", "01_PBCCS"}  # ponytail: PBCCS QC embeds runtime ms; not reproducible
+
+
+def head_diff(path_a, path_b, max_lines=12):
+    a, b = set(normalized(path_a)), set(normalized(path_b))
+    out = []
+    for line in sorted(a - b)[:max_lines]:
+        out.append(f"  - {line}")
+    for line in sorted(b - a)[:max_lines]:
+        out.append(f"  + {line}")
+    return out
 
 
 def normalized(path: Path):
@@ -37,10 +47,12 @@ def collect(root: Path):
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if len(args) != 2:
         print(__doc__)
         return 2
-    gold_dir, results_dir = Path(sys.argv[1]), Path(sys.argv[2])
+    show_diffs = "--show-diffs" in sys.argv
+    gold_dir, results_dir = Path(args[0]), Path(args[1])
     if not gold_dir.is_dir() or not results_dir.is_dir():
         print(f"error: {gold_dir} and {results_dir} must exist "
               "(bootstrap: run pipeline on a known-good commit, then copy published outputs into gold/)")
@@ -54,6 +66,8 @@ def main() -> int:
             continue
         if normalized(gold_dir / rel) != normalized(got):
             problems.append(f"changed: {rel}")
+            if show_diffs:
+                problems.extend("    " + d for d in head_diff(gold_dir / rel, got))
     for rel in sorted(collect(results_dir) - collect(gold_dir)):
         problems.append(f"new output not in gold: {rel}")
 
