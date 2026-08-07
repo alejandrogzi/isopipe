@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  NXF_VER: "24.10.5"
+  NXF_VER: "25.10.4"
   NXF_ANSI_LOG: "false"
 
 jobs:
