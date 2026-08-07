@@ -179,7 +179,11 @@ workflow ARK {
           params.xorf_skip_netstart,
           params.xorf_rename_deactivate,
           false, // xorf_do_polishing
-          true   // xorf_skip_joined_concat
+          true,  // xorf_skip_joined_concat
+          false, // xorf_run_only_on
+          null,  // xorf_run_only_mode
+          null,  // xorf_run_only_target
+          Channel.empty() // xorf_database_versions
       )
       XORF_PREDICT_ORFS.out.files
           .map { meta, bed, tsv -> [ meta, bed ] }
@@ -197,7 +201,11 @@ workflow ARK {
           params.xorf_skip_netstart,
           params.xorf_rename_deactivate,
           false,
-          true
+          true,
+          false, // xorf_run_only_on
+          null,  // xorf_run_only_mode
+          null,  // xorf_run_only_target
+          Channel.empty() // xorf_database_versions
       )
       XORF_PREDICT_FUSION_ORFS.out.files
           .map { meta, bed, tsv -> [ meta.name, meta, bed ] }
