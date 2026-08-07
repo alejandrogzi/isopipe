@@ -46,7 +46,6 @@ jobs:
             --global_repeats "$D/chr19.repeats.bed" \
             --global_primers "$D/primers.fa" \
             --spliceai_scores_path "$D/chr19.spliceai.toga2.derived.tsv.gz" \
-            --xorf_custom_database "$D/xorf.db.dmnd" \
             --xorf_selenocysteine_codons "$D/mm39.selenocysteine.bed" \
             --global_prefix test_fasta \
             --global_species_name mm39
