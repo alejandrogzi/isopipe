@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pbds:ConsensusReadSet CreatedAt="2026-08-07T13:12:31.615Z" MetaType="PacBio.DataSet.ConsensusReadSet" Name="alz.1perc.subreads.10000_fl (all samples)" Tags="barcoded,hidden" TimeStampedName="alz.1perc.subreads.10000_fl (all samples)-260807_131231615" UniqueId="691b621d-3e3b-4a1d-bde3-4685c5c604be" Version="3.0.1" xmlns:pbbase="http://pacificbiosciences.com/PacBioBaseDataModel.xsd" xmlns:pbdm="http://pacificbiosciences.com/PacBioDataModel.xsd" xmlns:pbmeta="http://pacificbiosciences.com/PacBioCollectionMetadata.xsd" xmlns:pbpn="http://pacificbiosciences.com/PacBioPartNumbers.xsd" xmlns:pbrk="http://pacificbiosciences.com/PacBioReagentKit.xsd" xmlns:pbsample="http://pacificbiosciences.com/PacBioSampleInfo.xsd" xmlns="http://pacificbiosciences.com/PacBioDatasets.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pacificbiosciences.com/PacBioDatasets.xsd" xmlns:pbds="http://pacificbiosciences.com/PacBioDatasets.xsd">
+	<pbbase:ExternalResources>
+		<pbbase:ExternalResource CreatedAt="2026-08-07T13:12:31.615Z" MetaType="PacBio.ConsensusReadFile.ConsensusReadBamFile" ResourceId="alz.1perc.subreads.10000_fl.NEB_5p--NEB_Clontech_3p.bam" TimeStampedName="pacbio_consensusreadfile_consensusreadbamfile-260807_131231615" UniqueId="2fcc710b-8c2f-4002-a1b7-b1f0371f96c9" Version="3.0.1">
+			<pbbase:FileIndices>
+				<pbbase:FileIndex CreatedAt="2026-08-07T13:12:31.615Z" MetaType="PacBio.Index.PacBioIndex" ResourceId="alz.1perc.subreads.10000_fl.NEB_5p--NEB_Clontech_3p.bam.pbi" TimeStampedName="pacbio_index_pacbioindex-260807_131231615" UniqueId="ad71400d-289f-439a-8e0b-2f2404c1b1ef" Version="3.0.1" />
+			</pbbase:FileIndices>
+			<pbbase:ExternalResources>
+				<pbbase:ExternalResource CreatedAt="2026-08-07T13:12:31.615Z" MetaType="PacBio.DataSet.ConsensusReadSet" ResourceId="alz.1perc.subreads.10000_fl.NEB_5p--NEB_Clontech_3p.consensusreadset.xml" TimeStampedName="pacbio_dataset_consensusreadset-260807_131231615" UniqueId="be7e20be-15c3-4530-a25a-605ffb710bbf" Version="3.0.1" />
+			</pbbase:ExternalResources>
+		</pbbase:ExternalResource>
+	</pbbase:ExternalResources>
+	<pbbase:SupplementalResources>
+		<pbbase:ExternalResource CreatedAt="2026-08-07T13:12:31.615Z" Description="Points to the barcodes.fasta file." MetaType="PacBio.BarcodeFile.BarcodeFastaFile" Name="Barcodes FASTA" ResourceId="primers.fa" TimeStampedName="pacbio_barcodefile_barcodefastafile-260807_131231615" UniqueId="4242525a-742a-4985-89ee-c1e313d577fd" Version="3.0.1" />
+		<pbbase:ExternalResource CreatedAt="2026-08-07T13:12:31.615Z" MetaType="PacBio.FileTypes.txt" ResourceId="alz.1perc.subreads.10000_fl.lima.guess" TimeStampedName="pacbio_filetypes_txt-260807_131231615" UniqueId="3049d47a-3e01-44f5-9226-41bdb323ad47" Version="3.0.1" />
+		<pbbase:ExternalResource CreatedAt="2026-08-07T13:12:31.615Z" MetaType="PacBio.FileTypes.txt" ResourceId="alz.1perc.subreads.10000_fl.lima.counts" TimeStampedName="pacbio_filetypes_txt-260807_131231615" UniqueId="a85a5a02-28b7-4b6f-b2f3-22cb544e2198" Version="3.0.1" />
+		<pbbase:ExternalResource CreatedAt="2026-08-07T13:12:31.615Z" MetaType="PacBio.FileTypes.txt" ResourceId="alz.1perc.subreads.10000_fl.lima.report" TimeStampedName="pacbio_filetypes_txt-260807_131231615" UniqueId="8e95c3a6-d746-4345-aded-a13c0467ed84" Version="3.0.1" />
+		<pbbase:ExternalResource CreatedAt="2026-08-07T13:12:31.615Z" MetaType="PacBio.FileTypes.txt" ResourceId="alz.1perc.subreads.10000_fl.lima.summary" TimeStampedName="pacbio_filetypes_txt-260807_131231615" UniqueId="32809d0e-afb4-4799-9dff-15983bfefd87" Version="3.0.1" />
+	</pbbase:SupplementalResources>
+	<pbds:DataSetMetadata>
+		<pbds:TotalLength>729528</pbds:TotalLength>
+		<pbds:NumRecords>275</pbds:NumRecords>
+	</pbds:DataSetMetadata>
+</pbds:ConsensusReadSet>
