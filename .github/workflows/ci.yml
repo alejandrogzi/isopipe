@@ -41,15 +41,13 @@ jobs:
             -params-file assets/ci/params.${{ matrix.entrypoint }}.json \
             --global_input_dir "$INPUT_DIR" \
             --global_output_dir "$OUT" \
-            --global_genome "$D/chr19.fa" \
+            --global_genome "$D/chr19.fa.gz" \
             --global_annotation "$D/query_annotation.with_utrs.bed" \
             --global_repeats "$D/chr19.repeats.bed" \
             --global_primers "$D/primers.fa" \
             --spliceai_scores_path "$D/chr19.spliceai.toga2.derived.tsv.gz" \
             --xorf_custom_database "$D/xorf.db.dmnd" \
             --xorf_selenocysteine_codons "$D/mm39.selenocysteine.bed" \
-            --xorf_samba_local_weights "$D/full_length_weights.hdf5" \
-            --aparent_predict_weights_local_path "$D/aparent_large_lessdropout_all_libs_no_sampleweights.h5" \
             --global_prefix test_fasta \
             --global_species_name mm39
 
