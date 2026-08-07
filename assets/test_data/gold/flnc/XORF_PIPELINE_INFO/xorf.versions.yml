@@ -1,0 +1,9 @@
+"ARK:MAIN:XORF_PREDICT_ORFS:CONCAT":
+    cat: cat: unrecognized option '--version'
+
+"ARK:MAIN:XORF_PREDICT_ORFS:GENOMEMASK_SELENO":
+    genomemask: 0.0.4
+
+"ARK:MAIN:XORF_PREDICT_ORFS:BEDTOOLS_INTERSECT_UNMASKED":
+    bedtools: 2.31.1
+

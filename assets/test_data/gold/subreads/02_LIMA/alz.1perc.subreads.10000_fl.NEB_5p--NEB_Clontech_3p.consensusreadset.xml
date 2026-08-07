@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<pbds:ConsensusReadSet CreatedAt="2026-08-07T13:12:31.615Z" MetaType="PacBio.DataSet.ConsensusReadSet" Name="alz.1perc.subreads.10000_fl.NEB_5p--NEB_Clontech_3p (BioSample_1)" Tags="barcoded,hidden" TimeStampedName="alz.1perc.subreads.10000_fl.NEB_5p--NEB_Clontech_3p (BioSample_1)-260807_131231615" UniqueId="5c37ec06-9e8e-4508-90bb-3582e8a66995" Version="3.0.1" xmlns:pbbase="http://pacificbiosciences.com/PacBioBaseDataModel.xsd" xmlns:pbdm="http://pacificbiosciences.com/PacBioDataModel.xsd" xmlns:pbmeta="http://pacificbiosciences.com/PacBioCollectionMetadata.xsd" xmlns:pbpn="http://pacificbiosciences.com/PacBioPartNumbers.xsd" xmlns:pbrk="http://pacificbiosciences.com/PacBioReagentKit.xsd" xmlns:pbsample="http://pacificbiosciences.com/PacBioSampleInfo.xsd" xmlns="http://pacificbiosciences.com/PacBioDatasets.xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pacificbiosciences.com/PacBioDatasets.xsd" xmlns:pbds="http://pacificbiosciences.com/PacBioDatasets.xsd">
+	<pbds:DataSetMetadata>
+		<pbds:TotalLength>729528</pbds:TotalLength>
+		<pbds:NumRecords>275</pbds:NumRecords>
+		<pbds:Provenance CreatedBy="AnalysisJob">
+			<pbds:ParentDataSet MetaType="PacBio.DataSet.ConsensusReadSet" TimeStampedNamed="ParentDataSet-260807_131231615" UniqueId="691b621d-3e3b-4a1d-bde3-4685c5c604be" />
+		</pbds:Provenance>
+	</pbds:DataSetMetadata>
+	<pbbase:ExternalResources>
+		<pbbase:ExternalResource CreatedAt="2026-08-07T13:12:31.615Z" MetaType="PacBio.ConsensusReadFile.ConsensusReadBamFile" ResourceId="alz.1perc.subreads.10000_fl.NEB_5p--NEB_Clontech_3p.bam" TimeStampedName="pacbio_consensusreadfile_consensusreadbamfile-260807_131231615" UniqueId="f3e490fc-7582-4656-8a25-8cd8c749b3fb" Version="3.0.1">
+			<pbbase:FileIndices>
+				<pbbase:FileIndex CreatedAt="2026-08-07T13:12:31.615Z" MetaType="PacBio.Index.PacBioIndex" ResourceId="alz.1perc.subreads.10000_fl.NEB_5p--NEB_Clontech_3p.bam.pbi" TimeStampedName="pacbio_index_pacbioindex-260807_131231615" UniqueId="440d7198-d7e6-4afc-ae67-e873606c616a" Version="3.0.1" />
+			</pbbase:FileIndices>
+		</pbbase:ExternalResource>
+	</pbbase:ExternalResources>
+</pbds:ConsensusReadSet>

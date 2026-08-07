@@ -1,0 +1,32 @@
+{
+    "_comment": "Created by pbcopper v2.3.99",
+    "attributes": [
+        {
+            "id": "sample_name",
+            "name": "Sample Name",
+            "value": "BioSample_1"
+        },
+        {
+            "id": "num_reads_fl",
+            "name": "Full-Length Reads",
+            "value": 275
+        },
+        {
+            "id": "num_reads_flnc",
+            "name": "Full-Length Non-Chimeric Reads",
+            "value": 273
+        },
+        {
+            "id": "num_reads_flnc_polya",
+            "name": "Full-Length Non-Chimeric Reads with Poly-A Tail",
+            "value": 273
+        }
+    ],
+    "dataset_uuids": [],
+    "id": "isoseq_refine",
+    "plotGroups": [],
+    "tables": [],
+    "title": "Iso-Seq Refine Report",
+    "uuid": "28a6c8f3-dabe-411b-a4f4-69b05b605198",
+    "version": "1.0.1"
+}

@@ -1,0 +1,19 @@
+{
+  "createdAt": "2026-08-07T13:12:31.615Z",
+  "files": [
+    {
+      "createdAt": "2026-08-07T13:12:31.615Z",
+      "description": "Split BAM file by lima",
+      "fileSize": 499665,
+      "fileTypeId": "PacBio.DataSet.ConsensusReadSet",
+      "isChunked": false,
+      "modifiedAt": "2026-08-07T13:12:31.615Z",
+      "name": "Barcodes NEB_5p--NEB_Clontech_3p",
+      "path": "alz.1perc.subreads.10000_fl.NEB_5p--NEB_Clontech_3p.consensusreadset.xml",
+      "sourceId": "barcoding.tasks.lima-0",
+      "uniqueId": "5c37ec06-9e8e-4508-90bb-3582e8a66995"
+    }
+  ],
+  "updatedAt": "2026-08-07T13:12:31.615Z",
+  "version": "0.2.2"
+}
