@@ -13,7 +13,7 @@ import gzip
 import sys
 from pathlib import Path
 
-BINARY_SUFFIXES = (".bam", ".bai", ".pbi", ".bb", ".bw", ".html", ".pdf", ".png", ".mmi")
+BINARY_SUFFIXES = (".bam", ".bai", ".pbi", ".bb", ".bw", ".html", ".pdf", ".png", ".mmi", ".sam")
 EXCLUDED_DIRS = {"PIPELINE_INFO"}
 
 
