@@ -1,0 +1,4 @@
+Bootstrap fixtures still needed before CI can pass:
+1. data/flnc/: flnc fastq.gz + *.singleton.fastq.gz (run subreads entrypoint once, copy *_flnc outputs here)
+2. data/xorf.db.dmnd: small diamond db (xorf_custom_database; default uniprot wget is ~20 GB)
+3. gold/{subreads,flnc}/: run both entrypoints on a known-good commit, copy published text outputs here (then `python3 assets/ci/compare.py gold/<ep> out/<ep>` must pass)

@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  NXF_VER: "24.10.5"
+  NXF_ANSI_LOG: "false"
+
+jobs:
+  test:
+    name: ark (${{ matrix.entrypoint }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        entrypoint: [subreads, flnc]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Nextflow
+        run: |
+          curl -fsSL https://get.nextflow.io | bash
+          sudo mv nextflow /usr/local/bin/
+
+      - name: Run pipeline
+        env:
+          D: "${{ github.workspace }}/assets/test_data"
+          OUT: "${{ github.workspace }}/results/${{ matrix.entrypoint }}"
+        run: |
+          INPUT_DIR="$D"
+          if [ "${{ matrix.entrypoint }}" == "flnc" ]; then
+            INPUT_DIR="$D/flnc"
+          fi
+          nextflow run src/main.nf -profile docker,ci \
+            -params-file assets/ci/params.${{ matrix.entrypoint }}.json \
+            --global_input_dir "$INPUT_DIR" \
+            --global_output_dir "$OUT" \
+            --global_genome "$D/chr19.fa" \
+            --global_annotation "$D/query_annotation.with_utrs.bed" \
+            --global_repeats "$D/chr19.repeats.bed" \
+            --global_primers "$D/primers.fa" \
+            --spliceai_scores_path "$D/chr19.spliceai.toga2.derived.tsv.gz" \
+            --xorf_custom_database "$D/xorf.db.dmnd" \
+            --xorf_selenocysteine_codons "$D/mm39.selenocysteine.bed" \
+            --xorf_samba_local_weights "$D/full_length_weights.hdf5" \
+            --aparent_predict_weights_local_path "$D/aparent_large_lessdropout_all_libs_no_sampleweights.h5" \
+            --global_prefix test_fasta \
+            --global_species_name mm39
+
+      - name: Compare against golden truth
+        run: python3 assets/ci/compare.py assets/test_data/gold/${{ matrix.entrypoint }} results/${{ matrix.entrypoint }}
