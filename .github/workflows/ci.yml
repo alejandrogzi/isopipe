@@ -30,7 +30,7 @@ jobs:
 
       - name: Run pipeline
         env:
-          D: "${{ github.workspace }}/assets/test_data"
+          D: "${{ github.workspace }}/assets/test_data/data"
           OUT: "${{ github.workspace }}/results/${{ matrix.entrypoint }}"
         run: |
           INPUT_DIR="$D"
