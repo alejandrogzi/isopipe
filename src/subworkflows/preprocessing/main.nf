@@ -25,6 +25,8 @@ include { SPLICING as SPLICEAI_GENOMIC_SPLICE_SCORES } from '../splicing/main.nf
 include { WGET as WGET_PROTEIN_DATABASE } from '../../modules/nf-core/wget/main.nf'
 include { UNTAR as UNTAR_PROTEIN_DATABASE } from '../../modules/nf-core/untar/main.nf'
 include { GUNZIP as GUNZIP_DATABASE } from '../../modules/custom/gunzip/main.nf'
+include { FASTA_MERGE } from '../../modules/custom/diamond/merge/main.nf'
+include { DIAMOND_MAKEDB } from '../../modules/custom/diamond/makedb/main.nf'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -43,6 +45,7 @@ workflow PREPROCESSING {
       isoseq_cluster2_mode   // string
       protein_database       // path
       custom_database        // path
+      raw_database           // path
       minimap2_index         // path
       use_splice_scores      // bool
       splice_score_algorithm // string
@@ -74,33 +77,59 @@ workflow PREPROCESSING {
       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
       */
 
-      ch_database = Channel.empty()
-      if (custom_database) {
-        if (custom_database.endsWith('.gz')) {
-            GUNZIP_DATABASE(
-                Channel.value(
-                    [ [id: custom_database.tokenize('/')[-1]], custom_database ]
-                )
-            )
-            GUNZIP_DATABASE.out.gunzip
-              .map { meta, it -> it }
-              .set { ch_database }
-
-            ch_versions = ch_versions.mix(GUNZIP_DATABASE.out.versions)
-        } else {
-            ch_database = Channel.value(file(custom_database, checkIfExists: true))
-        }
+    ch_database = Channel.empty()
+    if (custom_database) {
+      // INFO: .dmnd / .dmnd.gz -> replaces the default database entirely
+      if (custom_database.endsWith('.dmnd')) {
+          ch_database = Channel.fromPath(custom_database, checkIfExists: true)
+      } else if (custom_database.endsWith('.dmnd.gz')) {
+          GUNZIP_DATABASE(
+              Channel.value(
+                  [ [id: custom_database.tokenize('/')[-1]], custom_database ]
+              )
+          )
+          GUNZIP_DATABASE.out.gunzip
+            .map { meta, it -> it }
+            .set { ch_database }
+      // INFO: .fa / .fasta / .fa.gz / .fasta.gz -> downloaded raw database + custom
+      // sequences are merged, then reindexed with DIAMOND_MAKEDB
+      } else if (custom_database.endsWith('.fa') || custom_database.endsWith('.fasta')
+                  || custom_database.endsWith('.fa.gz') || custom_database.endsWith('.fasta.gz')) {
+          WGET_PROTEIN_DATABASE(
+              Channel.value(raw_database)
+              .map { it -> [ [ id: 'uniprot_sprot.fasta.gz' ], it ] }
+          )
+          FASTA_MERGE(
+              Channel.fromPath(custom_database, checkIfExists: true)
+                .map { it -> [ [ id: it.baseName ], it ] }
+                .combine(WGET_PROTEIN_DATABASE.out.outfile.map { meta, raw -> raw })
+          )
+          DIAMOND_MAKEDB(
+              FASTA_MERGE.out.fasta.map { meta, fasta -> [ [ id: 'merged_database' ], fasta ] },
+              [],
+              [],
+              []
+          )
+          DIAMOND_MAKEDB.out.db
+            .map { meta, it -> it }
+            .set { ch_database }
+          ch_versions = FASTA_MERGE.out.versions.mix(DIAMOND_MAKEDB.out.versions)
       } else {
-        WGET_PROTEIN_DATABASE(
-          Channel.value(protein_database)
-          .map { it -> [ [ id: 'uniprot_sprot.tar.gz' ], it ] }
-        )
-        UNTAR_PROTEIN_DATABASE(WGET_PROTEIN_DATABASE.out.outfile)
-        ch_database = UNTAR_PROTEIN_DATABASE.out.contents.map { meta, it -> it }
-
-        ch_versions = ch_versions.mix(WGET_PROTEIN_DATABASE.out.versions)
-        ch_versions = ch_versions.mix(UNTAR_PROTEIN_DATABASE.out.versions)
+          error """
+          ERROR: custom_database extension not recognized.
+          Please provide a custom database in one of these formats:
+            .dmnd/.dmnd.gz   -> replaces the default database entirely
+            .fa/.fasta/.fa.gz/.fasta.gz -> appended to the default SwissProt database and reindexed
+          """.stripIndent()
       }
+    } else {
+      WGET_PROTEIN_DATABASE(
+        Channel.value(protein_database)
+        .map { it -> [ [ id: 'uniprot_sprot.tar.gz' ], it ] }
+      )
+      UNTAR_PROTEIN_DATABASE(WGET_PROTEIN_DATABASE.out.outfile)
+      ch_database = UNTAR_PROTEIN_DATABASE.out.contents.map { meta, it -> it }
+    }
 
       /*
       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
