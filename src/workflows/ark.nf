@@ -87,6 +87,7 @@ workflow ARK {
         params.isoseq_cluster2_mode,
         params.xorf_protein_database,
         params.xorf_custom_database,
+        params.xorf_raw_database,
         params.minimap2_index_path,
         params.minimap2_align_use_splice_scores,
         params.minimap2_align_splicing_algorithm,
