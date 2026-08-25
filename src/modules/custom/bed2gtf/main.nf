@@ -43,7 +43,7 @@ process BED2GTF {
         $args \\
         $isf \\
         -T ${task.cpus} \\
-        -i ${bed} \\
+        -b ${bed} \\
         -o $prefix
         
     cat <<-END_VERSIONS > versions.yml
